@@ -4,6 +4,15 @@ import json
 import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from typing import Protocol
+
+
+class ChatProvider(Protocol):
+    """Common interface for model backends."""
+
+    def complete(self, system_prompt: str, user_prompt: str) -> str:
+        """Return one model response."""
+        ...
 
 
 class ProviderError(RuntimeError):
