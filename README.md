@@ -49,7 +49,7 @@ Optional environment variables:
 
 Then open [http://127.0.0.1:8765](http://127.0.0.1:8765).
 
-The server binds to localhost by default. For iPhone access on the same trusted Wi-Fi network, run:
+On Windows, you can double-click `Start-BabyMind.bat` to install and launch the local app. For iPhone access on the same trusted Wi-Fi network, double-click `Start-BabyMind-iPhone.bat` or run:
 
     babymind-web --lan
 
@@ -87,7 +87,7 @@ Run the automated test suite from the repository root:
 
 ## Current capability boundaries
 
-The UI and local application foundation are being built in stages. The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. The current version does not include unrestricted computer control, autonomous background execution, internet search, or secure remote/mobile networking. Those require explicit integrations and security controls.
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, internet search, or public-internet remote access. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
 
