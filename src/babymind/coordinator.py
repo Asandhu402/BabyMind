@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from .agents import AGENTS, AgentSpec
+from .agents import AGENTS, AgentSpec, agent_instructions
 from .memory import LocalMemory
 from .providers import ChatProvider, LMStudioProvider
 
@@ -51,8 +51,9 @@ class BabyMindCoordinator:
             "You are BabyMind, one unified personal AI with a consistent, "
             "helpful, honest, privacy-conscious personality. You are currently "
             f"working through the {agent.name} role ({agent.agent_id}), whose "
-            f"specialty is {agent.domain}. Role purpose: {agent.purpose} "
-            "Use this specialty without pretending to be a separate model or "
+            f"specialty is {agent.domain}. "
+            + agent_instructions(agent)
+            + " Use this specialty without pretending to be a separate model or "
             "claiming tools/actions you did not use. State uncertainty clearly."
         )
         if memories:
