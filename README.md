@@ -8,7 +8,7 @@ The 50 agents are specialist configurations that share one underlying language m
 
 - **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, dark/light themes, and Markdown conversation export.
 - **Local text attachments:** attach small TXT, Markdown, CSV, JSON, source-code, or config files (up to 12 KB) for model context.
-- **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue.
+- **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue, each with a focused domain playbook and responsibility.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
 - **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
 - **Local memory:** opt-in SQLite task/response memories, with controls to view or clear them.
@@ -70,6 +70,12 @@ The terminal prints a local network address and a one-time access token. Open th
 - `ask` sends the request to LM Studio with the selected role instructions.
 - Memory is opt-in. Use `--remember` to save and `--use-memory` to include relevant recent notes.
 - In the web UI, the **Remember** and **Use memory** controls are separate.
+
+## Developer checks
+
+Run the automated test suite from the repository root:
+
+    py -m unittest discover -s tests
 
 ## Privacy and data
 
