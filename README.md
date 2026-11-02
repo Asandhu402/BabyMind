@@ -6,7 +6,8 @@ The 50 agents are specialist configurations that share one underlying language m
 
 ## What is included
 
-- **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, and dark/light themes.
+- **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, dark/light themes, and Markdown conversation export.
+- **Local text attachments:** attach small TXT, Markdown, CSV, JSON, source-code, or config files (up to 12 KB) for model context.
 - **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
 - **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
