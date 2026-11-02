@@ -23,8 +23,7 @@ from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
 from .providers import LMStudioProvider, ProviderError
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-WEB = ROOT / "web"
+WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
 DATA_HOME.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_HOME / "app.sqlite3"
