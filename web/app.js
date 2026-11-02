@@ -14,9 +14,16 @@ function markdown(value) {
   return safe.split(/\n{2,}/).map((part) => part.startsWith("<pre>") || part.startsWith("<h") || part.startsWith("<ul>") ? part : `<p>${part.replace(/\n/g,"<br>")}</p>`).join("");
 }
 function toast(message) { const el=$("#toast"); el.textContent=message; el.classList.add("show"); clearTimeout(toast.timer); toast.timer=setTimeout(()=>el.classList.remove("show"),2600); }
-async function api(path, options={}) {
-  const response = await fetch(path,{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});
+async function api(path, options={}, retried=false) {
+  const token = localStorage.getItem("babymind_access_token") || "";
+  const response = await fetch(path,{...options,headers:{"Content-Type":"application/json",...(token?{"X-BabyMind-Token":token}:{}),...(options.headers||{})}});
   const data = await response.json().catch(()=>({error:"Unexpected server response"}));
+  if(response.status===401 && !retried) {
+    const entered=prompt("Enter the one-time BabyMind access token shown in the PowerShell window on your PC:");
+    if(!entered) throw new Error("Access token is required for this BabyMind server.");
+    localStorage.setItem("babymind_access_token",entered.trim());
+    return api(path,options,true);
+  }
   if(!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
 }
@@ -105,8 +112,15 @@ async function loadMemory() {
 async function checkHealth() {
   try {
     const result=await api("/api/health");
-    $("#statusDot").className="status-dot online";$("#connectionText").textContent="BabyMind app online";
-    $("#modelSettingStatus").textContent="App ready · Model connects through LM Studio";
+    if(result.model_available) {
+      $("#statusDot").className="status-dot online";
+      $("#connectionText").textContent="Local model connected";
+      $("#modelSettingStatus").textContent="Connected · "+(result.model_name||"Model loaded");
+    } else {
+      $("#statusDot").className="status-dot offline";
+      $("#connectionText").textContent="Waiting for local model";
+      $("#modelSettingStatus").textContent="Start LM Studio server and load a model";
+    }
   } catch(error) {
     $("#statusDot").className="status-dot offline";$("#connectionText").textContent="App connection issue";
     $("#modelSettingStatus").textContent="Unable to reach BabyMind server";
@@ -129,7 +143,13 @@ async function init() {
   $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories`);loadMemory();}catch(error){toast(error.message);}});
   $("#openSidebar").addEventListener("click",()=>$("#sidebar").classList.add("open"));
   $("#closeSidebar").addEventListener("click",()=>$("#sidebar").classList.remove("open"));
-  $("#themeButton").addEventListener("click",()=>toast("Dark workspace is the current theme."));
+  const savedTheme=localStorage.getItem("babymind_theme")||"dark";
+  document.body.classList.toggle("light",savedTheme==="light");
+  $("#themeButton").addEventListener("click",()=>{
+    const light=!document.body.classList.contains("light");
+    document.body.classList.toggle("light",light);
+    localStorage.setItem("babymind_theme",light?"light":"dark");
+  });
   document.addEventListener("keydown",event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==="k"){event.preventDefault();newConversation();}});
 }
 init();
