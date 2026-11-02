@@ -1,5 +1,5 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { agents: [], conversations: [], conversationId: null, busy: false, filter: "all", view: "chat" };
+const state = { agents: [], conversations: [], conversationId: null, busy: false, filter: "all", view: "chat", attachment: null };
 const domainLabels = {core:"Core",research:"Research",knowledge:"Knowledge",memory:"Memory",safety:"Safety",development:"Development",language:"Language",content:"Content",education:"Education",analysis:"Analysis",productivity:"Productivity",lifestyle:"Lifestyle",career:"Career",finance:"Finance",creative:"Creative",automation:"Automation",quality:"Quality"};
 const symbols = {core:"✳",research:"⌕",knowledge:"▤",memory:"⌁",safety:"◈",development:"⌘",language:"文",content:"✎",education:"⌂",analysis:"∑",productivity:"◷",lifestyle:"◇",career:"↗",finance:"＄",creative:"✧",automation:"⟳",quality:"✓"};
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
@@ -71,27 +71,30 @@ function showTyping() {
 async function openConversation(id) {
   try {
     const messages=await api(`/api/conversations/${encodeURIComponent(id)}`);
-    state.conversationId=id;$("#messages").innerHTML="";
+    state.conversationId=id;$("#exportButton").disabled=false;$("#messages").innerHTML="";
     $("#welcome").style.display=messages.length?"none":"block";
     messages.forEach(message=>addMessage(message.role,message.content,message.role==="assistant"?"BabyMind · "+(state.agents.find(a=>a.id===message.agent_id)?.name||"Assistant"):"You"));
     renderConversations();setView("chat");
   } catch(error){toast(error.message);}
 }
 async function newConversation() {
-  state.conversationId=null;$("#messages").innerHTML="";$("#welcome").style.display="block";
+  state.conversationId=null;$("#exportButton").disabled=true;state.attachment=null;renderAttachment();$("#messages").innerHTML="";$("#welcome").style.display="block";
   renderConversations();setView("chat");$("#messageInput").focus();
 }
 async function sendMessage(message) {
   const text=message.trim();if(!text||state.busy)return;
+  const attachment=state.attachment;
+  const submitted=attachment ? text+"\n\nAttached file ("+attachment.name+"):\n"+attachment.content : text;
   state.busy=true;$("#sendButton").disabled=true;$("#messageInput").value="";resizeInput();
-  addMessage("user",text);showTyping();
+  addMessage("user",attachment?text+"\n\n📎 "+attachment.name:text);showTyping();
   try {
     const result=await api("/api/chat",{method:"POST",body:JSON.stringify({
-      message:text,agent_id:$("#agentSelect").value,conversation_id:state.conversationId,
+      message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId,
       collaborate:$("#collaborateToggle").checked,use_memory:$("#memoryToggle").checked,
       remember:$("#rememberToggle").checked
     })});
     state.conversationId=result.conversation_id;
+    state.attachment=null;renderAttachment();$("#exportButton").disabled=false;
     $("#typingIndicator")?.remove();
     const names=result.agents_involved.map(id=>state.agents.find(a=>a.id===id)?.name||id);
     addMessage("assistant",result.response,result.agents_involved.length>1?`BabyMind · ${names.join(" + ")}`:`BabyMind · ${result.agent_name}`);
@@ -126,7 +129,23 @@ async function checkHealth() {
     $("#modelSettingStatus").textContent="Unable to reach BabyMind server";
   }
 }
+function renderAttachment(){
+  const chip=$("#attachmentChip");
+  chip.hidden=!state.attachment;
+  $("#attachmentName").textContent=state.attachment?state.attachment.name:"";
+}
 function resizeInput(){const input=$("#messageInput");input.style.height="auto";input.style.height=Math.min(input.scrollHeight,160)+"px";}
+async function exportConversation(){
+  if(!state.conversationId)return;
+  try{
+    const messages=await api("/api/conversations/"+encodeURIComponent(state.conversationId));
+    const lines=["# BabyMind conversation",""];
+    messages.forEach(item=>lines.push("## "+(item.role==="user"?"You":"BabyMind"),"",item.content,""));
+    const blob=new Blob([lines.join("\n")],{type:"text/markdown;charset=utf-8"});
+    const url=URL.createObjectURL(blob);const link=document.createElement("a");
+    link.href=url;link.download="babymind-conversation.md";link.click();URL.revokeObjectURL(url);
+  }catch(error){toast(error.message);}
+}
 async function init() {
   try {
     state.agents=await api("/api/agents");renderAgentSelect();renderFilters();renderAgents();
@@ -139,6 +158,18 @@ async function init() {
   document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>setView(button.dataset.view)));
   $("#newChat").addEventListener("click",newConversation);
   $("#agentSearch").addEventListener("input",renderAgents);
+  $("#fileInput").addEventListener("change",async event=>{
+    const file=event.target.files[0];if(!file)return;
+    if(file.size>12000){toast("Choose a text file smaller than 12 KB.");event.target.value="";return;}
+    try{
+      const content=await file.text();
+      if(content.includes("\u0000"))throw new Error("This file does not look like plain text.");
+      state.attachment={name:file.name,content};renderAttachment();toast("File attached locally");
+    }catch(error){toast(error.message);}
+    event.target.value="";
+  });
+  $("#removeAttachment").addEventListener("click",()=>{state.attachment=null;renderAttachment();});
+  $("#exportButton").addEventListener("click",exportConversation);
   $("#settingsButton").addEventListener("click",()=>setView("settings"));
   $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories`);loadMemory();}catch(error){toast(error.message);}});
   $("#openSidebar").addEventListener("click",()=>$("#sidebar").classList.add("open"));
