@@ -45,10 +45,9 @@ Optional environment variables:
 ## Choose BabyMind's local model engine
 
 BabyMind can use LM Studio, or launch its own local `llama.cpp` server. The
-llama.cpp option does not require LM Studio and does not require an API token.
-It runs a GGUF model on this computer. The first setup still requires you to
-download the runtime and model yourself; BabyMind does not silently download
-model files or executable binaries.
+portable Windows desktop package bundles the CPU runtime and offers a verified
+first-run model download. For source/developer launches, you still provide the
+runtime and GGUF model paths yourself. Both modes run inference on this computer.
 
 ### llama.cpp setup on Windows
 
@@ -76,9 +75,10 @@ download and its compatible runtime libraries.
 
 ### Switch back to LM Studio
 
-Set `BABYMIND_ENGINE=lm-studio` (or remove the variable). LM Studio remains
-supported as an optional backend. You can also set `BABYMIND_BASE_URL`,
-`BABYMIND_MODEL`, and `BABYMIND_API_KEY` for compatible local servers.
+For source/developer launches, set `BABYMIND_ENGINE=lm-studio` to use LM Studio.
+The portable Windows package uses its bundled llama.cpp engine by default.
+You can also set `BABYMIND_BASE_URL`, `BABYMIND_MODEL`, and `BABYMIND_API_KEY`
+for compatible local servers.
 
 ## Start the BabyMind interface
 
