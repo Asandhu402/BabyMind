@@ -42,3 +42,10 @@ body.light .export-button{color:#5d5e70;background:rgba(255,255,255,.7)}
 body.light .attach-button{color:#6d5aa4}
 body.light .attachment-chip{color:#65539a;background:rgba(128,98,233,.07)}
 @media(max-width:680px){.export-button{font-size:9px;padding:5px 7px}.composer-actions{gap:7px}.attach-button{font-size:9px;padding:5px 6px}}
+
+.conversation-row{display:flex;align-items:center;gap:3px;min-width:0}
+.conversation-row .conversation-item{flex:1;min-width:0}
+.delete-conversation{border:0;background:transparent;color:#777b8b;opacity:0;padding:3px 6px;border-radius:5px;font-size:15px}
+.conversation-row:hover .delete-conversation{opacity:1}
+.delete-conversation:hover{background:rgba(255,133,142,.1);color:#ff929a}
+body.light .delete-conversation{color:#77798a}
