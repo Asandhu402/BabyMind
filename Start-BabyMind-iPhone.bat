@@ -12,5 +12,5 @@ if errorlevel 1 (
 echo.
 echo Starting BabyMind for this computer and trusted Wi-Fi devices...
 echo The access token will appear below. Keep it private.
-babymind-web --lan
+py -m babymind.server --lan
 pause
