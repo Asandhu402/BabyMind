@@ -52,8 +52,17 @@ function renderAgents() {
 }
 function renderConversations() {
   $("#historyCount").textContent=state.conversations.length;
-  $("#conversationList").innerHTML=state.conversations.map(item=>`<button class="conversation-item ${item.id===state.conversationId?"active":""}" data-id="${item.id}" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</button>`).join("") || '<div class="empty-history">Your conversations will appear here.</div>';
+  $("#conversationList").innerHTML=state.conversations.map(item=>`<div class="conversation-row"><button class="conversation-item ${item.id===state.conversationId?"active":""}" data-id="${item.id}" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</button><button class="delete-conversation" data-delete="${item.id}" aria-label="Delete conversation">×</button></div>`).join("") || '<div class="empty-history">Your conversations will appear here.</div>';
   $("#conversationList").querySelectorAll("[data-id]").forEach(button=>button.addEventListener("click",()=>openConversation(button.dataset.id)));
+  $("#conversationList").querySelectorAll("[data-delete]").forEach(button=>button.addEventListener("click",async()=>{
+    const id=button.dataset.delete;
+    if(!confirm("Delete this conversation and its messages?"))return;
+    try{
+      await api("/api/conversations/"+encodeURIComponent(id),{method:"DELETE"});
+      if(state.conversationId===id){state.conversationId=null;$("#messages").innerHTML="";$("#welcome").style.display="block";$("#exportButton").disabled=true;}
+      await loadConversations();toast("Conversation deleted");
+    }catch(error){toast(error.message);}
+  }));
 }
 async function loadConversations() { state.conversations=await api("/api/conversations");renderConversations(); }
 function addMessage(role, content, agentName="BabyMind") {
