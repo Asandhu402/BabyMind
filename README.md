@@ -56,14 +56,14 @@ model files or executable binaries.
 
 1. Download the official Windows **x64 CPU** release from
    [ggml-org/llama.cpp Releases](https://github.com/ggml-org/llama.cpp/releases).
-   Extract it to a folder such as `C:\\BabyMind\\llama.cpp\\`.
+   Extract it to a folder such as `C:\BabyMind\llama.cpp\`.
 2. Obtain a compatible `.gguf` model and save it in a folder such as
-   `C:\\BabyMind\\models\\`.
+   `C:\BabyMind\models\`.
 3. In PowerShell, set the paths for your current terminal session:
 
        $env:BABYMIND_ENGINE = "llama.cpp"
-       $env:BABYMIND_LLAMA_SERVER = "C:\\BabyMind\\llama.cpp\\llama-server.exe"
-       $env:BABYMIND_GGUF_MODEL = "C:\\BabyMind\\models\\your-model.gguf"
+       $env:BABYMIND_LLAMA_SERVER = "C:\BabyMind\llama.cpp\llama-server.exe"
+       $env:BABYMIND_GGUF_MODEL = "C:\BabyMind\models\your-model.gguf"
 
 4. Start BabyMind with `babymind-desktop` or double-click the desktop launcher
    after setting these variables in Windows Environment Variables.
@@ -110,9 +110,9 @@ WebView2 Runtime and launch again.
 The desktop window hosts the existing local BabyMind interface. Its local
 server binds only to `127.0.0.1`. Build a portable Windows app folder with:
 
-    .\\build-windows.ps1
+    .\build-windows.ps1
 
-The output is `dist\\BabyMind\\BabyMind.exe`; copy the entire `dist\\BabyMind`
+The output is `dist\BabyMind\BabyMind.exe`; copy the entire `dist\BabyMind`
 folder, not just the EXE. The app uses the installed Microsoft Edge WebView2
 runtime. The portable build bundles BabyMind and Python, but does not bundle a
 model, the llama.cpp runtime, or WebView2. It is not code-signed and is not a
