@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
-from .providers import LMStudioProvider, ProviderError
+from .providers import ProviderError
 
 WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
@@ -112,7 +112,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorize(path):
             return
         if path == "/api/health":
-            provider = LMStudioProvider()
+            provider = COORDINATOR.provider
             try:
                 model_data = provider._request_json(f"{provider.base_url}/models")
                 models = model_data.get("data", [])
