@@ -94,3 +94,90 @@ class LMStudioProvider:
         if not isinstance(content, str) or not content.strip():
             raise ProviderError("LM Studio returned an empty response.")
         return content.strip()
+
+class LlamaCppProvider(LMStudioProvider):
+    """Launch and use a local llama.cpp server with a user-supplied GGUF model.
+
+    No model is downloaded automatically. The executable and model remain
+    under the user's control and inference runs on this computer.
+    """
+
+    def __init__(self, timeout: int = 180) -> None:
+        import shutil
+        import subprocess
+        import time
+        from pathlib import Path
+
+        executable = os.getenv("BABYMIND_LLAMA_SERVER", "").strip()
+        model_path = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
+        if not executable or not model_path:
+            raise ProviderError(
+                "The BabyMind llama.cpp engine needs BABYMIND_LLAMA_SERVER "
+                "(path to llama-server.exe) and BABYMIND_GGUF_MODEL "
+                "(path to a .gguf model file)."
+            )
+        exe = Path(executable).expanduser()
+        model = Path(model_path).expanduser()
+        if not exe.is_file():
+            raise ProviderError(f"llama-server executable not found: {exe}")
+        if not model.is_file() or model.suffix.lower() != ".gguf":
+            raise ProviderError(f"GGUF model file not found: {model}")
+        port = int(os.getenv("BABYMIND_LLAMA_PORT", "1235"))
+        super().__init__(
+            base_url=f"http://127.0.0.1:{port}/v1",
+            model=os.getenv("BABYMIND_MODEL", "local-model"),
+            api_key=None,
+            timeout=timeout,
+        )
+        self._process = None
+        try:
+            with urlopen(f"http://127.0.0.1:{port}/health", timeout=1):
+                return
+        except (URLError, TimeoutError, OSError):
+            pass
+        command = [
+            str(exe), "--model", str(model), "--host", "127.0.0.1",
+            "--port", str(port), "--ctx-size",
+            os.getenv("BABYMIND_CONTEXT_SIZE", "4096"),
+        ]
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            self._process = subprocess.Popen(
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, creationflags=creationflags,
+            )
+        except OSError as error:
+            raise ProviderError(f"Could not start llama.cpp: {error}") from error
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            if self._process.poll() is not None:
+                raise ProviderError(
+                    "llama.cpp server exited during startup. Check the model, "
+                    "runtime files, and available memory."
+                )
+            try:
+                with urlopen(f"http://127.0.0.1:{port}/health", timeout=1):
+                    break
+            except (URLError, TimeoutError, OSError):
+                time.sleep(0.5)
+        else:
+            self._process.terminate()
+            raise ProviderError("Timed out while loading the local GGUF model.")
+
+    def _request_json(self, url: str, payload: dict | None = None) -> dict:
+        try:
+            return super()._request_json(url, payload)
+        except ProviderError as error:
+            raise ProviderError(f"BabyMind local llama.cpp engine: {error}") from error
+
+
+def create_provider():
+    """Select the local inference backend from BABYMIND_ENGINE."""
+    engine = os.getenv("BABYMIND_ENGINE", "lm-studio").strip().lower()
+    if engine in {"llama.cpp", "llamacpp", "llama-cpp"}:
+        return LlamaCppProvider()
+    if engine in {"lm-studio", "lmstudio"}:
+        return LMStudioProvider()
+    raise ProviderError(
+        f"Unknown BABYMIND_ENGINE '{engine}'. Use 'llama.cpp' or 'lm-studio'."
+    )
