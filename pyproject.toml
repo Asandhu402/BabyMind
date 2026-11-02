@@ -12,6 +12,7 @@ dependencies = []
 
 [project.scripts]
 babymind = "babymind.cli:main"
+babymind-web = "babymind.server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
