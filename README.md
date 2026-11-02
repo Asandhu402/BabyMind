@@ -19,9 +19,7 @@ The 50 agents are specialist configurations that share one underlying language m
 
 ## Requirements
 
-- Windows 10/11 and Python 3.10 or newer
-- Either [LM Studio](https://lmstudio.ai/) or the [llama.cpp runtime](https://github.com/ggml-org/llama.cpp/releases)
-- A compatible local model (LM Studio model or GGUF file)
+For running from source: Windows 10/11 and Python 3.10 or newer, plus either LM Studio or a compatible llama.cpp runtime and local model. The portable Windows desktop package bundles Python and the llama.cpp CPU runtime; it downloads and verifies its default GGUF model on first launch. A current Microsoft Edge WebView2 Runtime is required for the desktop window.
 
 ## Install
 
@@ -97,26 +95,35 @@ The terminal prints a local network address and a one-time access token. Open th
 
 ## Windows desktop application
 
-Install and launch BabyMind in its own desktop window (no browser tab required):
+### Portable Windows desktop package
 
-    py -m pip install -e .
-    babymind-desktop
+The GitHub Actions workflow builds a portable Windows package containing
+BabyMind, its Python runtime, and the official llama.cpp Windows CPU runtime.
+Download the complete `BabyMind-Windows-Portable` artifact from the latest
+successful Windows build, extract it, and double-click `BabyMind.exe`.
 
-Or double-click `Start-BabyMind-Desktop.bat`. The first launch installs the
-Python package and the pywebview desktop-window dependency. Windows uses the
-Microsoft Edge WebView2 runtime; if it is missing, install the official
-WebView2 Runtime and launch again.
+On first launch, BabyMind asks permission to download the default Qwen3.5-4B
+Q4_K_M model (approximately 2.8 GB). It displays download progress, verifies
+the file against the model publisher's SHA-256 checksum, and stores the model
+under `%USERPROFILE%\\.babymind\\models`. Later launches reuse that model
+locally; the download is not repeated. The first download requires internet
+access and at least 4.5 GB of free disk space.
 
-The desktop window hosts the existing local BabyMind interface. Its local
-server binds only to `127.0.0.1`. Build a portable Windows app folder with:
+The packaged desktop app selects its bundled llama.cpp engine automatically
+and does not require LM Studio, Python, or an API key. Inference and chat
+storage remain on the user's computer. The desktop window requires Microsoft
+Edge WebView2 Runtime, which is normally present on current Windows 11 systems.
+If WebView2 is missing, install Microsoft's official Evergreen Runtime.
 
-    .\build-windows.ps1
+For developers building from source, install Python 3.10 or newer and run:
 
-The output is `dist\BabyMind\BabyMind.exe`; copy the entire `dist\BabyMind`
-folder, not just the EXE. The app uses the installed Microsoft Edge WebView2
-runtime. The portable build bundles BabyMind and Python, but does not bundle a
-model, the llama.cpp runtime, or WebView2. It is not code-signed and is not a
-traditional installer yet.
+    .\\build-windows.ps1
+
+The output is `dist\\BabyMind\\BabyMind.exe`; copy the entire
+`dist\\BabyMind` folder, not just the EXE. The build is not code-signed and
+is not a traditional installer yet. The default Qwen model is the standard
+Apache-2.0 Qwen release, not an "uncensored" fine-tune; model behaviour and
+refusal tendencies are determined by the selected model.
 
 ## Use the command line
 
