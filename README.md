@@ -6,7 +6,7 @@ The 50 agents are specialist configurations that share one underlying language m
 
 ## What is included
 
-- **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, and prompt starters.
+- **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, and dark/light themes.
 - **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
 - **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
@@ -48,7 +48,11 @@ Optional environment variables:
 
 Then open [http://127.0.0.1:8765](http://127.0.0.1:8765).
 
-The server binds to localhost by default. This is intentional: the current web server does not include user authentication, so do not expose it to a network or the public internet. A responsive mobile layout is included; secure iPhone/LAN access is a separate required step before enabling network binding.
+The server binds to localhost by default. For iPhone access on the same trusted Wi-Fi network, run:
+
+    babymind-web --lan
+
+The terminal prints a local network address and a one-time access token. Open that address in Safari on the iPhone and enter the token when prompted. Keep the token private and use this only on a trusted home network. The token protects API access; this is not intended for public internet exposure.
 
 ## Use the command line
 
