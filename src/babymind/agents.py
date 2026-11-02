@@ -61,7 +61,6 @@ _AGENT_ROWS = (
     ("AutomationEngineer", "automation", "Design safe repeatable automations."),
     ("IntegrationEngineer", "automation", "Plan external service integrations."),
     ("QualityReviewer", "quality", "Review outputs for completeness and clarity."),
-    ("ComplianceReviewer", "safety", "Flag policy and compliance considerations."),
     ("SessionReporter", "core", "Produce clear task status and hand-off reports."),
 )
 
