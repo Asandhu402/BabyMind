@@ -89,6 +89,22 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
         self.assertEqual(messages[-1]["content"], "Hello from BabyMind")
 
+    def test_conversation_can_be_deleted_with_its_messages(self) -> None:
+        fake_result = SimpleNamespace(response="Temporary answer")
+        with patch.object(server.COORDINATOR, "ask", return_value=fake_result):
+            status, _, body = self.request("/api/chat", {
+                "message": "Delete me", "agent_id": "BM-01"
+            })
+        self.assertEqual(status, 200)
+        conversation_id = json.loads(body)["conversation_id"]
+        request = Request(self.base + "/api/conversations/" + conversation_id, method="DELETE")
+        with urlopen(request, timeout=3) as response:
+            result = json.loads(response.read())
+        self.assertEqual(result["deleted"], 1)
+        status, _, body = self.request("/api/conversations/" + conversation_id)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), [])
+
     def test_collaboration_uses_specialist_reviewer_and_coordinator(self) -> None:
         fake_result = SimpleNamespace(response="Draft answer")
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result) as ask:
