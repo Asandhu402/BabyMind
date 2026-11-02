@@ -105,7 +105,7 @@ successful Windows build, extract it, and double-click `BabyMind.exe`.
 On first launch, BabyMind asks permission to download the default Qwen3.5-4B
 Q4_K_M model (approximately 2.8 GB). It displays download progress, verifies
 the file against the model publisher's SHA-256 checksum, and stores the model
-under `%USERPROFILE%\\.babymind\\models`. Later launches reuse that model
+under `%USERPROFILE%\.babymind\models`. Later launches reuse that model
 locally; the download is not repeated. The first download requires internet
 access and at least 4.5 GB of free disk space.
 
@@ -117,10 +117,10 @@ If WebView2 is missing, install Microsoft's official Evergreen Runtime.
 
 For developers building from source, install Python 3.10 or newer and run:
 
-    .\\build-windows.ps1
+    .\build-windows.ps1
 
-The output is `dist\\BabyMind\\BabyMind.exe`; copy the entire
-`dist\\BabyMind` folder, not just the EXE. The build is not code-signed and
+The output is `dist\BabyMind\BabyMind.exe`; copy the entire
+`dist\BabyMind` folder, not just the EXE. The build is not code-signed and
 is not a traditional installer yet. The default Qwen model is the standard
 Apache-2.0 Qwen release, not an "uncensored" fine-tune; model behaviour and
 refusal tendencies are determined by the selected model.
