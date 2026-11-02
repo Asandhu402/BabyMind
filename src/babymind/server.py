@@ -125,6 +125,7 @@ class Handler(BaseHTTPRequestHandler):
                 "application": "BabyMind",
                 "status": "ready" if model_ready else "waiting_for_model",
                 "agent_count": len(AGENTS), "model_server": provider.base_url,
+                "model_engine": "llama.cpp" if provider.__class__.__name__ == "LlamaCppProvider" else "LM Studio",
                 "model_available": model_ready, "model_name": model_name,
                 "privacy": "Local server; conversation data stays on this device."
             })
