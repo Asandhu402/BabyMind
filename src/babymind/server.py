@@ -216,34 +216,24 @@ class Handler(BaseHTTPRequestHandler):
         agent = next((item for item in AGENTS if item.agent_id == agent_id), None)
         if agent is None:
             raise ValueError("Choose one of the 50 registered agents.")
-        if not conversation_id:
+        is_new_conversation = not conversation_id
+        if is_new_conversation:
             conversation_id = secrets.token_urlsafe(12)
-            timestamp = now()
-            with db() as connection:
-                connection.execute(
-                    "INSERT INTO conversations VALUES (?, ?, ?, ?)",
-                    (conversation_id, task[:54] + ("…" if len(task) > 54 else ""), timestamp, timestamp)
-                )
+            conversation_title = task[:54] + ("…" if len(task) > 54 else "")
         with db() as connection:
-            exists = connection.execute(
-                "SELECT 1 FROM conversations WHERE id=?", (conversation_id,)
-            ).fetchone()
-            if not exists:
-                raise ValueError("Conversation not found. Start a new conversation.")
-            history = connection.execute(
-                "SELECT role, content FROM messages WHERE conversation_id=? "
-                "ORDER BY id DESC LIMIT 12", (conversation_id,)
-            ).fetchall()
-            history = list(reversed(history))
-            connection.execute(
-                "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
-                "VALUES (?, 'user', ?, ?, ?)",
-                (conversation_id, task, agent_id, now())
-            )
-            connection.execute(
-                "UPDATE conversations SET updated_at=? WHERE id=?",
-                (now(), conversation_id)
-            )
+            if not is_new_conversation:
+                exists = connection.execute(
+                    "SELECT 1 FROM conversations WHERE id=?", (conversation_id,)
+                ).fetchone()
+                if not exists:
+                    raise ValueError("Conversation not found. Start a new conversation.")
+                history = connection.execute(
+                    "SELECT role, content FROM messages WHERE conversation_id=? "
+                    "ORDER BY id DESC LIMIT 12", (conversation_id,)
+                ).fetchall()
+                history = list(reversed(history))
+            else:
+                history = []
         context = "\n".join(
             f"{'User' if item['role'] == 'user' else 'BabyMind'}: {item['content']}"
             for item in history
@@ -273,14 +263,25 @@ class Handler(BaseHTTPRequestHandler):
             response = result.response
             used_agents = [agent_id]
         with db() as connection:
+            timestamp = now()
+            if is_new_conversation:
+                connection.execute(
+                    "INSERT INTO conversations VALUES (?, ?, ?, ?)",
+                    (conversation_id, conversation_title, timestamp, timestamp)
+                )
+            connection.execute(
+                "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
+                "VALUES (?, 'user', ?, ?, ?)",
+                (conversation_id, task, agent_id, timestamp)
+            )
             connection.execute(
                 "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
                 "VALUES (?, 'assistant', ?, ?, ?)",
-                (conversation_id, response, agent_id, now())
+                (conversation_id, response, agent_id, timestamp)
             )
             connection.execute(
                 "UPDATE conversations SET updated_at=? WHERE id=?",
-                (now(), conversation_id)
+                (timestamp, conversation_id)
             )
         self.send_json({
             "conversation_id": conversation_id, "response": response,
