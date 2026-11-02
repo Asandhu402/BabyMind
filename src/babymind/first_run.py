@@ -15,7 +15,6 @@ import threading
 import urllib.request
 from pathlib import Path
 from typing import Callable
-from tkinter import Tk, messagebox, ttk
 
 MODEL_URL = (
     "https://huggingface.co/SoAIHQ/Qwen3.5-4B-GGUF/resolve/main/"
@@ -110,6 +109,8 @@ def _download_model(
 
 
 def _ensure_model(model_path: Path) -> None:
+    from tkinter import Tk, messagebox, ttk
+
     marker = model_path.with_suffix(model_path.suffix + ".sha256")
     if model_path.is_file() and marker.is_file():
         if marker.read_text(encoding="ascii").strip() == MODEL_SHA256:
