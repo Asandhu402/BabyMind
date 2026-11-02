@@ -103,7 +103,6 @@ class LlamaCppProvider(LMStudioProvider):
     """
 
     def __init__(self, timeout: int = 180) -> None:
-        import shutil
         import subprocess
         import time
         from pathlib import Path
@@ -125,7 +124,7 @@ class LlamaCppProvider(LMStudioProvider):
         port = int(os.getenv("BABYMIND_LLAMA_PORT", "1235"))
         super().__init__(
             base_url=f"http://127.0.0.1:{port}/v1",
-            model=os.getenv("BABYMIND_MODEL", "local-model"),
+            model=os.getenv("BABYMIND_MODEL"),
             api_key=None,
             timeout=timeout,
         )
