@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["pywebview>=5.0"]
 
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
+
 [project.scripts]
 babymind = "babymind.cli:main"
 babymind-web = "babymind.server:main"
