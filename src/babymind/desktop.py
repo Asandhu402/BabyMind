@@ -15,8 +15,7 @@ from http.server import ThreadingHTTPServer
 
 import webview
 
-from .memory import init_db
-from .server import DATA_HOME, Handler
+from .server import DATA_HOME, Handler, init_db
 
 
 def _available_port() -> int:
