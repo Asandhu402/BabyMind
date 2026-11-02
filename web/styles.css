@@ -27,3 +27,18 @@ body.light .settings-card code{background:rgba(128,98,233,.08)}
 body.light .composer-foot,body.light .composer-hint{color:#858697}
 body.light .message-meta{color:#77798a}
 body.light .icon-button{color:#686b7c}
+
+.export-button{border:1px solid var(--line-strong);background:rgba(255,255,255,.025);color:#aeb0bf;border-radius:7px;padding:6px 9px;font-size:10px;transition:.2s}
+.export-button:hover:not(:disabled){border-color:rgba(165,138,255,.4);color:#d6caff}
+.export-button:disabled{opacity:.35;cursor:not-allowed}
+.composer-actions{display:flex;align-items:center;gap:12px}
+.attach-button{font-size:10px;color:#a9a0ca;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:5px 8px;transition:.2s}
+.attach-button:hover{border-color:rgba(165,138,255,.4);color:#d3c5ff}
+.attach-button input{display:none}
+.attachment-chip{display:flex;align-items:center;gap:8px;width:max-content;max-width:100%;border:1px solid rgba(165,138,255,.25);background:rgba(165,138,255,.08);color:#c6b8f5;border-radius:7px;padding:5px 8px;margin-bottom:9px;font-size:10px}
+.attachment-chip[hidden]{display:none}
+.attachment-chip button{border:0;background:transparent;color:#a6a0b8;font-size:16px;padding:0 2px;margin-left:4px}
+body.light .export-button{color:#5d5e70;background:rgba(255,255,255,.7)}
+body.light .attach-button{color:#6d5aa4}
+body.light .attachment-chip{color:#65539a;background:rgba(128,98,233,.07)}
+@media(max-width:680px){.export-button{font-size:9px;padding:5px 7px}.composer-actions{gap:7px}.attach-button{font-size:9px;padding:5px 6px}}
