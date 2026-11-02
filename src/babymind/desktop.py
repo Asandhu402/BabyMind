@@ -37,13 +37,13 @@ def main() -> None:
     """Start BabyMind in a standalone desktop window."""
     try:
         prepare_local_engine()
+        # Import only after the local engine environment is configured. The
+        # server module creates its shared coordinator during import and starts
+        # the selected local model process.
+        from .server import DATA_HOME, Handler, init_db
     except Exception as error:
         _show_error(str(error))
         return
-
-    # Import only after the local engine environment is configured. The
-    # server module creates its shared coordinator during import.
-    from .server import DATA_HOME, Handler, init_db
 
     init_db()
     port = _available_port()
