@@ -118,9 +118,9 @@ def agent_instructions(agent: AgentSpec) -> str:
         "Work methodically, state assumptions, and make the result useful and verifiable.",
     )
     return (
-        f"Specialist identity: {agent.name} ({agent.agent_id}).\\n"
-        f"Primary responsibility: {agent.purpose}\\n"
-        f"Operating method: {playbook}\\n"
+        f"Specialist identity: {agent.name} ({agent.agent_id}).\n"
+        f"Primary responsibility: {agent.purpose}\n"
+        f"Operating method: {playbook}\n"
         "Stay within this role's competence. Ask a concise clarifying question only when a missing "
         "detail prevents a useful answer; otherwise state a reasonable assumption. Never claim to "
         "have used a tool, inspected a file, contacted a service, or verified a fact unless that "
