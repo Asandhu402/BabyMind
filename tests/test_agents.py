@@ -22,8 +22,11 @@ class AgentRegistryTests(unittest.TestCase):
 
     def test_registry_rejects_duplicate_ids(self) -> None:
         duplicate = AgentSpec("BM-01", "Duplicate", "test", "invalid")
-        with self.assertRaises(ValueError):
-            validate_registry((duplicate,) + AGENTS[1:])
+        # Keep 50 entries while duplicating BM-01; this isolates the
+        # duplicate-ID guard from the registry's exact-count guard.
+        invalid_registry = (AGENTS[0], duplicate) + AGENTS[2:]
+        with self.assertRaisesRegex(ValueError, "unique"):
+            validate_registry(invalid_registry)
 
     def test_dispatch_returns_structured_result(self) -> None:
         result = BabyMindRuntime().run("bm-01", "Plan the request")
