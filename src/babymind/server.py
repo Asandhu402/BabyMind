@@ -35,6 +35,7 @@ COORDINATOR = BabyMindCoordinator()
 def db():
     connection = sqlite3.connect(DB_PATH, timeout=15)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
     try:
         yield connection
         connection.commit()
@@ -204,6 +205,21 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(error), "kind": "model_unavailable"}, 503)
         except Exception as error:
             self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
+
+    def do_DELETE(self) -> None:
+        path = urlparse(self.path).path
+        if not self.authorize(path):
+            return
+        if path.startswith("/api/conversations/"):
+            conversation_id = path.rsplit("/", 1)[-1]
+            with db() as connection:
+                cursor = connection.execute(
+                    "DELETE FROM conversations WHERE id=?", (conversation_id,)
+                )
+                deleted = cursor.rowcount
+            self.send_json({"deleted": deleted})
+        else:
+            self.send_json({"error": "Not found"}, 404)
 
     def handle_chat(self, payload: dict) -> None:
         task = str(payload.get("message", "")).strip()
