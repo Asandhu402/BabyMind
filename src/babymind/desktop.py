@@ -1,7 +1,7 @@
 """Native-window launcher for BabyMind on Windows.
 
-The local HTTP server stays bound to loopback. pywebview supplies the desktop
-window; all chat/model work remains in the existing BabyMind runtime.
+The local HTTP server stays bound to loopback. The bundled llama.cpp engine
+and first-run model setup are prepared before importing the application server.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from http.server import ThreadingHTTPServer
 
 import webview
 
-from .server import DATA_HOME, Handler, init_db
+from .first_run import prepare_local_engine
 
 
 def _available_port() -> int:
@@ -24,8 +24,27 @@ def _available_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def _show_error(message: str) -> None:
+    from tkinter import Tk, messagebox
+
+    root = Tk()
+    root.withdraw()
+    messagebox.showerror("BabyMind could not start", message, parent=root)
+    root.destroy()
+
+
 def main() -> None:
     """Start BabyMind in a standalone desktop window."""
+    try:
+        prepare_local_engine()
+    except Exception as error:
+        _show_error(str(error))
+        return
+
+    # Import only after the local engine environment is configured. The
+    # server module creates its shared coordinator during import.
+    from .server import DATA_HOME, Handler, init_db
+
     init_db()
     port = _available_port()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
@@ -37,7 +56,6 @@ def main() -> None:
     server_thread.start()
 
     url = f"http://127.0.0.1:{port}"
-    # Wait briefly for the local server before creating the desktop window.
     for _ in range(40):
         try:
             with urllib.request.urlopen(url, timeout=0.25):
