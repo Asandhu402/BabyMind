@@ -2,7 +2,7 @@
 
 import unittest
 
-from babymind.agents import AGENTS, AgentSpec, validate_registry
+from babymind.agents import AGENTS, AgentSpec, agent_instructions, validate_registry
 from babymind.runtime import BabyMindRuntime
 
 
@@ -15,6 +15,13 @@ class AgentRegistryTests(unittest.TestCase):
         ids = [agent.agent_id for agent in AGENTS]
         self.assertEqual(ids, [f"BM-{number:02d}" for number in range(1, 51)])
         self.assertEqual(len(ids), len(set(ids)))
+
+    def test_each_agent_has_role_specific_playbook(self) -> None:
+        for agent in AGENTS:
+            instructions = agent_instructions(agent)
+            self.assertIn(agent.name, instructions)
+            self.assertIn(agent.purpose, instructions)
+            self.assertIn("Operating method", instructions)
 
     def test_registry_rejects_wrong_count(self) -> None:
         with self.assertRaises(ValueError):

@@ -1,34 +1,61 @@
 # BabyMind
 
-BabyMind is a modular personal-AI foundation with a fixed catalogue of exactly **50 agents**. All roles share one assistant identity and one configured model provider; role-specific instructions change the specialist perspective, not the underlying model.
+BabyMind is a local-first personal AI application with exactly **50 specialist roles**, one consistent assistant identity, a browser-based interface, optional shared memory, and an LM Studio model connection.
+
+The 50 agents are specialist configurations that share one underlying language model. They are not 50 separately trained or separately running models. The optional collaboration mode performs a specialist pass, a quality-review pass, and a final synthesis pass using that same model.
+
+## What is included
+
+- **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, dark/light themes, and Markdown conversation export.
+- **Local text attachments:** attach small TXT, Markdown, CSV, JSON, source-code, or config files (up to 12 KB) for model context.
+- **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue, each with a focused domain playbook and responsibility.
+- **Unified coordinator:** one BabyMind identity with role-specific instructions.
+- **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
+- **Local memory:** opt-in SQLite task/response memories, with controls to view or clear them.
+- **Conversation storage:** local SQLite history on the computer running BabyMind.
+- **Local model adapter:** LM Studio's OpenAI-compatible API.
+- **CLI:** health, list, ask, route, and memory commands.
+- **No runtime Python dependencies:** server, storage, and model HTTP client use the Python standard library.
 
 ## Requirements
 
 - Python 3.10 or newer
-- LM Studio (free local model runner) for local AI responses
-- No third-party Python packages are required by the runtime
+- [LM Studio](https://lmstudio.ai/) for local model inference
+- A local model compatible with LM Studio's chat-completions endpoint
 
 ## Install
 
-From the repository root:
+Open PowerShell in the repository folder:
 
-    python -m pip install -e .
+    py -m pip install -e .
 
-## Start the local model
+## Start the model
 
-1. Open LM Studio and download a model that fits your computer's memory.
-2. Load that model in the Chat / Developer interface.
-3. Start the local server. The default address is `http://127.0.0.1:1234/v1`.
-4. Keep LM Studio's server running while using BabyMind.
+1. Open LM Studio and download a model that fits the computer's available memory.
+2. Load the model.
+3. Start the local server in LM Studio.
+4. Keep the default endpoint at `http://127.0.0.1:1234/v1`, unless you configure another one.
 
-BabyMind asks LM Studio for the loaded model ID automatically. To override the server or model, set:
+Optional environment variables:
 
-- `BABYMIND_BASE_URL` — defaults to `http://127.0.0.1:1234/v1`
-- `BABYMIND_MODEL` — optional; defaults to the first model reported by LM Studio
-- `BABYMIND_API_KEY` — optional, only if your local server requires one
-- `BABYMIND_HOME` — optional folder for BabyMind's local data
+- `BABYMIND_BASE_URL` — local OpenAI-compatible endpoint; defaults to `http://127.0.0.1:1234/v1`
+- `BABYMIND_MODEL` — optional explicit model ID; otherwise BabyMind discovers the first loaded model
+- `BABYMIND_API_KEY` — optional key if the local server requires one
+- `BABYMIND_HOME` — optional location for BabyMind's SQLite data
 
-## Commands
+## Start the BabyMind interface
+
+    babymind-web
+
+Then open [http://127.0.0.1:8765](http://127.0.0.1:8765).
+
+On Windows, you can double-click `Start-BabyMind.bat` to install and launch the local app. For iPhone access on the same trusted Wi-Fi network, double-click `Start-BabyMind-iPhone.bat` or run:
+
+    babymind-web --lan
+
+The terminal prints a local network address and a one-time access token. Open that address in Safari on the iPhone and enter the token when prompted. Keep the token private and use this only on a trusted home network. The token protects API access; this is not intended for public internet exposure.
+
+## Use the command line
 
     babymind health
     babymind list
@@ -39,23 +66,29 @@ BabyMind asks LM Studio for the loaded model ID automatically. To override the s
     babymind memory list
     babymind memory clear
 
-- `run` tests role routing only; it does not call a model.
-- `ask` sends the request to the single model served by LM Studio, with the selected agent's specialist instructions.
-- Memory is local SQLite and opt-in: nothing is saved unless `--remember` is supplied. Previous notes are not included unless `--use-memory` is supplied.
-- `memory clear` deletes saved BabyMind memory records from its SQLite database.
+- `run` checks role routing and does not call a model.
+- `ask` sends the request to LM Studio with the selected role instructions.
+- Memory is opt-in. Use `--remember` to save and `--use-memory` to include relevant recent notes.
+- In the web UI, the **Remember** and **Use memory** controls are separate.
 
-## Architecture in this increment
+## Developer checks
 
-- **50 role agents:** the canonical BM-01 through BM-50 registry remains unchanged and validated.
-- **One identity / coordinator:** `BabyMindCoordinator` maintains one assistant personality and applies the selected role's specialty.
-- **Model adapter:** `LMStudioProvider` uses LM Studio's OpenAI-compatible local API.
-- **Shared local memory:** `LocalMemory` stores explicitly saved task/response pairs in SQLite.
-- **CLI:** health, list, scaffold routing, local-model ask, and memory management.
+Run the automated test suite from the repository root:
 
-## Honest capability boundary
+    py -m unittest discover -s tests
 
-The 50 entries are role definitions, not 50 separate autonomous models. This version connects all 50 roles to one shared local model. It does not yet give agents independent tools, background autonomy, web access, or permission to take actions. The model's quality and speed depend on the model you load and your computer's available memory.
+## Privacy and data
+
+- The default web server listens only on `127.0.0.1`.
+- Conversations and memory are stored under `~/.babymind/` by default (or `BABYMIND_HOME`).
+- Memory is not automatically written unless the user enables **Remember** for that request.
+- No analytics, account service, or cloud model is included in the application.
+- The model runner is local; the model's own behavior and resource requirements depend on the model selected in LM Studio.
+
+## Current capability boundaries
+
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, internet search, or public-internet remote access. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
 
-The application refuses to start if the registry contains anything other than 50 agents or contains duplicate or non-sequential IDs.
+BabyMind validates that the canonical registry contains exactly 50 unique, sequential IDs from BM-01 through BM-50.

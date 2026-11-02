@@ -4,17 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "babymind"
-version = "0.1.0"
-description = "A modular personal-AI foundation with exactly 50 agents"
+version = "0.2.0"
+description = "Local-first personal AI workspace with 50 specialist roles"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
 [project.scripts]
 babymind = "babymind.cli:main"
+babymind-web = "babymind.server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+babymind = ["web/*"]
