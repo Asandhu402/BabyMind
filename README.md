@@ -55,6 +55,24 @@ On Windows, you can double-click `Start-BabyMind.bat` to install and launch the 
 
 The terminal prints a local network address and a one-time access token. Open that address in Safari on the iPhone and enter the token when prompted. Keep the token private and use this only on a trusted home network. The token protects API access; this is not intended for public internet exposure.
 
+
+## Windows desktop application
+
+Install and launch BabyMind in its own desktop window (no browser tab required):
+
+    py -m pip install -e .
+    babymind-desktop
+
+Or double-click `Start-BabyMind-Desktop.bat`. The first launch installs the
+Python package and the pywebview desktop-window dependency. Windows uses the
+Microsoft Edge WebView2 runtime; if it is missing, install the official
+WebView2 Runtime and launch again.
+
+The desktop window hosts the existing local BabyMind interface. Its local
+server binds only to `127.0.0.1`; model inference still uses the configured
+local LM Studio server. This launcher is a desktop-window version, not yet a
+self-contained signed `.exe` installer.
+
 ## Use the command line
 
     babymind health
