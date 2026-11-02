@@ -13,6 +13,7 @@ dependencies = ["pywebview>=5.0"]
 [project.scripts]
 babymind = "babymind.cli:main"
 babymind-web = "babymind.server:main"
+babymind-desktop = "babymind.desktop:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -23,5 +24,3 @@ where = ["src"]
 [tool.setuptools.package-data]
 babymind = ["web/*"]
 
-[project.scripts]
-babymind-desktop = "babymind.desktop:main"
