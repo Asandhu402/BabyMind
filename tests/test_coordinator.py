@@ -13,10 +13,12 @@ class FakeProvider:
     def __init__(self) -> None:
         self.system_prompt = ""
         self.user_prompt = ""
+        self.system_prompts = []
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         self.system_prompt = system_prompt
         self.user_prompt = user_prompt
+        self.system_prompts.append(system_prompt)
         return "A tested response."
 
 
@@ -32,11 +34,13 @@ class CoordinatorTests(unittest.TestCase):
 
     def test_one_provider_serves_different_agent_roles(self) -> None:
         first = self.coordinator.ask("BM-01", "Coordinate this")
+        first_prompt = self.provider.system_prompt
         second = self.coordinator.ask("BM-02", "Research this")
+        second_prompt = self.provider.system_prompt
         self.assertEqual(first.response, "A tested response.")
-        self.assertIn("Coordinator", self.provider.system_prompt)
+        self.assertIn("Coordinator", first_prompt)
         self.assertEqual(second.agent_id, "BM-02")
-        self.assertIn("Researcher", self.provider.system_prompt)
+        self.assertIn("Researcher", second_prompt)
 
     def test_memory_is_opt_in_for_writing_and_reading(self) -> None:
         self.coordinator.ask("BM-01", "Private task", remember=True)
