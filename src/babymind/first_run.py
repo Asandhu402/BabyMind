@@ -14,6 +14,7 @@ import sys
 import threading
 import urllib.request
 from pathlib import Path
+from typing import Callable
 from tkinter import Tk, messagebox, ttk
 
 MODEL_URL = (
@@ -62,7 +63,7 @@ def _sha256(path: Path) -> str:
 
 def _download_model(
     destination: Path,
-    progress: callable | None = None,
+    progress: Callable[[int, int], None] | None = None,
     cancelled: threading.Event | None = None,
 ) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -204,6 +205,8 @@ def prepare_local_engine() -> None:
     selected = os.getenv("BABYMIND_ENGINE", "").strip().lower()
     if selected in {"lm-studio", "lmstudio"}:
         return
+    if selected and selected not in {"llama.cpp", "llamacpp", "llama-cpp"}:
+        raise RuntimeError(f"Unknown BABYMIND_ENGINE setting: {selected}")
 
     app_dir = _app_directory()
     server = _find_llama_server(app_dir)
@@ -213,9 +216,12 @@ def prepare_local_engine() -> None:
             "BabyMind Windows package again; do not move only BabyMind.exe."
         )
 
-    model_path = Path(os.getenv("BABYMIND_GGUF_MODEL", "")).expanduser()
-    if not str(model_path):
-        model_path = _data_home() / "models" / MODEL_FILENAME
+    configured_model = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
+    model_path = (
+        Path(configured_model).expanduser()
+        if configured_model
+        else _data_home() / "models" / MODEL_FILENAME
+    )
     _ensure_model(model_path)
 
     os.environ["BABYMIND_ENGINE"] = "llama.cpp"
