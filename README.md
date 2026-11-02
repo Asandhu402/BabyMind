@@ -19,7 +19,6 @@ The 50 agents are specialist configurations that share one underlying language m
 
 ## Requirements
 
-- Python 3.10 or newer
 - Windows 10/11 and Python 3.10 or newer
 - Either [LM Studio](https://lmstudio.ai/) or the [llama.cpp runtime](https://github.com/ggml-org/llama.cpp/releases)
 - A compatible local model (LM Studio model or GGUF file)
@@ -109,9 +108,15 @@ Microsoft Edge WebView2 runtime; if it is missing, install the official
 WebView2 Runtime and launch again.
 
 The desktop window hosts the existing local BabyMind interface. Its local
-server binds only to `127.0.0.1`; model inference still uses the configured
-local LM Studio server. This launcher is a desktop-window version, not yet a
-self-contained signed `.exe` installer.
+server binds only to `127.0.0.1`. Build a portable Windows app folder with:
+
+    .\\build-windows.ps1
+
+The output is `dist\\BabyMind\\BabyMind.exe`; copy the entire `dist\\BabyMind`
+folder, not just the EXE. The app uses the installed Microsoft Edge WebView2
+runtime. The portable build bundles BabyMind and Python, but does not bundle a
+model, the llama.cpp runtime, or WebView2. It is not code-signed and is not a
+traditional installer yet.
 
 ## Use the command line
 
