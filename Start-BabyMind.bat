@@ -11,5 +11,5 @@ if errorlevel 1 (
 )
 echo.
 echo Starting BabyMind on this computer...
-babymind-web
+py -m babymind.server
 pause
