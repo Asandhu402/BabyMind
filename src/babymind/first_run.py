@@ -211,6 +211,9 @@ def prepare_local_engine() -> None:
 
     app_dir = _app_directory()
     server = _find_llama_server(app_dir)
+    if server is None and not selected and not getattr(sys, "frozen", False):
+        # Keep source/developer launches compatible with the existing LM Studio default.
+        return
     if server is None:
         raise RuntimeError(
             "The bundled llama.cpp runtime is missing. Download the complete "
