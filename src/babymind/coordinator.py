@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from .agents import AGENTS, AgentSpec, agent_instructions, validate_registry
 from .memory import LocalMemory
-from .providers import ChatProvider, LMStudioProvider
+from .providers import ChatProvider, create_provider
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +26,7 @@ class BabyMindCoordinator:
         agents: tuple[AgentSpec, ...] = AGENTS,
     ) -> None:
         validate_registry(agents)
-        self.provider = provider or LMStudioProvider()
+        self.provider = provider if provider is not None else create_provider()
         self.memory = memory or LocalMemory()
         self._agents = {agent.agent_id: agent for agent in agents}
 

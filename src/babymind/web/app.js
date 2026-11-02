@@ -110,7 +110,7 @@ async function sendMessage(message) {
     await loadConversations();
   } catch(error) {
     $("#typingIndicator")?.remove();
-    addMessage("assistant",`I couldn't complete that request. ${error.message}\n\nCheck that LM Studio is running, a model is loaded, and its local server is enabled.`,"BabyMind · Connection");
+    addMessage("assistant",`I couldn't complete that request. ${error.message}\n\nCheck that your selected local model engine is running and a model is loaded.`,"BabyMind · Connection");
     toast(error.message);
   } finally {state.busy=false;$("#sendButton").disabled=false;$("#messageInput").focus();}
 }
@@ -127,11 +127,11 @@ async function checkHealth() {
     if(result.model_available) {
       $("#statusDot").className="status-dot online";
       $("#connectionText").textContent="Local model connected";
-      $("#modelSettingStatus").textContent="Connected · "+(result.model_name||"Model loaded");
+      $("#modelSettingStatus").textContent="Connected · "+(result.model_engine||"Local engine")+" · "+(result.model_name||"Model loaded");
     } else {
       $("#statusDot").className="status-dot offline";
       $("#connectionText").textContent="Waiting for local model";
-      $("#modelSettingStatus").textContent="Start LM Studio server and load a model";
+      $("#modelSettingStatus").textContent="Start your selected local engine and load a model";
     }
   } catch(error) {
     $("#statusDot").className="status-dot offline";$("#connectionText").textContent="App connection issue";
