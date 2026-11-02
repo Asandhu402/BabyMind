@@ -18,6 +18,10 @@ try {
     New-Item -ItemType Directory -Force -Path $tempRoot, $extract | Out-Null
     Write-Host "Downloading official llama.cpp Windows CPU runtime..."
     Invoke-WebRequest -Uri $runtimeUrl -OutFile $archive
+    $runtimeHash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($runtimeHash -ne "73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287") {
+        throw "The downloaded llama.cpp archive failed its SHA-256 integrity check."
+    }
     Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
 
     $server = Get-ChildItem -Path $extract -Filter "llama-server.exe" -Recurse |
