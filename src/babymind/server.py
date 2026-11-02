@@ -9,9 +9,11 @@ import json
 import mimetypes
 import os
 import secrets
+import socket
 import sqlite3
 import threading
 import webbrowser
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -30,10 +32,18 @@ DB_LOCK = threading.Lock()
 COORDINATOR = BabyMindCoordinator()
 
 
-def db() -> sqlite3.Connection:
+@contextmanager
+def db():
     connection = sqlite3.connect(DB_PATH, timeout=15)
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def init_db() -> None:
@@ -86,8 +96,21 @@ class Handler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
             raise ValueError("Invalid JSON request.") from error
 
+    def authorize(self, path: str) -> bool:
+        token = getattr(self.server, "auth_token", None)
+        if token and path.startswith("/api/") and secrets.compare_digest(
+            self.headers.get("X-BabyMind-Token", ""), token
+        ):
+            return True
+        if token and path.startswith("/api/"):
+            self.send_json({"error": "This BabyMind server requires its local access token."}, 401)
+            return False
+        return True
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if not self.authorize(path):
+            return
         if path == "/api/health":
             provider = LMStudioProvider()
             try:
@@ -155,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if not self.authorize(path):
+            return
         try:
             payload = self.read_json()
             if path == "/api/conversations":
@@ -267,18 +292,34 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Start the BabyMind local web app.")
-    parser.add_argument("--host", default="127.0.0.1", help="Use 127.0.0.1 for this PC only.")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind address; localhost is safest.")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--lan", action="store_true", help="Allow trusted devices on your Wi-Fi using a one-time access token.")
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
     init_db()
-    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    host = "0.0.0.0" if args.lan else args.host
+    auth_token = secrets.token_urlsafe(24) if args.lan else None
+    server = ThreadingHTTPServer((host, args.port), Handler)
+    server.auth_token = auth_token
     url = f"http://127.0.0.1:{args.port}"
     print("BabyMind web app")
-    print(f"Open {url}")
+    print(f"Open on this computer: {url}")
     print("Data is stored locally in", DATA_HOME)
-    if args.host not in ("127.0.0.1", "localhost", "::1"):
-        print("WARNING: LAN binding exposes this unauthenticated app to your local network.")
+    if args.lan:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.connect(("192.0.2.1", 80))
+            lan_ip = probe.getsockname()[0]
+        except OSError:
+            lan_ip = "YOUR-PC-IP"
+        finally:
+            probe.close()
+        print(f"Open on a trusted Wi-Fi device: http://{lan_ip}:{args.port}")
+        print(f"One-time BabyMind access token: {auth_token}")
+        print("Keep this token private. Use only on a trusted local network.")
+    elif args.host not in ("127.0.0.1", "localhost", "::1"):
+        print("WARNING: Non-local binding is not protected. Use --lan instead.")
     if not args.no_browser:
         webbrowser.open(url)
     try:
