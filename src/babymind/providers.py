@@ -103,6 +103,7 @@ class LlamaCppProvider(LMStudioProvider):
     """
 
     def __init__(self, timeout: int = 180) -> None:
+        import atexit
         import subprocess
         import time
         from pathlib import Path
@@ -147,6 +148,7 @@ class LlamaCppProvider(LMStudioProvider):
             )
         except OSError as error:
             raise ProviderError(f"Could not start llama.cpp: {error}") from error
+        atexit.register(self.stop)
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             if self._process.poll() is not None:
@@ -163,6 +165,15 @@ class LlamaCppProvider(LMStudioProvider):
             self._process.terminate()
             raise ProviderError("Timed out while loading the local GGUF model.")
 
+    def stop(self) -> None:
+        """Stop only the llama-server process started by this provider."""
+        if self._process is not None and self._process.poll() is None:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=5)
+            except Exception:
+                self._process.kill()
+
     def _request_json(self, url: str, payload: dict | None = None) -> dict:
         try:
             return super()._request_json(url, payload)
@@ -170,7 +181,7 @@ class LlamaCppProvider(LMStudioProvider):
             raise ProviderError(f"BabyMind local llama.cpp engine: {error}") from error
 
 
-def create_provider():
+def create_provider() -> ChatProvider:
     """Select the local inference backend from BABYMIND_ENGINE."""
     engine = os.getenv("BABYMIND_ENGINE", "lm-studio").strip().lower()
     if engine in {"llama.cpp", "llamacpp", "llama-cpp"}:
