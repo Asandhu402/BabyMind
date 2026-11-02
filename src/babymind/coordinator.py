@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from .agents import AGENTS, AgentSpec, agent_instructions
+from .agents import AGENTS, AgentSpec, agent_instructions, validate_registry
 from .memory import LocalMemory
 from .providers import ChatProvider, LMStudioProvider
 
@@ -25,6 +25,7 @@ class BabyMindCoordinator:
         memory: LocalMemory | None = None,
         agents: tuple[AgentSpec, ...] = AGENTS,
     ) -> None:
+        validate_registry(agents)
         self.provider = provider or LMStudioProvider()
         self.memory = memory or LocalMemory()
         self._agents = {agent.agent_id: agent for agent in agents}
