@@ -90,9 +90,19 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/health":
             provider = LMStudioProvider()
+            try:
+                model_data = provider._request_json(f"{provider.base_url}/models")
+                models = model_data.get("data", [])
+                model_ready = bool(models)
+                model_name = str(models[0].get("id", "Loaded model")) if models else None
+            except ProviderError:
+                model_ready = False
+                model_name = None
             self.send_json({
-                "application": "BabyMind", "status": "ready",
+                "application": "BabyMind",
+                "status": "ready" if model_ready else "waiting_for_model",
                 "agent_count": len(AGENTS), "model_server": provider.base_url,
+                "model_available": model_ready, "model_name": model_name,
                 "privacy": "Local server; conversation data stays on this device."
             })
         elif path == "/api/agents":
@@ -217,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
         if payload.get("collaborate"):
             first = COORDINATOR.ask(agent_id, prompt, use_memory=bool(payload.get("use_memory")))
-            reviewer = COORDINATOR.ask("BM-48", (
+            reviewer = COORDINATOR.ask("BM-49", (
                 "Review this draft for correctness, gaps, clarity, and safety. "
                 "Return concise actionable improvements. Do not rewrite the user's request.\n\n"
                 + first.response
@@ -229,7 +239,7 @@ class Handler(BaseHTTPRequestHandler):
                 + "\n\nREVIEW NOTES:\n" + reviewer.response
             ), remember=bool(payload.get("remember")))
             response = final.response
-            used_agents = [agent_id, "BM-48", "BM-01"]
+            used_agents = [agent_id, "BM-49", "BM-01"]
         else:
             result = COORDINATOR.ask(
                 agent_id, prompt,
