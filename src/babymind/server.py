@@ -367,7 +367,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Start the task before requesting an execution proposal.")
                 proposal_action = str(payload.get("action", "list_directory")).strip()
                 proposal = build_readonly_proposal(
-                    str(payload.get("relative_path", "")), action=proposal_action
+                    str(payload.get("relative_path", "")),
+                    action=proposal_action,
+                    name_contains=str(payload.get("name_contains", "")),
                 )
                 proposal_id = secrets.token_urlsafe(12)
                 timestamp = now()
@@ -388,6 +390,8 @@ class Handler(BaseHTTPRequestHandler):
                     "effects": (
                         "Read up to 32 KB of this UTF-8 text file after approval."
                         if proposal["action"] == "read_text_file"
+                        else "Search eligible filenames only; file contents are not opened."
+                        if proposal["action"] == "find_files"
                         else "Read directory names and basic item types only; no file contents are opened."
                     ),
                     "created_at": timestamp
@@ -428,6 +432,8 @@ class Handler(BaseHTTPRequestHandler):
                     "notice": (
                         "Approved text-file preview completed. No files were modified."
                         if row["action"] == "read_text_file"
+                        else "Filename search completed. No file contents were opened."
+                        if row["action"] == "find_files"
                         else "Read-only directory listing completed. No file contents were opened or modified."
                     )
                 })
