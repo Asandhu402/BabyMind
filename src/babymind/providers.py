@@ -51,15 +51,15 @@ class LMStudioProvider:
         except HTTPError as error:
             detail = error.read().decode("utf-8", errors="replace")
             raise ProviderError(
-                f"LM Studio returned HTTP {error.code}: {detail[:500]}"
+                f"Local model server returned HTTP {error.code}: {detail[:500]}"
             ) from error
         except (URLError, TimeoutError, OSError) as error:
             raise ProviderError(
-                "Could not reach LM Studio. Start its local server and check "
+                "Could not reach the local model server. Start the configured engine and check "
                 f"the address {self.base_url}. Details: {error}"
             ) from error
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            raise ProviderError("LM Studio returned invalid JSON.") from error
+            raise ProviderError("Local model server returned invalid JSON.") from error
 
     def _resolve_model(self) -> str:
         if self.model:
@@ -68,7 +68,7 @@ class LMStudioProvider:
         models = response.get("data", [])
         if not models or not models[0].get("id"):
             raise ProviderError(
-                "No model is available. Load a model in LM Studio, or set "
+                "No model is available from the local model server; set "
                 "BABYMIND_MODEL to a model ID."
             )
         return str(models[0]["id"])
@@ -107,10 +107,10 @@ class LMStudioProvider:
             content = response["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as error:
             raise ProviderError(
-                "LM Studio response did not contain a chat completion."
+                "Local model server response did not contain a chat completion."
             ) from error
         if not isinstance(content, str) or not content.strip():
-            raise ProviderError("LM Studio returned an empty response.")
+            raise ProviderError("Local model server returned an empty response.")
         return content.strip()
 
 class LlamaCppProvider(LMStudioProvider):
@@ -201,7 +201,7 @@ class LlamaCppProvider(LMStudioProvider):
 
 def create_provider() -> ChatProvider:
     """Select the local inference backend from BABYMIND_ENGINE."""
-    engine = os.getenv("BABYMIND_ENGINE", "lm-studio").strip().lower()
+    engine = os.getenv("BABYMIND_ENGINE", "llama.cpp").strip().lower()
     if engine in {"llama.cpp", "llamacpp", "llama-cpp"}:
         return LlamaCppProvider()
     if engine in {"lm-studio", "lmstudio"}:
