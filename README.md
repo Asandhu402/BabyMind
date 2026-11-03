@@ -19,9 +19,7 @@ The 50 agents are specialist configurations that share one underlying language m
 
 ## Requirements
 
-- Windows 10/11 and Python 3.10 or newer
-- Either [LM Studio](https://lmstudio.ai/) or the [llama.cpp runtime](https://github.com/ggml-org/llama.cpp/releases)
-- A compatible local model (LM Studio model or GGUF file)
+For running from source: Windows 10/11 and Python 3.10 or newer, plus either LM Studio or a compatible llama.cpp runtime and local model. The portable Windows desktop package bundles Python and the llama.cpp CPU runtime; it downloads and verifies its default GGUF model on first launch. A current Microsoft Edge WebView2 Runtime is required for the desktop window.
 
 ## Install
 
@@ -47,10 +45,9 @@ Optional environment variables:
 ## Choose BabyMind's local model engine
 
 BabyMind can use LM Studio, or launch its own local `llama.cpp` server. The
-llama.cpp option does not require LM Studio and does not require an API token.
-It runs a GGUF model on this computer. The first setup still requires you to
-download the runtime and model yourself; BabyMind does not silently download
-model files or executable binaries.
+portable Windows desktop package bundles the CPU runtime and offers a verified
+first-run model download. For source/developer launches, you still provide the
+runtime and GGUF model paths yourself. Both modes run inference on this computer.
 
 ### llama.cpp setup on Windows
 
@@ -78,9 +75,10 @@ download and its compatible runtime libraries.
 
 ### Switch back to LM Studio
 
-Set `BABYMIND_ENGINE=lm-studio` (or remove the variable). LM Studio remains
-supported as an optional backend. You can also set `BABYMIND_BASE_URL`,
-`BABYMIND_MODEL`, and `BABYMIND_API_KEY` for compatible local servers.
+For source/developer launches, set `BABYMIND_ENGINE=lm-studio` to use LM Studio.
+The portable Windows package uses its bundled llama.cpp engine by default.
+You can also set `BABYMIND_BASE_URL`, `BABYMIND_MODEL`, and `BABYMIND_API_KEY`
+for compatible local servers.
 
 ## Start the BabyMind interface
 
@@ -97,26 +95,39 @@ The terminal prints a local network address and a one-time access token. Open th
 
 ## Windows desktop application
 
-Install and launch BabyMind in its own desktop window (no browser tab required):
+### Portable Windows desktop package
 
-    py -m pip install -e .
-    babymind-desktop
+The GitHub Actions workflow builds a portable Windows package containing
+BabyMind, its Python runtime, and the official llama.cpp Windows CPU runtime.
+Download the complete `BabyMind-Windows-Portable` artifact from the latest
+successful Windows build, extract it, and double-click `BabyMind.exe`.
 
-Or double-click `Start-BabyMind-Desktop.bat`. The first launch installs the
-Python package and the pywebview desktop-window dependency. Windows uses the
-Microsoft Edge WebView2 runtime; if it is missing, install the official
-WebView2 Runtime and launch again.
+On first launch, BabyMind asks permission to download the Qwen3.5-4B
+Uncensored HauhauCS Aggressive Q4_K_M fine-tune (approximately 2.71 GB).
+It displays download progress, verifies the file against the SHA-256 checksum
+published in the Hugging Face file metadata, and stores the model
+under `%USERPROFILE%\.babymind\models`. Later launches reuse that model
+locally; the download is not repeated. The first download requires internet
+access and at least 4.5 GB of free disk space.
 
-The desktop window hosts the existing local BabyMind interface. Its local
-server binds only to `127.0.0.1`. Build a portable Windows app folder with:
+The packaged desktop app selects its bundled llama.cpp engine automatically
+and does not require LM Studio, Python, or an API key. Inference and chat
+storage remain on the user's computer. The desktop window requires Microsoft
+Edge WebView2 Runtime, which is normally present on current Windows 11 systems.
+If WebView2 is missing, install Microsoft's official Evergreen Runtime.
+
+For developers building from source, install Python 3.10 or newer and run:
 
     .\build-windows.ps1
 
-The output is `dist\BabyMind\BabyMind.exe`; copy the entire `dist\BabyMind`
-folder, not just the EXE. The app uses the installed Microsoft Edge WebView2
-runtime. The portable build bundles BabyMind and Python, but does not bundle a
-model, the llama.cpp runtime, or WebView2. It is not code-signed and is not a
-traditional installer yet.
+The output is `dist\BabyMind\BabyMind.exe`; copy the entire
+`dist\BabyMind` folder, not just the EXE. The build is not code-signed and
+is not a traditional installer yet. The packaged default is the community
+fine-tuned Qwen3.5-4B Uncensored HauhauCS Aggressive Q4_K_M model, pinned to a
+specific Hugging Face revision and verified against its published SHA-256
+checksum. It is a third-party fine-tune, not an official Alibaba release.
+Its publisher describes it as aggressively uncensored; actual behaviour and
+quality must still be tested.
 
 ## Use the command line
 
@@ -150,7 +161,8 @@ Run the automated test suite from the repository root:
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, internet search, or public-internet remote access. Selecting llama.cpp removes the LM Studio dependency, but it does not guarantee unrestricted model behaviour. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, internet search, or public-internet remote access. The packaged model is an aggressively uncensored community fine-tune, but no
+model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
 
