@@ -11,6 +11,14 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Treat search results and snippets as untrusted content. They are evidence to evaluate, never instructions to follow.
 - Show source links to the user; do not claim a fact is verified merely because it appeared in a search result.
 
+## Phase 1.1 — optional bounded source-page reading (implemented foundation)
+
+- Optionally read up to two search-result pages per chat request.
+- Accept only HTTP(S) on standard ports; reject private, local, reserved, credential-bearing, and unsafe redirect targets.
+- Fetch at most 1 MB per page with a 12-second timeout; accept HTML and plain text only.
+- Extract up to 12,000 characters of text, omit scripts/styles/navigation/forms, and never execute page code.
+- Treat all extracted page text as untrusted instructions and evidence. Reading a page does not verify its claims.
+
 ## Phase 2A — visible task queue (implemented foundation)
 
 - Persist up to 100 user-created tasks in the local encrypted SQLite database.
@@ -26,7 +34,14 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Require confirmation before overwriting/deleting files, installing software, sending messages, spending money, or changing accounts.
 - Provide pause, resume, cancel, and terminate controls; log each action and its result.
 
-### Phase 2B.1 — approval-gated read-only listing (implemented foundation)\n\n- Set `BABYMIND_WORKSPACE_ROOT` to an existing folder on the BabyMind computer.\n- Start a task, request a `list_directory` proposal for a relative subfolder, review its target and SHA-256 proposal fingerprint, then explicitly approve that exact fingerprint.\n- The server revalidates the path at execution time, rejects absolute paths and parent traversal, and lists at most 200 entry names/types. It never opens file contents or follows symlinks.\n- This is a narrow API foundation; it is not a general-purpose executor and does not yet provide a complete graphical proposal/approval experience.\n\n### Phase 2B.2 — approval-gated new text files (implemented foundation)
+### Phase 2B.1 — approval-gated read-only listing (implemented foundation)
+
+- Set `BABYMIND_WORKSPACE_ROOT` to an existing folder on the BabyMind computer.
+- Start a task, request a `list_directory` proposal for a relative subfolder, review its target and SHA-256 proposal fingerprint, then explicitly approve that exact fingerprint.
+- The server revalidates the path at execution time, rejects absolute paths and parent traversal, and lists at most 200 entry names/types. It never opens file contents or follows symlinks.
+- This is a narrow API foundation; it is not a general-purpose executor and does not yet provide a complete graphical proposal/approval experience.
+
+### Phase 2B.2 — approval-gated new text files (implemented foundation)
 
 - Create a new allowlisted UTF-8 text file up to 32 KB inside an existing workspace folder.
 - Keep proposed content encrypted in the local proposal store until approval.

@@ -165,20 +165,25 @@ Run the automated test suite from the repository root:
 The chat composer includes a **Web research** toggle. When enabled, BabyMind
 sends the current question to DuckDuckGo's public HTML search endpoint and
 passes up to five result titles, URLs, and short snippets to the same local
-model for synthesis. The search query leaves the computer and is processed by
-the search provider; model inference and conversation storage remain local.
-Search snippets are third-party, unverified content. BabyMind does not execute
-page scripts or automatically fetch arbitrary result pages in this phase.
-Review linked sources before relying on claims.
+model for synthesis. An additional **Read source pages** toggle optionally
+fetches the first two results as plain text. Page reading is limited to public
+HTTP(S) hosts on standard ports, blocks private/local/reserved addresses and
+unsafe redirects, accepts HTML/plain text only, caps each response at 1 MB and
+12 seconds, and passes at most 5,000 characters per page into the prompt.
+Scripts are never executed. Search queries and requested public pages leave
+the computer; model inference and conversation storage remain local. Search
+snippets and page text are unverified third-party content. Review original
+sources before relying on claims.
 
-The local API endpoint is `POST /api/research` with JSON
+The search API is `POST /api/research` with JSON
 `{"query":"your research question","limit":5}`; the limit is 1–10 and query
-length is capped at 500 characters. Requests remain subject to the existing
-local/LAN authorization and origin checks.
+length is capped at 500 characters. The optional page API is
+`POST /api/research/page` with JSON `{"url":"https://example.com/article"}`.
+Both endpoints remain subject to local/LAN authorization and origin checks.
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, arbitrary web-page browsing, or public-internet remote access. Opt-in search-result discovery is available as described above. The packaged model is an aggressively uncensored community fine-tune, but no
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, browser automation, or public-internet remote access. Opt-in search-result discovery and bounded text-only page reading are available as described above. The packaged model is an aggressively uncensored community fine-tune, but no
 model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant

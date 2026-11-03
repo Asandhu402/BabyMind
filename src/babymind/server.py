@@ -25,7 +25,7 @@ from .coordinator import BabyMindCoordinator
 from .providers import ProviderError
 from .secure_store import SecureTextStore
 from .lan_tls import create_lan_tls_context
-from .research import search_web
+from .research import fetch_page, search_web
 
 WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
@@ -446,6 +446,12 @@ class Handler(BaseHTTPRequestHandler):
                         else "Read-only directory listing completed. No file contents were opened or modified."
                     )
                 })
+            elif path == "/api/research/page":
+                page_url = str(payload.get("url", "")).strip()
+                if not page_url or len(page_url) > 2048:
+                    raise ValueError("Enter a web page URL of 1–2,048 characters.")
+                result = fetch_page(page_url)
+                self.send_json(result)
             elif path == "/api/research":
                 query = str(payload.get("query", "")).strip()
                 limit = int(payload.get("limit", 5))
