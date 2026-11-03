@@ -48,6 +48,20 @@ int main() {
     std::wstring root_path(candidate);
     const std::wstring nested = root_path + L"\\nested";
     CHECK(CreateDirectoryW(nested.c_str(), nullptr) != 0);
+    const std::wstring outside = root_path + L"_outside";
+    CHECK(CreateDirectoryW(outside.c_str(), nullptr) != 0);
+    const std::wstring outside_file = outside + L"\\secret.txt";
+    HANDLE outside_handle = CreateFileW(outside_file.c_str(), GENERIC_WRITE, 0, nullptr,
+        CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    CHECK(outside_handle != INVALID_HANDLE_VALUE);
+    const char secret[] = "outside";
+    DWORD secret_written = 0;
+    CHECK(WriteFile(outside_handle, secret, sizeof(secret) - 1, &secret_written, nullptr) != 0);
+    CHECK(secret_written == sizeof(secret) - 1);
+    CHECK(CloseHandle(outside_handle) != 0);
+    const std::wstring junction = root_path + L"\\escape";
+    CHECK(CreateSymbolicLinkW(junction.c_str(), outside.c_str(),
+        SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != 0);
 
     void* root = nullptr;
     CHECK(bm_ws_open_workspace_root(root_path.c_str(), &root) == BM_WS_OK);
@@ -64,11 +78,20 @@ int main() {
     CHECK(bm_ws_create_new_text(root, L"nested/hello.txt", payload, sizeof(payload), 1024) == BM_WS_IO_ERROR);
     CHECK(bm_ws_read_text(root, L"../outside.txt", 1024, output, sizeof(output), &bytes_read) == BM_WS_INVALID_RELATIVE_PATH);
     CHECK(bm_ws_read_text(root, L"nested/absent.txt", 1024, output, sizeof(output), &bytes_read) == BM_WS_IO_ERROR);
-    CHECK(bm_ws_read_text(root, L"nested/hello.txt", 1024, output, 4, &bytes_read) == BM_WS_TOO_LARGE);
+    CHECK(bm_ws_read_text(root, L"nested/hello.txt", 1024, output, 4, &bytes_read) == BM_WS_BUFFER_TOO_SMALL);
+    CHECK(bm_ws_read_text(root, L"escape/secret.txt", 1024, output, sizeof(output), &bytes_read) != BM_WS_OK);
+    CHECK(bm_ws_create_new_text(root, L"escape/created.txt", payload, sizeof(payload), 1024) != BM_WS_OK);
+
+    void* escaped_root = nullptr;
+    CHECK(bm_ws_open_workspace_root(junction.c_str(), &escaped_root) != BM_WS_OK);
+    CHECK(escaped_root == nullptr);
 
     bm_ws_close_workspace_root(root);
     CHECK(DeleteFileW((nested + L"\\hello.txt").c_str()) != 0);
     CHECK(RemoveDirectoryW(nested.c_str()) != 0);
+    CHECK(DeleteFileW(outside_file.c_str()) != 0);
+    CHECK(RemoveDirectoryW(outside.c_str()) != 0);
+    CHECK(RemoveDirectoryW(junction.c_str()) != 0);
     CHECK(RemoveDirectoryW(root_path.c_str()) != 0);
 
     std::wcout << L"Handle-relative workspace tests passed. Python integration remains disabled.\n";
