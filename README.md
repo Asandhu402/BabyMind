@@ -192,3 +192,17 @@ model can guarantee unrestricted behaviour on every prompt. iPhone use is suppor
 BabyMind validates that the canonical registry contains exactly 50 unique, sequential IDs from BM-01 through BM-50.
 
 **Security status:** Workspace file operations and project test execution are disabled in the current development branch until native, race-resistant filesystem protections and a real OS-level execution sandbox are implemented and tested.
+
+
+## Installation diagnostics
+
+Run the non-destructive diagnostic command from PowerShell:
+
+    babymind doctor
+
+It checks the Python version, 50-role registry, local storage permissions,
+existing encrypted memory database/key availability, local model connection,
+and the current workspace/execution security gates. It never starts a model,
+executes project code, or creates a replacement encryption key. A disconnected
+model is reported as a warning so you can start LM Studio and run the command
+again. A missing memory key is a failure: do not delete or replace it.
