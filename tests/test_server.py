@@ -57,6 +57,66 @@ class BabyMindWebTests(unittest.TestCase):
         except HTTPError as error:
             return error.code, error.headers.get("Content-Type"), error.read()
 
+    def test_integrations_api_lists_optional_tools(self) -> None:
+        status, _, body = self.request("/api/integrations")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            {item["integration_id"] for item in json.loads(body)},
+            {"docling", "faster-whisper", "browser-use", "open-interpreter"},
+        )
+
+    def test_document_integration_uses_core_coordinator(self) -> None:
+        fake = SimpleNamespace(
+            response="Document summary", agent_id="BM-02", agent_name="Researcher",
+            memories_used=0, remembered=False,
+        )
+        with patch.object(server.COORDINATOR, "process_document", return_value=(fake, 123)) as process:
+            status, _, body = self.request("/api/integrations/document", {
+                "path": "C:/Users/test/report.pdf", "agent_id": "BM-02",
+            })
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["response"], "Document summary")
+        self.assertEqual(json.loads(body)["extracted_characters"], 123)
+        process.assert_called_once()
+
+    def test_audio_integration_uses_core_coordinator(self) -> None:
+        fake = SimpleNamespace(
+            response="Audio summary", agent_id="BM-01", agent_name="Coordinator",
+            memories_used=0, remembered=False,
+        )
+        transcript = {"text": "Hello there", "language": "en"}
+        with patch.object(server.COORDINATOR, "process_audio", return_value=(fake, transcript)) as process:
+            status, _, body = self.request("/api/integrations/audio", {
+                "path": "C:/Users/test/voice.wav",
+            })
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["transcript"]["text"], "Hello there")
+        process.assert_called_once()
+
+    def test_browser_and_coding_integrations_fail_closed_without_explicit_approval(self) -> None:
+        for endpoint, payload in [
+            ("/api/integrations/browser", {"task": "Open a website"}),
+            ("/api/integrations/coding", {"workspace": "C:/Projects"}),
+        ]:
+            status, _, body = self.request(endpoint, payload)
+            self.assertEqual(status, 400)
+            self.assertIn(b"explicitly", body.lower())
+
+    def test_integration_exchanges_are_saved_in_encrypted_conversation_history(self) -> None:
+        conversation_id = server.persist_integration_exchange(
+            "", "Analyze local document: report.pdf", "This is the summary."
+        )
+        status, _, body = self.request("/api/conversations/" + conversation_id)
+        self.assertEqual(status, 200)
+        messages = json.loads(body)
+        self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
+        self.assertEqual(messages[-1]["content"], "This is the summary.")
+        with server.db() as connection:
+            rows = connection.execute(
+                "SELECT content FROM messages WHERE conversation_id=?", (conversation_id,)
+            ).fetchall()
+        self.assertTrue(all(row["content"].startswith("bmenc:v1:") for row in rows))
+
     def test_task_queue_create_and_lifecycle(self) -> None:
         status, _, body = self.request("/api/tasks", {
             "title": "Prepare project plan", "details": "Draft steps only"

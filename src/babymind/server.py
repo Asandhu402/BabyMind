@@ -5,6 +5,7 @@ The server binds to localhost by default. LAN access is opt-in via --lan.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import ipaddress
 import json
 import mimetypes
@@ -105,6 +106,46 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def persist_integration_exchange(
+    conversation_id: str, user_content: str, assistant_content: str, agent_id: str = "BM-01"
+) -> str:
+    """Persist a completed local-tool exchange in the same encrypted chat history."""
+    clean_user = user_content.strip()
+    clean_assistant = assistant_content.strip()
+    if not clean_user or not clean_assistant:
+        raise ValueError("Integration exchange content cannot be empty.")
+    timestamp = now()
+    conversation_id = conversation_id.strip()
+    secure = text_store()
+    with DB_LOCK, db() as connection:
+        if not conversation_id:
+            conversation_id = secrets.token_urlsafe(12)
+            title = clean_user[:54] + ("…" if len(clean_user) > 54 else "")
+            connection.execute(
+                "INSERT INTO conversations VALUES (?, ?, ?, ?)",
+                (conversation_id, secure.encrypt(title), timestamp, timestamp),
+            )
+        elif not connection.execute(
+            "SELECT 1 FROM conversations WHERE id=?", (conversation_id,)
+        ).fetchone():
+            raise ValueError("Conversation not found. Start a new conversation.")
+        connection.execute(
+            "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
+            "VALUES (?, 'user', ?, ?, ?)",
+            (conversation_id, secure.encrypt(clean_user), agent_id, timestamp),
+        )
+        connection.execute(
+            "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
+            "VALUES (?, 'assistant', ?, ?, ?)",
+            (conversation_id, secure.encrypt(clean_assistant), agent_id, timestamp),
+        )
+        connection.execute(
+            "UPDATE conversations SET updated_at=? WHERE id=?",
+            (timestamp, conversation_id),
+        )
+    return conversation_id
+
+
 def is_loopback_host(host: str) -> bool:
     """Return whether a bind host is a loopback address or localhost."""
     if host.lower() == "localhost":
@@ -194,6 +235,9 @@ class Handler(BaseHTTPRequestHandler):
                 "model_available": model_ready, "model_name": model_name,
                 "privacy": "Local server; conversation data stays on this device."
             })
+        elif path == "/api/integrations":
+            from .integrations.catalog import integration_status
+            self.send_json(integration_status())
         elif path == "/api/agents":
             self.send_json([{
                 "id": agent.agent_id, "name": agent.name,
@@ -291,6 +335,91 @@ class Handler(BaseHTTPRequestHandler):
                     self.handle_chat(payload)
                 finally:
                     INFERENCE_SEMAPHORE.release()
+            elif path == "/api/integrations/document":
+                source = str(payload.get("path", "")).strip()
+                if not source or len(source) > 2048:
+                    raise ValueError("Enter a local document path of 1–2,048 characters.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy with another model request."}, 429)
+                    return
+                try:
+                    result, extracted_chars = COORDINATOR.process_document(
+                        str(payload.get("agent_id", "BM-01")), source,
+                        str(payload.get("instruction", "Summarize this document and identify its key points.")),
+                        use_memory=bool(payload.get("use_memory")),
+                        remember=bool(payload.get("remember")),
+                    )
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                user_message = f"Analyze local document: {source}\n{payload.get('instruction', 'Summarize this document and identify its key points.')}"
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, result.response, result.agent_id
+                )
+                self.send_json({
+                    "conversation_id": conversation_id, "user_message": user_message,
+                    "response": result.response, "agent_id": result.agent_id,
+                    "agent_name": result.agent_name, "extracted_characters": extracted_chars,
+                    "memories_used": result.memories_used, "remembered": result.remembered,
+                })
+            elif path == "/api/integrations/audio":
+                source = str(payload.get("path", "")).strip()
+                if not source or len(source) > 2048:
+                    raise ValueError("Enter a local audio path of 1–2,048 characters.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy with another model request."}, 429)
+                    return
+                try:
+                    result, transcript = COORDINATOR.process_audio(
+                        str(payload.get("agent_id", "BM-01")), source,
+                        str(payload.get("instruction", "Summarize this recording and extract important points.")),
+                        language=str(payload.get("language", "")).strip() or None,
+                        use_memory=bool(payload.get("use_memory")),
+                        remember=bool(payload.get("remember")),
+                    )
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                user_message = f"Transcribe and analyze local audio: {source}\n{payload.get('instruction', 'Summarize this recording and extract important points.')}\n\nTRANSCRIPT:\n{str(transcript.get('text', ''))[:100000]}"
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, result.response, result.agent_id
+                )
+                self.send_json({
+                    "conversation_id": conversation_id, "user_message": user_message,
+                    "response": result.response, "agent_id": result.agent_id,
+                    "agent_name": result.agent_name, "transcript": transcript,
+                    "memories_used": result.memories_used, "remembered": result.remembered,
+                })
+            elif path == "/api/integrations/browser":
+                if payload.get("user_approved") is not True:
+                    raise PermissionError("Confirm the browser task explicitly before it can run.")
+                task = str(payload.get("task", "")).strip()
+                if not task or len(task) > 4000:
+                    raise ValueError("Browser task must contain 1–4,000 characters.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy with another model request."}, 429)
+                    return
+                try:
+                    result = asyncio.run(COORDINATOR.run_browser_task(task, user_approved=True))
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                notice = "Browser task completed in a supervised local browser. Review any website changes."
+                user_message = "Supervised browser task: " + task
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, str(result or notice), "BM-01"
+                )
+                self.send_json({"conversation_id": conversation_id, "user_message": user_message, "result": result, "notice": notice})
+            elif path == "/api/integrations/coding":
+                if payload.get("user_approved") is not True:
+                    raise PermissionError("Confirm the read-only coding session explicitly before it can launch.")
+                workspace = str(payload.get("workspace", "")).strip()
+                if not workspace or len(workspace) > 2048:
+                    raise ValueError("Enter a local workspace directory path.")
+                pid = COORDINATOR.launch_coding_session(workspace, user_approved=True)
+                notice = f"Open Interpreter started in read-only mode (process {pid}). Its own sandbox must enforce read-only access; terminate it if it requests broader permissions."
+                user_message = "Launch the read-only coding assistant in: " + workspace
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, notice, "BM-01"
+                )
+                self.send_json({"conversation_id": conversation_id, "user_message": user_message, "pid": pid, "mode": "read-only", "notice": notice}, 201)
             elif path == "/api/tasks":
                 title = str(payload.get("title", "")).strip()
                 details = str(payload.get("details", "")).strip()
@@ -496,8 +625,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Not found"}, 404)
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
+        except (PermissionError, FileNotFoundError) as error:
+            self.send_json({"error": str(error)}, 400)
+        except ImportError as error:
+            self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except ProviderError as error:
             self.send_json({"error": str(error), "kind": "model_unavailable"}, 503)
+        except RuntimeError as error:
+            self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except Exception as error:
             self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
 

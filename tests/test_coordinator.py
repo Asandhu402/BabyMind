@@ -42,6 +42,35 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(second.agent_id, "BM-02")
         self.assertIn("Researcher", second_prompt)
 
+    def test_document_pipeline_routes_extracted_text_through_shared_coordinator(self) -> None:
+        from unittest.mock import patch
+        with patch("babymind.integrations.documents.convert_document", return_value="# Local report\\nRevenue increased.") as convert:
+            result, extracted_chars = self.coordinator.process_document(
+                "BM-02", "report.pdf", "Analyze the report"
+            )
+        convert.assert_called_once()
+        self.assertEqual(result.response, "A tested response.")
+        self.assertEqual(extracted_chars, len("# Local report\\nRevenue increased."))
+        self.assertIn("Local report", self.provider.user_prompt)
+        self.assertIn("untrusted source data", self.provider.user_prompt)
+
+    def test_audio_pipeline_transcribes_then_uses_the_same_model(self) -> None:
+        from unittest.mock import patch
+        transcript = {"text": "Meeting starts at nine.", "language": "en"}
+        with patch("babymind.integrations.speech.transcribe_audio", return_value=transcript):
+            result, metadata = self.coordinator.process_audio(
+                "BM-01", "meeting.wav", "Extract action items"
+            )
+        self.assertEqual(result.response, "A tested response.")
+        self.assertEqual(metadata, transcript)
+        self.assertIn("Meeting starts at nine.", self.provider.user_prompt)
+
+    def test_audio_pipeline_rejects_empty_transcript(self) -> None:
+        from unittest.mock import patch
+        with patch("babymind.integrations.speech.transcribe_audio", return_value={"text": " "}):
+            with self.assertRaises(ValueError):
+                self.coordinator.process_audio("BM-01", "silent.wav")
+
     def test_memory_is_opt_in_for_writing_and_reading(self) -> None:
         self.coordinator.ask("BM-01", "Private task", remember=True)
         self.assertEqual(len(self.memory.recent()), 1)
