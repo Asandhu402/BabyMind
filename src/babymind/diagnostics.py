@@ -33,10 +33,12 @@ def _check_local_model(timeout: float = 3.0) -> tuple[str, str]:
             return "WARN", f"LM Studio not reachable at {base_url}: {error}"
 
     if engine in {"llama.cpp", "llamacpp", "llama-cpp"}:
-        executable = Path(os.getenv("BABYMIND_LLAMA_SERVER", "")).expanduser()
-        model = Path(os.getenv("BABYMIND_GGUF_MODEL", "")).expanduser()
-        if not str(executable) or not str(model):
+        executable_value = os.getenv("BABYMIND_LLAMA_SERVER", "").strip()
+        model_value = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
+        if not executable_value or not model_value:
             return "WARN", "Set BABYMIND_LLAMA_SERVER and BABYMIND_GGUF_MODEL."
+        executable = Path(executable_value).expanduser()
+        model = Path(model_value).expanduser()
         missing = [str(path) for path in (executable, model) if not path.is_file()]
         if missing:
             return "FAIL", "Missing local llama.cpp file(s): " + ", ".join(missing)
