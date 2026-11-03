@@ -256,6 +256,14 @@ def main() -> None:
                     "do not claim code was changed.\\n\\n"
                     + local_code + "\\n\\n" + research_context
                 )
+                # Always start from a fresh conversation. A stale conversation ID
+                # in browser state must never turn this test into a false-positive
+                # "message appeared" check.
+                page.locator("#newChat").click()
+                page.wait_for_function(
+                    "() => document.querySelector('#welcome')?.style.display !== 'none'",
+                    timeout=10000,
+                )
                 page.locator("#messageInput").fill(prompt)
                 previous = page.locator("#messages .message .message-content").count()
                 page.locator("#sendButton").click()
@@ -264,8 +272,37 @@ def main() -> None:
                     arg=previous,
                     timeout=240000,
                 )
-                page.wait_for_timeout(1000)
-                print(f"Inspected {len(local_code)} characters from the local BabyMind source tree.")
+                page.wait_for_function(
+                    "() => !document.querySelector('#typingIndicator')",
+                    timeout=240000,
+                )
+                assistant_messages = page.locator("#messages .message.assistant .message-content")
+                if assistant_messages.count() < 1:
+                    raise RuntimeError("The UI did not render an assistant response.")
+                assistant_response = assistant_messages.last.inner_text().strip()
+                failure_markers = (
+                    "I couldn't complete that request",
+                    "Conversation not found",
+                    "Check that your selected local model engine is running",
+                    "Unable to reach BabyMind server",
+                )
+                if len(assistant_response) < 80 or any(
+                    marker.lower() in assistant_response.lower() for marker in failure_markers
+                ):
+                    raise RuntimeError(
+                        "BabyMind UI did not produce a successful substantive answer. "
+                        f"Rendered assistant text: {assistant_response[:2000]}"
+                    )
+                print(
+                    "BabyMind produced a substantive assistant response "
+                    f"({len(assistant_response)} characters) after inspecting "
+                    f"{len(local_code)} characters of local source."
+                )
+                (OUT / "BabyMind-Upgrade-Recommendation.md").write_text(
+                    "# BabyMind self-inspection result\\n\\n"
+                    + assistant_response + "\\n",
+                    encoding="utf-8",
+                )
                 page.screenshot(path=str(OUT / "03-live-model-chat.png"), full_page=True)
 
                 # Show memory and settings areas.
