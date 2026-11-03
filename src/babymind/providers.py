@@ -199,10 +199,27 @@ class LlamaCppProvider(LMStudioProvider):
             raise ProviderError(f"BabyMind local llama.cpp engine: {error}") from error
 
 
+class UnconfiguredLlamaCppProvider(LMStudioProvider):
+    """Keep the app importable until first-run setup supplies local runtime paths."""
+
+    def __init__(self) -> None:
+        port = int(os.getenv("BABYMIND_LLAMA_PORT", "1235"))
+        super().__init__(base_url=f"http://127.0.0.1:{port}/v1", timeout=600)
+
+    def complete(self, system_prompt: str, user_prompt: str) -> str:
+        raise ProviderError(
+            "BabyMind standalone llama.cpp is not configured yet. Complete first-run "
+            "setup so BABYMIND_LLAMA_SERVER and BABYMIND_GGUF_MODEL point to the "
+            "bundled runtime and pinned model."
+        )
+
+
 def create_provider() -> ChatProvider:
     """Select the local inference backend from BABYMIND_ENGINE."""
     engine = os.getenv("BABYMIND_ENGINE", "llama.cpp").strip().lower()
     if engine in {"llama.cpp", "llamacpp", "llama-cpp"}:
+        if not os.getenv("BABYMIND_LLAMA_SERVER", "").strip() or not os.getenv("BABYMIND_GGUF_MODEL", "").strip():
+            return UnconfiguredLlamaCppProvider()
         return LlamaCppProvider()
     if engine in {"lm-studio", "lmstudio"}:
         return LMStudioProvider()
