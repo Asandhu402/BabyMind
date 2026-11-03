@@ -1,19 +1,24 @@
 # Native Windows workspace broker prototype
 
-This is the first MSVC-buildable stage of BabyMind's native workspace work.
+This is an experimental MSVC/CMake native component. It is **not connected to BabyMind's Python API** and does not enable workspace access in the application.
 
-## Current capability
+## Implemented in this prototype
 
-- Strict lexical validation for relative Windows workspace path components.
-- Windows-only CMake target and native unit-test executable.
-- Reserved API entry points for future workspace operations.
+- Strict lexical validation for relative Windows path components.
+- Root admission for a fixed local NTFS drive, walking each path component relative to the previous directory handle.
+- Handle-relative intermediate and final opens using NtCreateFile with OBJECT_ATTRIBUTES.RootDirectory.
+- Reparse-point inspection on opened handles; reparse components are rejected.
+- Bounded reads from the opened file handle (maximum 16 MiB).
+- Exclusive new-file creation (maximum 1 MiB); existing names are not overwritten.
+- Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory-symlink escape rejection.
+- Windows CI build and CTest steps.
 
-## Deliberate limitations
+## Security limits — do not enable
 
-**No filesystem operation is implemented.** Root admission, handle-relative child opening, reparse-point rejection, bounded reads, and exclusive file creation all return `BM_WS_NOT_IMPLEMENTED`.
+This is an initial implementation, not a completed security review. It does not yet include directory enumeration, approval-token binding, Python FFI, a broker process boundary, deterministic concurrent rename stress tests, a hostile same-user isolation boundary, or independent review.
 
-Lexical validation is not a filesystem security boundary. It does not prove that a path is inside a workspace and must never be used as a reason to call Python `open()`, `Path.resolve()`, or another path-based API. The Python feature gate remains disabled.
+The read and create functions are native primitives only. They are not exposed to the UI or Python. Keep WORKSPACE_FILE_ACTIONS_ENABLED = False and project test execution disabled. Never fall back to Python open(), Path.resolve(), or path-based file operations.
 
-The next implementation stage must establish a pinned root directory handle and resolve every child relative to pinned parent handles using a reviewed Windows-native strategy. It must then add adversarial junction/reparse-point and concurrent rename tests before any filesystem API is enabled.
+A process running as the same Windows user may have equivalent filesystem permissions. Handle-relative opens do not by themselves protect against a hostile same-user process. A separate restricted identity/ACL boundary is required before claiming that threat is covered.
 
-Protection against a hostile process running as the same Windows user requires a separate OS security boundary; a normal child process is not sufficient.
+The first release remains limited to listing, bounded text reads, and exclusive creation. Editing, deletion, recursive search, and command execution remain out of scope.
