@@ -1,4 +1,5 @@
 """Tests for authenticated encryption of local BabyMind text."""
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -42,7 +43,7 @@ class SecureTextStoreTests(unittest.TestCase):
             path = Path(folder) / "key"
             SecureTextStore(path)
             self.assertTrue(path.is_file())
-            if hasattr(path.stat(), "st_mode"):
+            if os.name != "nt":
                 self.assertEqual(path.stat().st_mode & 0o077, 0)
 
 
