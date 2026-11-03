@@ -1,0 +1,148 @@
+name: BabyMind Windows runtime smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-runtime-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build the actual portable Windows package
+        shell: pwsh
+        run: ./build-windows.ps1
+
+      - name: Verify portable package contents
+        shell: pwsh
+        run: |
+          $required = @(
+            "dist/BabyMind/BabyMind.exe",
+            "dist/BabyMind/BabyMind-iPhone.exe",
+            "dist/BabyMind/llama.cpp/llama-server.exe",
+            "dist/BabyMind/FIRST-RUN.txt",
+            "dist/BabyMind/Start-BabyMind-iPhone.bat"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Required portable package file is missing: $path"
+            }
+            $item = Get-Item -LiteralPath $path
+            if ($item.Length -le 0) {
+              throw "Required portable package file is empty: $path"
+            }
+            Write-Host ("PASS {0} ({1:N0} bytes)" -f $path, $item.Length)
+          }
+          $guide = Get-Content -Raw "dist/BabyMind/FIRST-RUN.txt"
+          foreach ($phrase in @("Certificate Trust Settings", "remove the profile", "Private networks only")) {
+            if (-not $guide.Contains($phrase)) {
+              throw "First-run guide is missing required instruction: $phrase"
+            }
+          }
+          Write-Host "PASS first-run guide includes iPhone trust and firewall safety instructions"
+
+      - name: Download and verify the pinned local model
+        shell: pwsh
+        run: |
+          $model = Join-Path $env:RUNNER_TEMP "babymind-smoke.gguf"
+          $url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/55e05aba5a4e1e2d6c4919753a68941c4ad4cb11/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true"
+          Write-Host "Downloading the pinned ~2.71 GB model for a real CPU inference smoke test..."
+          Invoke-WebRequest -Uri $url -OutFile $model -TimeoutSec 1800
+          $actual = (Get-FileHash -LiteralPath $model -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = "79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741"
+          if ($actual -ne $expected) {
+            throw "Model SHA-256 mismatch. Expected $expected; got $actual"
+          }
+          Write-Host "PASS pinned model download and SHA-256 verification"
+
+      - name: Start bundled llama.cpp and verify real inference
+        shell: pwsh
+        run: |
+          $server = (Resolve-Path "dist/BabyMind/llama.cpp/llama-server.exe").Path
+          $model = Join-Path $env:RUNNER_TEMP "babymind-smoke.gguf"
+          $log = Join-Path $env:RUNNER_TEMP "babymind-llama-server.stdout.log"
+          $errlog = Join-Path $env:RUNNER_TEMP "babymind-llama-server.stderr.log"
+          $port = 18087
+          $arguments = @(
+            "--model", "`"$model`"",
+            "--host", "127.0.0.1",
+            "--port", "$port",
+            "--ctx-size", "1024",
+            "--threads", "4",
+            "--n-gpu-layers", "0"
+          ) -join " "
+          $process = Start-Process -FilePath $server -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput $log -RedirectStandardError $errlog
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 180; $i++) {
+              Start-Sleep -Seconds 5
+              if ($process.HasExited) {
+                throw "llama-server exited before becoming healthy. Log: $log"
+              }
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 5
+                if ($health.status -eq "ok") {
+                  $ready = $true
+                  break
+                }
+              } catch {
+                # The model is still loading; keep waiting.
+              }
+            }
+            if (-not $ready) {
+              throw "llama-server did not become healthy within 15 minutes. Log: $log"
+            }
+            Write-Host "PASS bundled llama.cpp loaded the verified GGUF model"
+
+            $body = @{
+              prompt = "Reply with exactly this text and nothing else: BABYMIND_RUNTIME_OK"
+              n_predict = 32
+              temperature = 0
+              stop = @()
+            } | ConvertTo-Json -Depth 5
+            $reply = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/completion" -ContentType "application/json" -Body $body -TimeoutSec 180
+            if ([string]::IsNullOrWhiteSpace([string]$reply.content)) {
+              throw "The local model returned an empty completion."
+            }
+            Write-Host "PASS real local CPU inference returned text:"
+            Write-Host $reply.content
+          }
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+              $process.WaitForExit()
+            }
+            foreach ($path in @($log, $errlog)) {
+              if (Test-Path $path) {
+                Write-Host "llama-server log: $path"
+                Get-Content $path -Tail 80
+              }
+            }
+          }
+
+      - name: Upload runtime smoke logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: BabyMind-Windows-Runtime-Smoke-Logs
+          path: ${{ runner.temp }}/babymind-llama-server.*.log
+          if-no-files-found: ignore
+          retention-days: 7
