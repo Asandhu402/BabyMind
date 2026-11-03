@@ -59,19 +59,38 @@ jobs:
           }
           Write-Host "PASS first-run guide includes iPhone trust and firewall safety instructions"
 
-      - name: Download and verify the pinned local model
+      - name: Restore verified pinned model cache
+        id: model-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/babymind-smoke.gguf
+          key: babymind-model-79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741
+
+      - name: Download (if needed) and verify the pinned local model
         shell: pwsh
         run: |
           $model = Join-Path $env:RUNNER_TEMP "babymind-smoke.gguf"
           $url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/55e05aba5a4e1e2d6c4919753a68941c4ad4cb11/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true"
-          Write-Host "Downloading the pinned ~2.71 GB model for a real CPU inference smoke test..."
-          Invoke-WebRequest -Uri $url -OutFile $model -TimeoutSec 1800
+          if (Test-Path -LiteralPath $model -PathType Leaf) {
+            Write-Host "Found cached model; verifying its SHA-256 before use..."
+          } else {
+            Write-Host "Cache miss. Downloading the pinned ~2.71 GB model for a real CPU inference smoke test..."
+            Invoke-WebRequest -Uri $url -OutFile $model -TimeoutSec 1800
+          }
           $actual = (Get-FileHash -LiteralPath $model -Algorithm SHA256).Hash.ToLowerInvariant()
           $expected = "79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741"
           if ($actual -ne $expected) {
+            Remove-Item -LiteralPath $model -Force -ErrorAction SilentlyContinue
             throw "Model SHA-256 mismatch. Expected $expected; got $actual"
           }
-          Write-Host "PASS pinned model download and SHA-256 verification"
+          Write-Host "PASS pinned model is present and SHA-256 verified"
+
+      - name: Save verified pinned model cache
+        if: success() && steps.model-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/babymind-smoke.gguf
+          key: babymind-model-79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741
 
       - name: Start bundled llama.cpp and verify real inference
         shell: pwsh
