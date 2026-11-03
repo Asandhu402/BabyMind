@@ -23,6 +23,8 @@ from urllib.parse import urlparse
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
 from .providers import ProviderError
+from .secure_store import SecureTextStore
+from .lan_tls import create_lan_tls_context
 
 WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
@@ -39,6 +41,7 @@ def db():
     connection = sqlite3.connect(DB_PATH, timeout=15)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA secure_delete = ON")
     try:
         yield connection
         connection.commit()
@@ -49,7 +52,12 @@ def db():
         connection.close()
 
 
+def text_store() -> SecureTextStore:
+    return SecureTextStore(DB_PATH.with_suffix(".key"))
+
+
 def init_db() -> None:
+    secure = text_store()
     with DB_LOCK, db() as connection:
         connection.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
@@ -66,6 +74,16 @@ def init_db() -> None:
             )
         """)
         connection.execute("PRAGMA foreign_keys = ON")
+        # Encrypt legacy plaintext values in place; the prefix makes this
+        # migration idempotent and safe to retry after an interrupted upgrade.
+        for row in connection.execute("SELECT id, title FROM conversations").fetchall():
+            encrypted = secure.encrypt(row["title"])
+            if encrypted != row["title"]:
+                connection.execute("UPDATE conversations SET title=? WHERE id=?", (encrypted, row["id"]))
+        for row in connection.execute("SELECT id, content FROM messages").fetchall():
+            encrypted = secure.encrypt(row["content"])
+            if encrypted != row["content"]:
+                connection.execute("UPDATE messages SET content=? WHERE id=?", (encrypted, row["id"]))
 
 
 def now() -> str:
@@ -172,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
                     "SELECT id, title, created_at, updated_at FROM conversations "
                     "ORDER BY updated_at DESC LIMIT 100"
                 ).fetchall()
-            self.send_json([dict(row) for row in rows])
+            self.send_json([{**dict(row), "title": text_store().decrypt(row["title"])} for row in rows])
         elif path.startswith("/api/conversations/"):
             conversation_id = path.rsplit("/", 1)[-1]
             with db() as connection:
@@ -180,7 +198,7 @@ class Handler(BaseHTTPRequestHandler):
                     "SELECT id, role, content, agent_id, created_at FROM messages "
                     "WHERE conversation_id=? ORDER BY id", (conversation_id,)
                 ).fetchall()
-            self.send_json([dict(row) for row in rows])
+            self.send_json([{**dict(row), "content": text_store().decrypt(row["content"])} for row in rows])
         elif path == "/api/memory":
             self.send_json(COORDINATOR.memory.recent(limit=100))
         elif path == "/":
@@ -225,7 +243,7 @@ class Handler(BaseHTTPRequestHandler):
                 with db() as connection:
                     connection.execute(
                         "INSERT INTO conversations VALUES (?, ?, ?, ?)",
-                        (conversation_id, title, timestamp, timestamp)
+                        (conversation_id, text_store().encrypt(title), timestamp, timestamp)
                     )
                 self.send_json({"id": conversation_id, "title": title}, 201)
             elif path == "/api/chat":
@@ -295,7 +313,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 history = []
         context = "\n".join(
-            f"{'User' if item['role'] == 'user' else 'BabyMind'}: {item['content']}"
+            f"{'User' if item['role'] == 'user' else 'BabyMind'}: {text_store().decrypt(item['content'])}"
             for item in history
         )
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
@@ -327,17 +345,17 @@ class Handler(BaseHTTPRequestHandler):
             if is_new_conversation:
                 connection.execute(
                     "INSERT INTO conversations VALUES (?, ?, ?, ?)",
-                    (conversation_id, conversation_title, timestamp, timestamp)
+                    (conversation_id, text_store().encrypt(conversation_title), timestamp, timestamp)
                 )
             connection.execute(
                 "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
                 "VALUES (?, 'user', ?, ?, ?)",
-                (conversation_id, task, agent_id, timestamp)
+                (conversation_id, text_store().encrypt(task), agent_id, timestamp)
             )
             connection.execute(
                 "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
                 "VALUES (?, 'assistant', ?, ?, ?)",
-                (conversation_id, response, agent_id, timestamp)
+                (conversation_id, text_store().encrypt(response), agent_id, timestamp)
             )
             connection.execute(
                 "UPDATE conversations SET updated_at=? WHERE id=?",
@@ -363,26 +381,36 @@ def main() -> None:
     init_db()
     host = "0.0.0.0" if args.lan else args.host
     auth_token = secrets.token_urlsafe(24) if args.lan else None
-    server = ThreadingHTTPServer((host, args.port), Handler)
-    server.auth_token = auth_token
-    url = f"http://127.0.0.1:{args.port}"
-    print("BabyMind web app")
-    print(f"Open on this computer: {url}")
-    print("Data is stored locally in", DATA_HOME)
+    lan_ip = None
+    tls_context = None
+    ca_path = None
     if args.lan:
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             probe.connect(("192.0.2.1", 80))
             lan_ip = probe.getsockname()[0]
-        except OSError:
-            lan_ip = "YOUR-PC-IP"
+        except OSError as error:
+            raise RuntimeError("BabyMind could not determine this computer's LAN IP address.") from error
         finally:
             probe.close()
-        print(f"Open on a trusted Wi-Fi device: http://{lan_ip}:{args.port}")
+        tls_context, ca_path = create_lan_tls_context(DATA_HOME, lan_ip)
+
+    server = ThreadingHTTPServer((host, args.port), Handler)
+    if tls_context is not None:
+        server.socket = tls_context.wrap_socket(server.socket, server_side=True)
+    server.auth_token = auth_token
+    scheme = "https" if args.lan else "http"
+    url = f"{scheme}://127.0.0.1:{args.port}"
+    print("BabyMind web app")
+    print(f"Open on this computer: {url}")
+    print("Data is stored locally in", DATA_HOME)
+    if args.lan:
+        print(f"Open on a trusted Wi-Fi device: https://{lan_ip}:{args.port}")
         print(f"One-time BabyMind access token: {auth_token}")
-        print("WARNING: LAN mode uses HTTP. Use only on a trusted private Wi-Fi network; do not use on public Wi-Fi.")
-        print("Keep this token private.")
-    if not args.no_browser:
+        print(f"Install this public CA certificate on your iPhone: {ca_path}")
+        print("On iPhone, install the certificate profile, then enable full trust under Settings > General > About > Certificate Trust Settings.")
+        print("Use only on a trusted private Wi-Fi network. Keep the access token private.")
+    if not args.no_browser and not args.lan:
         webbrowser.open(url)
     try:
         server.serve_forever()

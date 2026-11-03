@@ -123,6 +123,21 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
         self.assertEqual(messages[-1]["content"], "Hello from BabyMind")
 
+    def test_conversation_text_is_encrypted_in_sqlite(self) -> None:
+        fake_result = SimpleNamespace(response="Confidential answer")
+        with patch.object(server.COORDINATOR, "ask", return_value=fake_result):
+            status, _, body = self.request("/api/chat", {
+                "message": "Confidential question", "agent_id": "BM-01"
+            })
+        self.assertEqual(status, 200)
+        with server.db() as connection:
+            stored = connection.execute(
+                "SELECT content FROM messages ORDER BY id"
+            ).fetchall()
+        self.assertTrue(all(row["content"].startswith("bmenc:v1:") for row in stored))
+        self.assertNotIn("Confidential question", [row["content"] for row in stored])
+        self.assertNotIn("Confidential answer", [row["content"] for row in stored])
+
     def test_conversation_can_be_deleted_with_its_messages(self) -> None:
         fake_result = SimpleNamespace(response="Temporary answer")
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result):

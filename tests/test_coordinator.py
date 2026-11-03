@@ -55,6 +55,21 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(result.memories_used, 0)
         self.assertNotIn("Old task", self.provider.system_prompt)
 
+    def test_memory_database_stores_ciphertext_and_migrates_plaintext(self) -> None:
+        self.memory.remember("BM-01", "Private task", "Private response")
+        import sqlite3
+        connection = sqlite3.connect(self.memory.database_path)
+        try:
+            task, response = connection.execute(
+                "SELECT task, response FROM memories"
+            ).fetchone()
+        finally:
+            connection.close()
+        self.assertNotIn("Private task", task)
+        self.assertNotIn("Private response", response)
+        self.assertTrue(task.startswith("bmenc:v1:"))
+        self.assertEqual(self.memory.recent()[0]["task"], "Private task")
+
     def test_memory_can_be_cleared(self) -> None:
         self.memory.remember("BM-01", "Task", "Response")
         self.assertEqual(self.memory.clear(), 1)
