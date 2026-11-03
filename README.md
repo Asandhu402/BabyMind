@@ -385,11 +385,16 @@ BabyMind can connect to three additional open-source projects without creating n
 See Optional integrations (docs/OPTIONAL_INTEGRATIONS.md) and Quality checks (quality/README.md) for setup and privacy boundaries.
 
 
-## Local self-inspection demo
+## Local self-inspection and public GitHub research demo
 
 The Windows UI demo reads a strict allowlist of BabyMind source files from the
-same local checkout used to launch the app, then sends a bounded source snapshot
-to BabyMind's fixed local model for a single prioritized code review. It does
-not query the private GitHub repository or send source code to a web search
-service. The snapshot excludes environment files, credentials, user databases,
-memory stores, certificates, model weights, and arbitrary workspace files.
+same local checkout used to launch the app. It separately searches public
+GitHub for unrelated projects, excludes BabyMind's own private repository, and
+reads a small number of public project pages. BabyMind's fixed local model
+compares those public capabilities against its actual local source and produces
+one prioritized core-code improvement with exact files, tests, and measurable
+acceptance criteria. Only the public search query and requests for public pages
+leave the device; the local BabyMind source snapshot is sent only to the local
+model. The local snapshot excludes environment files, credentials, user
+databases, memory stores, certificates, model weights, and arbitrary workspace
+files. Public page text is treated as untrusted input.
