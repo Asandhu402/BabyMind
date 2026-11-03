@@ -351,7 +351,7 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 finally:
                     INFERENCE_SEMAPHORE.release()
-                user_message = f"Analyze local document: {source}\\n{payload.get('instruction', 'Summarize this document and identify its key points.')}"
+                user_message = f"Analyze local document: {source}\n{payload.get('instruction', 'Summarize this document and identify its key points.')}"
                 conversation_id = persist_integration_exchange(
                     str(payload.get("conversation_id", "")), user_message, result.response, result.agent_id
                 )
@@ -378,7 +378,7 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 finally:
                     INFERENCE_SEMAPHORE.release()
-                user_message = f"Transcribe and analyze local audio: {source}\\n{payload.get('instruction', 'Summarize this recording and extract important points.')}\\n\\nTRANSCRIPT:\\n{str(transcript.get('text', ''))[:100000]}"
+                user_message = f"Transcribe and analyze local audio: {source}\n{payload.get('instruction', 'Summarize this recording and extract important points.')}\n\nTRANSCRIPT:\n{str(transcript.get('text', ''))[:100000]}"
                 conversation_id = persist_integration_exchange(
                     str(payload.get("conversation_id", "")), user_message, result.response, result.agent_id
                 )
