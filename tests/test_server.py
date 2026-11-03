@@ -62,7 +62,7 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(
             {item["integration_id"] for item in json.loads(body)},
-            {"docling", "faster-whisper", "browser-use", "open-interpreter"},
+            {"docling", "faster-whisper", "browser-use", "open-interpreter", "cognee", "voicebox", "promptfoo"},
         )
 
     def test_document_integration_uses_core_coordinator(self) -> None:
