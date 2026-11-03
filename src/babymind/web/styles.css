@@ -78,3 +78,5 @@ body.light .delete-conversation{color:#77798a}
 body.light .task-create-form,body.light .task-card{background:#fff}
 body.light .task-create-form input,body.light .task-create-form textarea{background:#fafaff;color:#222}
 @media(max-width:680px){.task-card-heading,.task-card-footer{align-items:flex-start;flex-direction:column}.task-toolbar{flex-wrap:wrap}}
+
+.memory-search-form{max-width:780px;width:100%;margin:14px auto 18px;display:flex;gap:8px;flex-wrap:wrap}.memory-search-form input{flex:1 1 220px;min-width:0;border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--text);border-radius:8px;padding:10px 12px;font:11px "DM Sans"}.memory-search-form button{border:1px solid var(--line);background:rgba(255,255,255,.045);color:var(--text);border-radius:8px;padding:9px 12px;font-size:10px}.memory-search-form button[type="submit"]{background:var(--accent);border-color:var(--accent);color:#fff}
