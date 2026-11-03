@@ -53,13 +53,13 @@
     $("#approvalList").innerHTML = cards.map(item => {
       const target = item.payload?.relative_path || ".";
       let resultHTML = "";
-      if (item.status === "completed" && item.result) {
+      if (["completed","failed"].includes(item.status) && item.result) {
         try {
           const result = typeof item.result === "string" ? JSON.parse(item.result) : item.result;
           const entries = Array.isArray(result.entries) ? result.entries : [];
           const foundFiles = Array.isArray(result.files) ? result.files : [];
           resultHTML = item.action === "run_tests"
-            ? `<div class="approval-result"><strong>Test run · ${result.success ? "passed" : result.timed_out ? "timed out" : "failed"} · exit code ${escapeHTML(result.exit_code)}</strong><pre class="approval-file-preview">${escapeHTML(result.output || "No test output.")}</pre>${result.output_truncated ? "<p>Output was truncated to the last 20,000 characters.</p>" : ""}</div>`
+            ? `<div class="approval-result"><strong>Test run · ${result.error ? "could not run" : result.success ? "passed" : result.timed_out ? "timed out" : "failed"} · exit code ${escapeHTML(result.exit_code ?? "—")}</strong><pre class="approval-file-preview">${escapeHTML(result.error || result.output || "No test output.")}</pre>${result.output_truncated ? "<p>Output was truncated to the last 20,000 characters.</p>" : ""}</div>`
             : item.action === "edit_text_file"
             ? `<div class="approval-result"><strong>File updated · ${escapeHTML(result.bytes)} bytes</strong><p>${escapeHTML(result.relative_path)}</p></div>`
             : item.action === "create_text_file"
@@ -176,7 +176,7 @@
       await api(`/api/proposals/${encodeURIComponent(id)}/approve`, {method:"POST", body:JSON.stringify({proposal_hash:item.proposal_hash})});
       toast(isTestRun ? "Approved. Test run finished; review its result." : isFileEdit ? "Approved. Text file updated." : isFileCreate ? "Approved. New file created." : isFileRead ? "Approved. Text preview complete." : isFileSearch ? "Approved. Filename search complete." : "Approved. The read-only listing is complete.");
       await load();
-    } catch (error) { toast(error.message); }
+    } catch (error) { toast(error.message); await load(); }
     finally { state.busy = false; }
   }
   document.addEventListener("click", event => {
