@@ -2,7 +2,7 @@ description: BabyMind local-only smoke and behavior evaluation
 prompts:
   - "{{prompt}}"
 providers:
-  - id: file://babymind_provider.py
+  - id: file://quality/babymind_provider.py
     label: BabyMind local coordinator
 tests:
   - vars:
