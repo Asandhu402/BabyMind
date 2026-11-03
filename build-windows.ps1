@@ -6,6 +6,14 @@ python -m pip install -e ".[build]"
 
 python -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --collect-all cryptography --add-data "src/babymind/web;babymind/web" run_desktop.py
 
+# Build a small console companion so the same portable package can expose
+# authenticated HTTPS access to an iPhone on the same trusted Wi-Fi network.
+# This entry point prepares the same verified local model before starting
+# server.py in mandatory --lan mode.
+python -m PyInstaller --noconfirm --onefile --console --name BabyMind-iPhone --paths src --workpath build/pyinstaller-iphone --distpath dist/iphone --specpath build/spec-iphone --collect-all cryptography --hidden-import tkinter --hidden-import tkinter.messagebox --hidden-import tkinter.ttk --add-data "src/babymind/web;babymind/web" run_iphone.py
+if ($LASTEXITCODE -ne 0) { throw "Could not build the BabyMind iPhone companion." }
+
+
 
 # Bundle the official llama.cpp Windows CPU runtime. The GGUF model is
 # downloaded and checksum-verified by BabyMind on first launch.
@@ -37,6 +45,9 @@ try {
     if (-not (Test-Path (Join-Path $runtimeTarget "llama-server.exe"))) {
         throw "Could not stage llama-server.exe in the BabyMind package."
     }
+
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "dist\\iphone\\BabyMind-iPhone.exe") -Destination (Join-Path $PSScriptRoot "dist\\BabyMind\\BabyMind-iPhone.exe") -Force
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Start-BabyMind-iPhone-Portable.bat") -Destination (Join-Path $PSScriptRoot "dist\\BabyMind\\Start-BabyMind-iPhone.bat") -Force
 
     @"
 BabyMind Windows portable package
