@@ -35,8 +35,13 @@ class ProviderSelectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ProviderError, "valid numeric values"):
                 provider.complete("system", "question")
 
-    def test_lm_studio_is_default_backend(self) -> None:
+    def test_local_engine_default_is_llama_cpp_and_requires_paths(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ProviderError, "BABYMIND_LLAMA_SERVER"):
+                create_provider()
+
+    def test_lm_studio_is_only_selected_explicitly(self) -> None:
+        with patch.dict(os.environ, {"BABYMIND_ENGINE": "lm-studio"}, clear=True):
             self.assertIsInstance(create_provider(), LMStudioProvider)
 
     def test_unknown_backend_is_rejected(self) -> None:
