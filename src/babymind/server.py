@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
 from .providers import ProviderError
+from .secure_store import SecureTextStore
 
 WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
@@ -49,7 +50,12 @@ def db():
         connection.close()
 
 
+def text_store() -> SecureTextStore:
+    return SecureTextStore(DB_PATH.with_suffix(".key"))
+
+
 def init_db() -> None:
+    secure = text_store()
     with DB_LOCK, db() as connection:
         connection.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
@@ -66,6 +72,16 @@ def init_db() -> None:
             )
         """)
         connection.execute("PRAGMA foreign_keys = ON")
+        # Encrypt legacy plaintext values in place; the prefix makes this
+        # migration idempotent and safe to retry after an interrupted upgrade.
+        for row in connection.execute("SELECT id, title FROM conversations").fetchall():
+            encrypted = secure.encrypt(row["title"])
+            if encrypted != row["title"]:
+                connection.execute("UPDATE conversations SET title=? WHERE id=?", (encrypted, row["id"]))
+        for row in connection.execute("SELECT id, content FROM messages").fetchall():
+            encrypted = secure.encrypt(row["content"])
+            if encrypted != row["content"]:
+                connection.execute("UPDATE messages SET content=? WHERE id=?", (encrypted, row["id"]))
 
 
 def now() -> str:
@@ -172,7 +188,7 @@ class Handler(BaseHTTPRequestHandler):
                     "SELECT id, title, created_at, updated_at FROM conversations "
                     "ORDER BY updated_at DESC LIMIT 100"
                 ).fetchall()
-            self.send_json([dict(row) for row in rows])
+            self.send_json([{**dict(row), "title": text_store().decrypt(row["title"])} for row in rows])
         elif path.startswith("/api/conversations/"):
             conversation_id = path.rsplit("/", 1)[-1]
             with db() as connection:
@@ -180,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
                     "SELECT id, role, content, agent_id, created_at FROM messages "
                     "WHERE conversation_id=? ORDER BY id", (conversation_id,)
                 ).fetchall()
-            self.send_json([dict(row) for row in rows])
+            self.send_json([{**dict(row), "content": text_store().decrypt(row["content"])} for row in rows])
         elif path == "/api/memory":
             self.send_json(COORDINATOR.memory.recent(limit=100))
         elif path == "/":
@@ -225,7 +241,7 @@ class Handler(BaseHTTPRequestHandler):
                 with db() as connection:
                     connection.execute(
                         "INSERT INTO conversations VALUES (?, ?, ?, ?)",
-                        (conversation_id, title, timestamp, timestamp)
+                        (conversation_id, text_store().encrypt(title), timestamp, timestamp)
                     )
                 self.send_json({"id": conversation_id, "title": title}, 201)
             elif path == "/api/chat":
@@ -295,7 +311,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 history = []
         context = "\n".join(
-            f"{'User' if item['role'] == 'user' else 'BabyMind'}: {item['content']}"
+            f"{'User' if item['role'] == 'user' else 'BabyMind'}: {text_store().decrypt(item['content'])}"
             for item in history
         )
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
@@ -327,17 +343,17 @@ class Handler(BaseHTTPRequestHandler):
             if is_new_conversation:
                 connection.execute(
                     "INSERT INTO conversations VALUES (?, ?, ?, ?)",
-                    (conversation_id, conversation_title, timestamp, timestamp)
+                    (conversation_id, text_store().encrypt(conversation_title), timestamp, timestamp)
                 )
             connection.execute(
                 "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
                 "VALUES (?, 'user', ?, ?, ?)",
-                (conversation_id, task, agent_id, timestamp)
+                (conversation_id, text_store().encrypt(task), agent_id, timestamp)
             )
             connection.execute(
                 "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
                 "VALUES (?, 'assistant', ?, ?, ?)",
-                (conversation_id, response, agent_id, timestamp)
+                (conversation_id, text_store().encrypt(response), agent_id, timestamp)
             )
             connection.execute(
                 "UPDATE conversations SET updated_at=? WHERE id=?",

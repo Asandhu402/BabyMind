@@ -11,8 +11,8 @@ The 50 agents are specialist configurations that share one underlying language m
 - **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue, each with a focused domain playbook and responsibility.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
 - **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
-- **Local memory:** opt-in SQLite task/response memories, with controls to view or clear them.
-- **Conversation storage:** local SQLite history on the computer running BabyMind.
+- **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows.
+- **Encrypted conversation storage:** local SQLite history on the computer running BabyMind; message text and titles are encrypted at rest with AES-256-GCM.
 - **Local model adapters:** LM Studio's OpenAI-compatible API or a BabyMind-managed llama.cpp server using a local GGUF model.
 - **CLI:** health, list, ask, route, and memory commands.
 - **Lightweight runtime:** core server, storage, and HTTP client use the Python standard library; the desktop window uses pywebview.
@@ -90,7 +90,7 @@ On Windows, you can double-click `Start-BabyMind.bat` to install and launch the 
 
     babymind-web --lan
 
-The terminal prints a local network address and a one-time access token. Open that address in Safari on the iPhone and enter the token when prompted. Keep the token private and use this only on a trusted home network. The token protects API access; this is not intended for public internet exposure.
+The terminal prints a local network address and a one-time access token. Open that address in Safari on the iPhone and enter the token when prompted. Keep the token private and use this only on a trusted home network. The token protects API access; this is not intended for public internet exposure. LAN transport is currently HTTP, so use only a trusted private Wi-Fi network. HTTPS with a trusted local certificate is a separate hardening step and is not yet enabled.
 
 
 ## Windows desktop application
@@ -154,8 +154,9 @@ Run the automated test suite from the repository root:
 ## Privacy and data
 
 - The default web server listens only on `127.0.0.1`.
-- Conversations and memory are stored under `~/.babymind/` by default (or `BABYMIND_HOME`).
+- Conversations and memory are stored under `~/.babymind/` by default (or `BABYMIND_HOME`). Message text, conversation titles, and saved memory content are encrypted at rest with AES-256-GCM. On Windows, the encryption key is protected by Windows DPAPI for the current Windows user; do not delete or move the `.key` files independently of their databases.
 - Memory is not automatically written unless the user enables **Remember** for that request.
+- Encryption protects stored text when BabyMind is closed. It does not protect data while the app is running, from malware running as the same Windows user, or from someone who can unlock that Windows account.
 - No analytics, account service, or cloud model is included in the application.
 - The model runner is local; the model's own behavior and resource requirements depend on the selected model and runtime.
 
