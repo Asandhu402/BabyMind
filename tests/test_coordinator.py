@@ -41,6 +41,8 @@ class CoordinatorTests(unittest.TestCase):
         self.assertIn("Coordinator", first_prompt)
         self.assertIn("QUALITY STANDARD", first_prompt)
         self.assertIn("Verify arithmetic", first_prompt)
+        self.assertIn("single best-supported course of action", first_prompt)
+        self.assertIn("do not present menus of alternatives", first_prompt)
         self.assertEqual(second.agent_id, "BM-02")
         self.assertIn("Researcher", second_prompt)
         self.assertIn("QUALITY STANDARD", second_prompt)
