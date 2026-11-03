@@ -44,7 +44,7 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(results[0]["snippet"], "Useful summary")
 
     def test_public_url_validation_blocks_local_and_non_web_addresses(self):
-        for url in ("http://127.0.0.1/", "http://192.168.1.1/", "file:///etc/passwd", "https://user:pass@example.com/"):
+        for url in ("http://127.0.0.1/", "http://192.168.1.1/", "file:///etc/passwd", "https://user:pass@example.com/", "https://example.com:80/", "http://example.com:443/"):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 _validate_public_url(url)
 
