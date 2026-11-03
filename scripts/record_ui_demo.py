@@ -166,6 +166,42 @@ def search_public_github_projects(limit: int = 3) -> tuple[list[dict[str, str]],
     return fallback[:limit], errors
 
 
+
+def verify_llama_api() -> None:
+    """Prove the bundled llama.cpp endpoint can generate text before browser testing."""
+    base = "http://127.0.0.1:1235/v1"
+    try:
+        with urlopen(f"{base}/models", timeout=15) as response:
+            models = json.loads(response.read().decode("utf-8")).get("data", [])
+        if not models or not models[0].get("id"):
+            raise RuntimeError("llama.cpp /v1/models returned no model ID.")
+        payload = {
+            "model": str(models[0]["id"]),
+            "messages": [
+                {"role": "system", "content": "Reply briefly and plainly."},
+                {"role": "user", "content": "Reply with exactly: BABYMIND_LOCAL_INFERENCE_OK"},
+            ],
+            "temperature": 0,
+            "max_tokens": 32,
+        }
+        request = Request(
+            f"{base}/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        with urlopen(request, timeout=600) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        content = result["choices"][0]["message"]["content"]
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("llama.cpp chat completion returned empty assistant content.")
+        print(f"llama.cpp API preflight passed; generated {len(content.strip())} characters.")
+    except Exception as error:
+        raise RuntimeError(
+            "Standalone llama.cpp API preflight failed before BabyMind UI startup. "
+            f"Endpoint: {base}; detail: {error}"
+        ) from error
+
+
 def main() -> None:
     env = os.environ.copy()
     env.update({
@@ -179,6 +215,7 @@ def main() -> None:
         "BABYMIND_HOME": str(Path(os.environ["RUNNER_TEMP"]) / "babymind-demo-data"),
         "PYTHONUNBUFFERED": "1",
     })
+    verify_llama_api()
     log_path = Path(os.environ["RUNNER_TEMP"]) / "babymind-ui-server.log"
     with log_path.open("w", encoding="utf-8") as log:
         server = subprocess.Popen(
