@@ -62,6 +62,9 @@ int main() {
     const std::wstring junction = root_path + L"\\escape";
     CHECK(CreateSymbolicLinkW(junction.c_str(), outside.c_str(),
         SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != 0);
+    const std::wstring file_link = root_path + L"\\file_escape";
+    CHECK(CreateSymbolicLinkW(file_link.c_str(), outside_file.c_str(),
+        SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != 0);
 
     void* root = nullptr;
     CHECK(bm_ws_open_workspace_root(root_path.c_str(), &root) == BM_WS_OK);
@@ -73,6 +76,7 @@ int main() {
     size_t bytes_read = 0;
     CHECK(bm_ws_read_text(root, L"nested/hello.txt", 1024, output, sizeof(output), &bytes_read) == BM_WS_OK);
     CHECK(bytes_read == sizeof(payload));
+    CHECK(bm_ws_read_text(root, L"nested/hello.txt", 3, output, 4, &bytes_read) == BM_WS_TOO_LARGE);
     CHECK(std::string(reinterpret_cast<char*>(output), bytes_read) == "BabyMind");
 
     CHECK(bm_ws_create_new_text(root, L"nested/hello.txt", payload, sizeof(payload), 1024) == BM_WS_IO_ERROR);
@@ -81,6 +85,7 @@ int main() {
     CHECK(bm_ws_read_text(root, L"nested/hello.txt", 1024, output, 4, &bytes_read) == BM_WS_BUFFER_TOO_SMALL);
     CHECK(bm_ws_read_text(root, L"escape/secret.txt", 1024, output, sizeof(output), &bytes_read) != BM_WS_OK);
     CHECK(bm_ws_create_new_text(root, L"escape/created.txt", payload, sizeof(payload), 1024) != BM_WS_OK);
+    CHECK(bm_ws_read_text(root, L"file_escape", 1024, output, sizeof(output), &bytes_read) != BM_WS_OK);
 
     void* escaped_root = nullptr;
     CHECK(bm_ws_open_workspace_root(junction.c_str(), &escaped_root) != BM_WS_OK);
@@ -91,6 +96,7 @@ int main() {
     CHECK(RemoveDirectoryW(nested.c_str()) != 0);
     CHECK(DeleteFileW(outside_file.c_str()) != 0);
     CHECK(RemoveDirectoryW(outside.c_str()) != 0);
+    CHECK(DeleteFileW(file_link.c_str()) != 0);
     CHECK(RemoveDirectoryW(junction.c_str()) != 0);
     CHECK(RemoveDirectoryW(root_path.c_str()) != 0);
 
