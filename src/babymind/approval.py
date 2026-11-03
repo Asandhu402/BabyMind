@@ -7,6 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
+WORKSPACE_FILE_ACTIONS_ENABLED = False  # Fail closed pending native handle-based path protection.
 MAX_TEXT_FILE_BYTES = 32 * 1024
 MAX_SEARCH_DIRECTORIES = 250
 MAX_SEARCH_FILES = 2000
@@ -116,6 +117,8 @@ def build_readonly_proposal(
     relative_path: str, action: str = "list_directory", name_contains: str = "",
     content: str = ""
 ) -> dict:
+    if not WORKSPACE_FILE_ACTIONS_ENABLED:
+        raise ValueError("Workspace file actions are disabled until native race-resistant filesystem protection is available.")
     if action == "create_text_file":
         root, target, clean_content = _safe_new_text_file(relative_path.strip(), content)
         relative = target.relative_to(root).as_posix()
@@ -169,6 +172,8 @@ def build_readonly_proposal(
 
 
 def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> dict:
+    if not WORKSPACE_FILE_ACTIONS_ENABLED:
+        raise ValueError("Workspace file actions are disabled until native race-resistant filesystem protection is available.")
     if action == "edit_text_file":
         required = {"relative_path", "expected_sha256", "original_content", "content"}
         if not isinstance(payload, dict) or set(payload) != required or any(not isinstance(payload[key], str) for key in required):
