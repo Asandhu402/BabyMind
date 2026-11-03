@@ -49,6 +49,43 @@ class IntegrationTests(unittest.TestCase):
         import asyncio
         asyncio.run(run())
 
+    def test_browser_is_enabled_by_default_after_explicit_task_approval(self):
+        import asyncio
+        import sys
+        import types
+
+        class FakeBrowser:
+            closed = False
+            async def close(self):
+                self.closed = True
+
+        browser = FakeBrowser()
+
+        class FakeAgent:
+            async def run(self):
+                return types.SimpleNamespace(final_result=lambda: "Page summary")
+
+        fake = types.ModuleType("browser_use")
+        fake.Agent = lambda **kwargs: FakeAgent()
+        fake.Browser = lambda: browser
+        fake.ChatOpenAI = lambda **kwargs: object()
+        with patch.dict(os.environ, {}, clear=True), patch.dict(sys.modules, {"browser_use": fake}):
+            result = asyncio.run(run_browser_task(
+                "Read the current page and summarize it",
+                model="local-model",
+                user_approved=True,
+            ))
+        self.assertEqual(result, "Page summary")
+        self.assertTrue(browser.closed)
+
+    def test_browser_can_still_be_disabled_explicitly(self):
+        import asyncio
+        with patch.dict(os.environ, {"BABYMIND_BROWSER_AUTOMATION_ENABLED": "false"}):
+            with self.assertRaises(PermissionError):
+                asyncio.run(run_browser_task(
+                    "Read this page", model="local-model", user_approved=True
+                ))
+
     def test_open_interpreter_requires_approval_before_launch(self):
         with self.assertRaises(PermissionError):
             launch_read_only_session(".")
