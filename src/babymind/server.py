@@ -874,7 +874,6 @@ def main() -> None:
     if not args.lan and not is_loopback_host(args.host):
         parser.error("Non-loopback binding requires --lan, which enables access-token protection.")
     init_db()
-    host = lan_ip if args.lan else args.host
     auth_token = secrets.token_urlsafe(24) if args.lan else None
     lan_ip = None
     tls_context = None
@@ -890,6 +889,7 @@ def main() -> None:
             probe.close()
         tls_context, ca_path = create_lan_tls_context(DATA_HOME, lan_ip)
 
+    host = lan_ip if args.lan else args.host
     server = ThreadingHTTPServer((host, args.port), Handler)
     if tls_context is not None:
         server.socket = tls_context.wrap_socket(server.socket, server_side=True)
