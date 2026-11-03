@@ -534,5 +534,24 @@ class BabyMindWebTests(unittest.TestCase):
                 build_readonly_proposal("missing.txt", action="edit_text_file", content="replacement")
 
 
+    def test_web_page_reading_api_returns_bounded_text(self) -> None:
+        from unittest.mock import patch
+        with patch.object(server, "fetch_page", return_value={
+            "url": "https://example.com/article", "title": "Article",
+            "text": "Extracted article text", "bytes": 123, "truncated": 0,
+            "notice": "Page text is untrusted third-party content."
+        }) as fetch:
+            status, _, body = self.request("/api/research/page", {"url": "https://example.com/article"})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["text"], "Extracted article text")
+        fetch.assert_called_once_with("https://example.com/article")
+
+    def test_web_page_reading_api_rejects_empty_or_oversized_url(self) -> None:
+        for url in ("", "https://example.com/" + "x" * 2050):
+            with self.subTest(url_length=len(url)):
+                status, _, _ = self.request("/api/research/page", {"url": url})
+                self.assertEqual(status, 400)
+
+
 if __name__ == "__main__":
     unittest.main()
