@@ -213,7 +213,7 @@ async function exportConversation(){
 async function loadIntegrations(){
   try{
     const items=await api("/api/integrations");
-    const targets={"docling":"documentStatus","faster-whisper":"audioStatus","browser-use":"browserStatus","open-interpreter":"codingStatus"};
+    const targets={"docling":"documentStatus","faster-whisper":"audioStatus","browser-use":"browserStatus","open-interpreter":"codingStatus","voicebox":"voiceboxStatus","cognee":"cogneeStatus","promptfoo":"promptfooStatus"};
     items.forEach(item=>{
       const target=$("#"+targets[item.integration_id]);if(!target)return;
       target.textContent=(item.available?"Available · ":"Not installed · ")+item.purpose+(item.available?"":" · "+item.install_hint);
@@ -270,6 +270,36 @@ async function init() {
     const workspace=$("#codingWorkspace").value.trim();if(!workspace){toast("Enter a local workspace folder.");return;}
     if(!confirm("Give the coding assistant read/write access to this project folder and allow it to run project commands? It will not have access outside this workspace, network access is disabled, and it must ask before actions requiring broader permissions. The installed CLI and Windows sandbox must enforce this boundary; if unavailable, launch must fail closed."))return;
     runCoreTool("/api/integrations/coding",{workspace,user_approved:true},"Workspace-write coding session");
+  });
+  $("#speakVoicebox").addEventListener("click",async()=>{
+    const text=$("#voiceboxText").value.trim();if(!text){toast("Enter text to speak.");return;}
+    try{
+      const result=await api("/api/integrations/voicebox/speech",{method:"POST",body:JSON.stringify({text})});
+      const binary=atob(result.audio_base64);const bytes=Uint8Array.from(binary,char=>char.charCodeAt(0));
+      const audioUrl=URL.createObjectURL(new Blob([bytes],{type:result.mime_type||"audio/wav"}));
+      const audio=new Audio(audioUrl);audio.addEventListener("ended",()=>URL.revokeObjectURL(audioUrl),{once:true});
+      await audio.play();toast("Playing local Voicebox speech");
+    }catch(error){toast(error.message);}
+  });
+  $("#indexCognee").addEventListener("click",async()=>{
+    const text=$("#cogneeNote").value.trim();if(!text){toast("Enter a note to index.");return;}
+    if(!confirm("This note will be stored in Cognee's separate local graph/vector database. BabyMind's AES encryption does NOT protect that database. Continue only if you accept this storage difference."))return;
+    try{
+      const result=await api("/api/integrations/cognee/index",{method:"POST",body:JSON.stringify({text,user_approved:true})});
+      $("#cogneeStatus").textContent=result.notice;toast("Approved note indexed in Cognee");
+    }catch(error){$("#cogneeStatus").textContent=error.message;toast(error.message);}
+  });
+  $("#searchCognee").addEventListener("click",async()=>{
+    const query=$("#cogneeQuery").value.trim();if(!query){toast("Enter a knowledge graph question.");return;}
+    try{
+      const result=await api("/api/integrations/cognee/search",{method:"POST",body:JSON.stringify({query})});
+      setView("chat");addMessage("assistant",result.results.join("\n\n")||"No matching Cognee chunks were found.","BabyMind · Cognee knowledge search");
+      toast("Cognee search completed");
+    }catch(error){$("#cogneeStatus").textContent=error.message;toast(error.message);}
+  });
+  $("#processVoiceboxAudio").addEventListener("click",()=>{
+    const path=$("#audioPath").value.trim();if(!path){toast("Enter a local audio path.");return;}
+    runCoreTool("/api/integrations/voicebox/transcribe",{path,agent_id:$("#agentSelect").value,instruction:$("#audioInstruction").value.trim()||"Summarize this recording.",use_memory:$("#memoryToggle").checked,remember:$("#rememberToggle").checked},"Voicebox transcription");
   });
   $("#memorySearchForm").addEventListener("submit",event=>{event.preventDefault();loadMemory($("#memorySearch").value.trim());});
   $("#clearMemorySearch").addEventListener("click",()=>{$("#memorySearch").value="";loadMemory();});
