@@ -16,6 +16,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Build and test native Windows workspace broker prototype
+        shell: pwsh
+        run: |
+          cmake -S native/windows_workspace -B build/native-workspace -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/native-workspace --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build/native-workspace -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install BabyMind
         run: python -m pip install -e .
       - name: Compile Python sources
