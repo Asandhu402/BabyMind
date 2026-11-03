@@ -110,6 +110,29 @@ under `%USERPROFILE%\.babymind\models`. Later launches reuse that model
 locally; the download is not repeated. The first download requires internet
 access and at least 4.5 GB of free disk space.
 
+### iPhone companion included in the portable package
+
+The portable ZIP also includes `BabyMind-iPhone.exe` and
+`Start-BabyMind-iPhone.bat`. After the model has been downloaded on the PC:
+
+1. Connect the iPhone and Windows PC to the same trusted private Wi-Fi.
+2. Double-click `Start-BabyMind-iPhone.bat` in the extracted BabyMind folder.
+3. Keep the Windows console open. It prints the HTTPS address, one-time access
+   token, and path to the public `lan-ca.crt` certificate.
+4. Transfer only `lan-ca.crt` to the iPhone (for example, with AirDrop). Install
+   the downloaded certificate profile, then enable full trust under
+   **Settings → General → About → Certificate Trust Settings**.
+5. Open the printed HTTPS address in iPhone Safari and enter the one-time token
+   when prompted. Keep the token private.
+
+The companion uses the same local model, encrypted data directory, and
+token-protected HTTPS server as BabyMind. It does not create a cloud account
+or expose the service intentionally to the public internet. Use it only on a
+trusted private Wi-Fi network; stop the server by closing its console window.
+The certificate is a locally generated private CA, so iOS requires the
+one-time manual trust step. This feature still needs a real iPhone/Windows
+device test before it can be described as fully verified.
+
 A permanent, versioned Windows release is published by the **BabyMind
 Windows release** workflow. Run it from GitHub Actions with a tag matching
 `pyproject.toml` (currently `v0.3.0`), or push that tag. The workflow repeats
