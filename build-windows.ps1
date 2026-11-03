@@ -1,14 +1,14 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-py -m pip install --upgrade pip
-py -m pip install -e ".[build]"
+python -m pip install --upgrade pip
+python -m pip install -e ".[build]"
 
-py -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --collect-all cryptography --add-data "src/babymind/web;babymind/web" run_desktop.py
+python -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --collect-all cryptography --add-data "src/babymind/web;babymind/web" run_desktop.py
 
 # Bundle a separate console runner so the packaged desktop app can execute
 # only the fixed Python unittest-discovery workflow after explicit approval.
-py -m PyInstaller --noconfirm --clean --console --name BabyMindTestRunner --paths src --collect-all cryptography src/babymind/test_runner.py
+python -m PyInstaller --noconfirm --clean --console --name BabyMindTestRunner --paths src --collect-all cryptography --collect-submodules tests src/babymind/test_runner.py
 $testRunnerTarget = Join-Path $PSScriptRoot "dist\BabyMind\tools\BabyMindTestRunner"
 New-Item -ItemType Directory -Force -Path $testRunnerTarget | Out-Null
 Copy-Item -Path (Join-Path $PSScriptRoot "dist\BabyMindTestRunner\*") -Destination $testRunnerTarget -Recurse -Force
