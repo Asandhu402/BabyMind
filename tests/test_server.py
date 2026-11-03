@@ -34,13 +34,15 @@ class BabyMindWebTests(unittest.TestCase):
         server.DB_PATH = self.original_db
         self.temp.cleanup()
 
-    def request(self, path: str, payload: dict | None = None, token: str | None = None):
+    def request(self, path: str, payload: dict | None = None, token: str | None = None,
+                extra_headers: dict | None = None):
         data = None if payload is None else json.dumps(payload).encode("utf-8")
         headers = {}
         if data is not None:
             headers["Content-Type"] = "application/json"
         if token:
             headers["X-BabyMind-Token"] = token
+        headers.update(extra_headers or {})
         request = Request(self.base + path, data=data, headers=headers)
         try:
             with urlopen(request, timeout=3) as response:
@@ -73,6 +75,38 @@ class BabyMindWebTests(unittest.TestCase):
         status, _, body = self.request("/api/agents", token="test-local-token")
         self.assertEqual(status, 200)
         self.assertEqual(len(json.loads(body)), 50)
+
+    def test_cross_site_mutation_is_rejected(self) -> None:
+        status, _, body = self.request(
+            "/api/memory/clear", {},
+            extra_headers={"Origin": "http://attacker.example"},
+        )
+        self.assertEqual(status, 403)
+        self.assertIn(b"origin", body.lower())
+
+    def test_non_json_mutation_is_rejected(self) -> None:
+        request = Request(
+            self.base + "/api/memory/clear",
+            data=b"{}",
+            headers={"Content-Type": "text/plain"},
+        )
+        try:
+            with urlopen(request, timeout=3) as response:
+                status = response.status
+        except HTTPError as error:
+            status = error.code
+        self.assertEqual(status, 400)
+
+    def test_chat_is_rejected_while_an_inference_is_active(self) -> None:
+        self.assertTrue(server.INFERENCE_SEMAPHORE.acquire(blocking=False))
+        try:
+            status, _, body = self.request("/api/chat", {
+                "message": "Hello", "agent_id": "BM-01"
+            })
+        finally:
+            server.INFERENCE_SEMAPHORE.release()
+        self.assertEqual(status, 429)
+        self.assertIn(b"busy", body.lower())
 
     def test_chat_persists_only_successful_conversation(self) -> None:
         fake_result = SimpleNamespace(response="Hello from BabyMind")
