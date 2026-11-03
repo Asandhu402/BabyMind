@@ -18,7 +18,7 @@ jobs:
   release-windows:
     runs-on: windows-latest
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
       SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
     steps:
       - name: Check out release source
