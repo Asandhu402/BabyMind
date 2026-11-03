@@ -22,6 +22,9 @@ class BabyMindWebTests(unittest.TestCase):
         self.original_db = server.DB_PATH
         server.DB_PATH = Path(self.temp.name) / "test.sqlite3"
         server.init_db()
+        from babymind import approval
+        self.original_workspace_actions_enabled = approval.WORKSPACE_FILE_ACTIONS_ENABLED
+        approval.WORKSPACE_FILE_ACTIONS_ENABLED = True  # Legacy helper coverage only inside tests.
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
         self.httpd.auth_token = None
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
@@ -33,6 +36,8 @@ class BabyMindWebTests(unittest.TestCase):
         self.httpd.server_close()
         self.thread.join(timeout=2)
         server.DB_PATH = self.original_db
+        from babymind import approval
+        approval.WORKSPACE_FILE_ACTIONS_ENABLED = self.original_workspace_actions_enabled
         self.temp.cleanup()
 
     def request(self, path: str, payload: dict | None = None, token: str | None = None,
@@ -565,6 +570,21 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(json.loads(body), expected)
         search.assert_called_once_with("Vancouver trucking", limit=5)
 
+
+    def test_workspace_file_actions_are_disabled_by_default_in_production(self) -> None:
+        from babymind import approval
+        original = approval.WORKSPACE_FILE_ACTIONS_ENABLED
+        approval.WORKSPACE_FILE_ACTIONS_ENABLED = False
+        try:
+            with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+                status, _, body = self.request("/api/tasks", {"title": "Disabled workspace"})
+                task_id = json.loads(body)["id"]
+                self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+                status, _, body = self.request(f"/api/tasks/{task_id}/propose", {"relative_path": "."})
+                self.assertEqual(status, 400)
+                self.assertIn(b"temporarily disabled", body)
+        finally:
+            approval.WORKSPACE_FILE_ACTIONS_ENABLED = original
 
     def test_project_test_execution_is_disabled_until_sandboxed(self) -> None:
         from babymind.approval import build_readonly_proposal, execute_readonly_proposal
