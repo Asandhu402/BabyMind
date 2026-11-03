@@ -65,6 +65,7 @@ def launch_read_only_session(
         cwd=str(root),
         env=environment,
         shell=False,
+        creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if os.name == "nt" else 0,
         stdin=None,
         stdout=None,
         stderr=None,
