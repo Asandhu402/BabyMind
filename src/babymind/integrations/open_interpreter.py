@@ -57,6 +57,8 @@ def launch_read_only_session(
         clean_model,
         "-c",
         'sandbox_mode="read-only"',
+        "-c",
+        'approval_policy="untrusted"',
     ]
     return subprocess.Popen(
         command,
