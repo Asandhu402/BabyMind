@@ -128,13 +128,13 @@ def build_readonly_proposal(
         root, target = _safe_text_file(relative_path.strip())
         with target.open("rb") as handle:
             original = handle.read(MAX_TEXT_FILE_BYTES + 1)
-        if len(original) > MAX_TEXT_FILE_BYTES or b"\\x00" in original:
+        if len(original) > MAX_TEXT_FILE_BYTES or b"\x00" in original:
             raise ValueError("Only UTF-8 text files up to 32 KB can be edited.")
         try:
             original_text = original.decode("utf-8")
         except UnicodeDecodeError as error:
             raise ValueError("Only valid UTF-8 text files can be edited.") from error
-        if not isinstance(content, str) or "\\x00" in content or len(content.encode("utf-8")) > MAX_TEXT_FILE_BYTES:
+        if not isinstance(content, str) or "\x00" in content or len(content.encode("utf-8")) > MAX_TEXT_FILE_BYTES:
             raise ValueError("Edited text must be plain UTF-8 and no larger than 32 KB.")
         relative = target.relative_to(root).as_posix()
         payload = {
@@ -173,7 +173,7 @@ def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> 
             new_content = payload["content"].encode("utf-8")
         except UnicodeEncodeError as error:
             raise ValueError("Edited text must be valid UTF-8.") from error
-        if len(new_content) > MAX_TEXT_FILE_BYTES or b"\\x00" in new_content:
+        if len(new_content) > MAX_TEXT_FILE_BYTES or b"\x00" in new_content:
             raise ValueError("Edited text must be plain UTF-8 and no larger than 32 KB.")
         with target.open("rb") as handle:
             current = handle.read(MAX_TEXT_FILE_BYTES + 1)
