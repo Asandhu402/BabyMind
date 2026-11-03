@@ -527,7 +527,7 @@ class BabyMindWebTests(unittest.TestCase):
             Path(workspace, "notes.txt").write_text("original", encoding="utf-8")
             from babymind.approval import build_readonly_proposal
             with self.assertRaises(ValueError):
-                build_readonly_proposal("notes.txt", action="edit_text_file", content="\\x00")
+                build_readonly_proposal("notes.txt", action="edit_text_file", content="\x00")
             with self.assertRaises(ValueError):
                 build_readonly_proposal("notes.txt", action="edit_text_file", content="x" * (32 * 1024 + 1))
             with self.assertRaises(ValueError):
