@@ -574,12 +574,21 @@ class BabyMindWebTests(unittest.TestCase):
     def test_workspace_file_actions_are_disabled_by_default_in_production(self) -> None:
         from babymind import approval
         original = approval.WORKSPACE_FILE_ACTIONS_ENABLED
-        approval.WORKSPACE_FILE_ACTIONS_ENABLED = False
         try:
             with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
                 status, _, body = self.request("/api/tasks", {"title": "Disabled workspace"})
                 task_id = json.loads(body)["id"]
                 self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+                status, _, body = self.request(f"/api/tasks/{task_id}/propose", {"relative_path": "."})
+                self.assertEqual(status, 201)
+                proposal = json.loads(body)
+                approval.WORKSPACE_FILE_ACTIONS_ENABLED = False
+                status, _, body = self.request(
+                    f"/api/proposals/{proposal['id']}/approve",
+                    {"proposal_hash": proposal["proposal_hash"]},
+                )
+                self.assertEqual(status, 400)
+                self.assertIn(b"temporarily disabled", body)
                 status, _, body = self.request(f"/api/tasks/{task_id}/propose", {"relative_path": "."})
                 self.assertEqual(status, 400)
                 self.assertIn(b"temporarily disabled", body)
