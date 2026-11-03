@@ -25,7 +25,9 @@ Browser Use currently requires Python 3.11 or newer; the base BabyMind package c
 
 ## Local document ingestion
 
-Open Settings → Connected tools. Enter a local file path and an instruction, then choose Analyze document. The server calls `BabyMindCoordinator.process_document`, converts the file with `convert_document`, and sends the extracted text through the same selected model and agent role. URLs are not accepted. Files above 100 MB are rejected and Markdown output is capped. Some PDF/OCR model assets may be downloaded on first use; once cached, processing can be performed locally.\n\nConverted content is untrusted input and is clearly separated from system instructions. It cannot authorize tools or actions. This is direct document analysis, not a persistent RAG index; no separate vector database or duplicate memory store is created.
+Open Settings → Connected tools. Enter a local file path and an instruction, then choose Analyze document. The server calls `BabyMindCoordinator.process_document`, converts the file with `convert_document`, and sends the extracted text through the same selected model and agent role. URLs are not accepted. Files above 100 MB are rejected and Markdown output is capped. Some PDF/OCR model assets may be downloaded on first use; once cached, processing can be performed locally.
+
+Converted content is untrusted input and is clearly separated from system instructions. It cannot authorize tools or actions. This is direct document analysis, not a persistent RAG index; no separate vector database or duplicate memory store is created.
 
 ## Voice input
 
