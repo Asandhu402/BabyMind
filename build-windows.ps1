@@ -63,6 +63,21 @@ The model is stored in your user profile under .babymind\models.
 Inference runs on this PC. No LM Studio account or API key is needed.
 Microsoft Edge WebView2 Runtime is required by the desktop window and is
 normally present on current Windows 11 systems.
+
+iPhone companion (same trusted private Wi-Fi only):
+1. Connect the iPhone and this PC to the same private Wi-Fi network.
+2. Double-click Start-BabyMind-iPhone.bat. Either launcher can perform the
+   first model download; the model is shared between both launchers.
+3. Allow Windows Firewall access on Private networks only, if prompted.
+4. Keep this console open and keep the PC awake. Follow the printed HTTPS URL,
+   one-time token, and lan-ca.crt certificate instructions.
+5. Transfer only lan-ca.crt to the iPhone, install its profile, then enable
+   full trust in Settings > General > About > Certificate Trust Settings.
+6. Open the printed HTTPS URL in Safari and enter the token. Do not share it.
+
+Do not use guest/public Wi-Fi, enable Public firewall access, or configure
+router port forwarding. The iPhone is a browser companion; this PC runs the
+model and stores BabyMind data. Real iPhone pairing still requires a device test.
 "@ | Set-Content -Path (Join-Path $PSScriptRoot "dist\BabyMind\FIRST-RUN.txt") -Encoding UTF8
 }
 finally {
