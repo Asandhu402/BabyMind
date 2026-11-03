@@ -119,7 +119,7 @@ async function sendMessage(message) {
       submitted += evidence.slice(0,Math.max(0,19000-submitted.length));
     }
     const chatPayload = () => ({
-      message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId,
+      message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId || "",
       collaborate:$("#collaborateToggle").checked,use_memory:$("#memoryToggle").checked,
       remember:$("#rememberToggle").checked
     });
