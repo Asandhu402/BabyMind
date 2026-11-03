@@ -35,10 +35,12 @@ class ProviderSelectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ProviderError, "valid numeric values"):
                 provider.complete("system", "question")
 
-    def test_local_engine_default_is_llama_cpp_and_requires_paths(self) -> None:
+    def test_local_engine_default_stays_available_before_first_run_setup(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(ProviderError, "BABYMIND_LLAMA_SERVER"):
-                create_provider()
+            provider = create_provider()
+            self.assertEqual(provider.base_url, "http://127.0.0.1:1235/v1")
+            with self.assertRaisesRegex(ProviderError, "first-run setup"):
+                provider.complete("system", "question")
 
     def test_lm_studio_is_only_selected_explicitly(self) -> None:
         with patch.dict(os.environ, {"BABYMIND_ENGINE": "lm-studio"}, clear=True):
@@ -49,11 +51,11 @@ class ProviderSelectionTests(unittest.TestCase):
             with self.assertRaises(ProviderError):
                 create_provider()
 
-    def test_llama_cpp_requires_explicit_local_paths(self) -> None:
+    def test_llama_cpp_requires_explicit_local_paths_when_constructed(self) -> None:
         env = {"BABYMIND_ENGINE": "llama.cpp"}
         with patch.dict(os.environ, env, clear=True):
-            with self.assertRaisesRegex(ProviderError, "BABYMIND_LLAMA_SERVER"):
-                create_provider()
+            provider = create_provider()
+            self.assertEqual(provider.__class__.__name__, "UnconfiguredLlamaCppProvider")
 
     def test_llama_cpp_rejects_missing_executable(self) -> None:
         env = {
