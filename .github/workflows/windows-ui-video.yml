@@ -93,7 +93,7 @@ jobs:
           "BABYMIND_CONTEXT_SIZE=8192" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_TEMPERATURE=0.35" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_TOP_P=0.9" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "BABYMIND_MAX_TOKENS=1024" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_MAX_TOKENS=512" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Save verified pinned model cache
         if: success() && steps.model-cache.outputs.cache-hit != 'true'
