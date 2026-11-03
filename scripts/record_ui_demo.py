@@ -53,12 +53,13 @@ def wait_for_server(process: subprocess.Popen, log_path: Path) -> None:
 def collect_local_code_context() -> str:
     """Read complete, bounded core files; never silently present partial files as complete."""
     source_paths = [
-        "src/babymind/coordinator.py",
         "src/babymind/providers.py",
         "tests/test_providers.py",
         "pyproject.toml",
     ]
-    total_limit = 25_000
+    # The chat API rejects user messages over 20,000 characters. Keep headroom
+    # for the review prompt and public-project excerpts.
+    total_limit = 14_000
     sections: list[str] = []
     total_chars = 0
     omitted: list[str] = []
@@ -310,7 +311,7 @@ def main() -> None:
                         public_sources.append(
                             f"PUBLIC GITHUB PROJECT: {data['title']}\\n"
                             f"URL: {data['url']}\\n"
-                            f"Page text: {str(data['text'])[:1200]}"
+                            f"Page text: {str(data['text'])[:700]}"
                         )
                     for warning in search_warnings:
                         print(f"Research note: {warning}")
