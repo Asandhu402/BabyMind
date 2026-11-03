@@ -54,27 +54,31 @@ try {
     @"
 BabyMind Windows portable package
 
+Before starting:
+- Extract the complete ZIP to a normal folder; do not run from inside the ZIP.
+- Allow at least 4.5 GB of free disk space.
+- Internet is needed for the first model download (about 2.71 GB).
+- Windows 11 normally includes Microsoft Edge WebView2 Runtime, which the
+  desktop window requires.
+
+Windows desktop:
 1. Double-click BabyMind.exe.
-2. On first launch, approve the one-time download of the local AI model (about 2.8 GB).
-3. Keep the internet connection active until setup finishes.
-4. Later launches use the saved model locally and do not need the download again.
+2. Keep the PC online until the verified model download and setup finish.
+3. Later use can run locally without downloading the model again.
 
-The model is stored in your user profile under .babymind\models.
-Inference runs on this PC. No LM Studio account or API key is needed.
-Microsoft Edge WebView2 Runtime is required by the desktop window and is
-normally present on current Windows 11 systems.
-
-iPhone companion (same trusted private Wi-Fi only):
+iPhone companion (trusted private Wi-Fi only):
 1. Close BabyMind.exe first; run only one BabyMind launcher at a time.
-2. Connect the iPhone and this PC to the same private Wi-Fi network.
-3. Double-click Start-BabyMind-iPhone.bat. Either launcher can perform the
-   first model download; the model file is shared between both launchers.
-3. Allow Windows Firewall access on Private networks only, if prompted.
-4. Keep this console open and keep the PC awake. Follow the printed HTTPS URL,
+2. Connect the iPhone and this PC to the same trusted private Wi-Fi.
+3. Double-click Start-BabyMind-iPhone.bat. It can download the model on the
+   first run too; both launchers share the same model file and data folder.
+4. If Windows Firewall asks, allow access on Private networks only.
+5. Keep this console open and keep the PC awake. Follow the printed HTTPS URL,
    one-time token, and lan-ca.crt certificate instructions.
-5. Transfer only lan-ca.crt to the iPhone, install its profile, then enable
-   full trust in Settings > General > About > Certificate Trust Settings.
-6. Open the printed HTTPS URL in Safari and enter the token. Do not share it.
+6. Transfer only lan-ca.crt to the iPhone. Install the certificate profile,
+   then enable full trust in Settings > General > About > Certificate Trust
+   Settings.
+7. Open the exact HTTPS URL printed by BabyMind in Safari and enter the token.
+   Keep the token private.
 
 Do not use guest/public Wi-Fi, enable Public firewall access, or configure
 router port forwarding. The iPhone is a browser companion; this PC runs the
