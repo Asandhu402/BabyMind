@@ -4,13 +4,15 @@ Set-Location $PSScriptRoot
 python -m pip install --upgrade pip
 python -m pip install -e ".[build]"
 
-python -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --collect-all cryptography --add-data "src/babymind/web;babymind/web" run_desktop.py
+$webAssets = Join-Path $PSScriptRoot "src\babymind\web"
+
+python -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --collect-all cryptography --add-data "$webAssets;babymind/web" run_desktop.py
 
 # Build a small console companion so the same portable package can expose
 # authenticated HTTPS access to an iPhone on the same trusted Wi-Fi network.
 # This entry point prepares the same verified local model before starting
 # server.py in mandatory --lan mode.
-python -m PyInstaller --noconfirm --onefile --console --name BabyMind-iPhone --paths src --workpath build/pyinstaller-iphone --distpath dist/iphone --specpath build/spec-iphone --collect-all cryptography --hidden-import tkinter --hidden-import tkinter.messagebox --hidden-import tkinter.ttk --add-data "src/babymind/web;babymind/web" run_iphone.py
+python -m PyInstaller --noconfirm --onefile --console --name BabyMind-iPhone --paths src --workpath build/pyinstaller-iphone --distpath dist/iphone --specpath build/spec-iphone --collect-all cryptography --hidden-import tkinter --hidden-import tkinter.messagebox --hidden-import tkinter.ttk --add-data "$webAssets;babymind/web" run_iphone.py
 if ($LASTEXITCODE -ne 0) { throw "Could not build the BabyMind iPhone companion." }
 
 
