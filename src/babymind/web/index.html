@@ -7,6 +7,7 @@
   <meta name="description" content="BabyMind — one personal AI, powered by 50 specialist agents.">
   <title>BabyMind — Your intelligence, unified</title>
   <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/approvals.css">
 </head>
 <body>
   <div class="app-shell">
@@ -23,6 +24,7 @@
         <button class="nav-item" data-view="agents"><span class="nav-icon">✳</span> Agent directory <span class="nav-count">50</span></button>
         <button class="nav-item" data-view="memory"><span class="nav-icon">⌁</span> Memory</button>
         <button class="nav-item" data-view="tasks"><span class="nav-icon">☷</span> Task queue <span class="nav-count" id="taskCount">0</span></button>
+        <button class="nav-item" data-view="approvals"><span class="nav-icon">✓</span> Approvals <span class="nav-count" id="approvalCount">0</span></button>
       </nav>
       <div class="history-heading"><span>RECENT CONVERSATIONS</span><span class="history-count" id="historyCount">0</span></div>
       <div class="conversation-list" id="conversationList"><div class="empty-history">Your conversations will appear here.</div></div>
@@ -31,13 +33,11 @@
         <button class="profile-button" id="settingsButton"><div class="avatar">B</div><span><strong>BabyMind</strong><small>Personal workspace</small></span><span class="more">···</span></button>
       </div>
     </aside>
-
     <main class="main-panel">
       <header class="topbar">
         <div class="topbar-left"><button class="icon-button menu-button" id="openSidebar" aria-label="Open menu">☰</button><span class="crumb">Workspace</span><span class="crumb-sep">/</span><strong id="pageTitle">Chat</strong></div>
         <div class="topbar-right"><div class="connection"><span class="status-dot" id="statusDot"></span><span id="connectionText">Checking local engine</span></div><button class="export-button" id="exportButton" disabled>↓ Export</button><button class="icon-button" id="themeButton" aria-label="Toggle theme">◐</button></div>
       </header>
-
       <section class="view active" id="chatView">
         <div class="chat-scroll" id="chatScroll">
           <div class="welcome" id="welcome">
@@ -60,32 +60,24 @@
           <div class="composer-foot">BabyMind can make mistakes. Verify important information.</div>
         </div>
       </section>
-
       <section class="view secondary-view" id="agentsView"><div class="section-intro"><div class="eyebrow"><span class="eyebrow-line"></span> SPECIALIST NETWORK</div><h2>50 perspectives.<br><span>One intelligence.</span></h2><p>Every specialist shares the same BabyMind identity and local model, with a focused role and skill prompt.</p><div class="search-wrap"><span>⌕</span><input id="agentSearch" placeholder="Search agents or specialties…" aria-label="Search agents"></div><div class="filter-row" id="agentFilters"><button class="filter-chip active" data-filter="all">All agents <b>50</b></button></div></div><div class="agent-grid" id="agentGrid"></div></section>
-
       <section class="view secondary-view" id="memoryView"><div class="section-intro"><div class="eyebrow"><span class="eyebrow-line"></span> YOUR PRIVATE CONTEXT</div><h2>Memory, <span>by choice.</span></h2><p>Only save information when you explicitly ask BabyMind to remember it. Your memory database stays on this device.</p><div class="memory-actions"><span class="memory-total" id="memoryTotal">0 saved memories</span><button class="danger-button" id="clearMemory">Clear all memory</button></div></div><div class="memory-list" id="memoryList"><div class="empty-state">No saved memories yet. Turn on “Remember” when sending a message to save useful context.</div></div></section>
-
       <section class="view secondary-view" id="tasksView">
-        <div class="section-intro">
-          <div class="eyebrow"><span class="eyebrow-line"></span> CONTROLLED WORKSPACE</div>
-          <h2>Task queue, <span>under your control.</span></h2>
-          <p>Create and track tasks with explicit lifecycle controls. In this foundation release, Start and Resume change task status only; BabyMind does not execute commands or modify files.</p>
-        </div>
-        <form class="task-create-form" id="taskForm">
-          <label for="taskTitle">Task title</label>
-          <input id="taskTitle" maxlength="120" required placeholder="What should BabyMind work on?">
-          <label for="taskDetails">Notes (optional)</label>
-          <textarea id="taskDetails" maxlength="5000" rows="3" placeholder="Add context or desired outcome…"></textarea>
-          <button class="task-primary" type="submit">＋ Add to queue</button>
-        </form>
-        <div class="task-toolbar"><strong>Your tasks</strong><span id="taskSummary">Loading tasks…</span><button class="task-refresh" id="refreshTasks" type="button">Refresh</button></div>
-        <div class="task-list" id="taskList"><div class="empty-state">Loading your task queue…</div></div>
+        <div class="section-intro"><div class="eyebrow"><span class="eyebrow-line"></span> CONTROLLED WORKSPACE</div><h2>Task queue, <span>under your control.</span></h2><p>Create and track tasks with explicit lifecycle controls. Start and Resume only change task status; proposals require your separate approval before a read-only directory listing.</p></div>
+        <form class="task-create-form" id="taskForm"><label for="taskTitle">Task title</label><input id="taskTitle" maxlength="120" required placeholder="What should BabyMind work on?"><label for="taskDetails">Notes (optional)</label><textarea id="taskDetails" maxlength="5000" rows="3" placeholder="Add context or desired outcome…"></textarea><button class="task-primary" type="submit">＋ Add to queue</button></form>
+        <div class="task-toolbar"><strong>Your tasks</strong><span id="taskSummary">Loading tasks…</span><button class="task-refresh" id="refreshTasks" type="button">Refresh</button></div><div class="task-list" id="taskList"><div class="empty-state">Loading your task queue…</div></div>
       </section>
-
+      <section class="view secondary-view" id="approvalsView">
+        <div class="section-intro"><div class="eyebrow"><span class="eyebrow-line"></span> HUMAN-IN-CONTROL EXECUTION</div><h2>Review first. <span>Approve explicitly.</span></h2><p>BabyMind cannot run a proposed action until you approve that exact proposal here. This release supports read-only folder listings only.</p></div>
+        <div class="approval-warning"><strong>What approval allows</strong><span>List names and basic types of items in one existing folder inside your selected workspace. It does not open file contents, change files, run commands, or access the internet.</span></div>
+        <div class="approval-toolbar"><strong>Pending and completed proposals</strong><button class="task-refresh" id="refreshApprovals" type="button">Refresh</button></div>
+        <div class="approval-list" id="approvalList"><div class="empty-state">Loading approval requests…</div></div>
+      </section>
       <section class="view secondary-view" id="settingsView"><div class="section-intro"><div class="eyebrow"><span class="eyebrow-line"></span> PERSONAL WORKSPACE</div><h2>Settings & <span>control.</span></h2><p>BabyMind runs locally. Choose either its managed llama.cpp engine or an optional LM Studio connection.</p></div><div class="settings-grid"><article class="settings-card"><div class="settings-icon">◉</div><h3>Local model engine</h3><p>BabyMind connects only to a local inference engine:</p><code>127.0.0.1 · local only</code><div class="setting-status" id="modelSettingStatus">Checking connection…</div></article><article class="settings-card"><div class="settings-icon">⌂</div><h3>Local data</h3><p>Conversations and memories are stored in your local BabyMind data folder.</p><code>~/.babymind/</code><div class="setting-status">Stored on this computer</div></article><article class="settings-card"><div class="settings-icon">✳</div><h3>Agent network</h3><p>Exactly 50 specialist roles are registered and available through one coordinator.</p><code>BM-01 — BM-50</code><div class="setting-status">50 roles registered</div></article><article class="settings-card"><div class="settings-icon">◇</div><h3>Privacy controls</h3><p>Memory is opt-in. No cloud account or external analytics are built into this app.</p><code>Memory: user controlled</code><div class="setting-status">Local-first configuration</div></article></div></section>
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
   <script src="/assets/app.js" defer></script>
+  <script src="/assets/approvals.js" defer></script>
 </body>
 </html>
