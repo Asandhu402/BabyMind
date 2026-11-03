@@ -566,101 +566,12 @@ class BabyMindWebTests(unittest.TestCase):
         search.assert_called_once_with("Vancouver trucking", limit=5)
 
 
-    def test_project_test_run_requires_existing_tests_folder(self) -> None:
-        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
-            Path(workspace, "empty-project").mkdir()
-            from babymind.approval import build_readonly_proposal
-            with self.assertRaisesRegex(ValueError, "tests subfolder"):
-                build_readonly_proposal("empty-project", action="run_tests")
-
-    def test_project_test_runner_uses_fixed_command_and_filtered_environment(self) -> None:
-        import io
-        import sys
-        from babymind.approval import _run_project_tests
-        with TemporaryDirectory() as workspace:
-            project = Path(workspace)
-            (project / "tests").mkdir()
-            (project / "src").mkdir()
-            process = SimpleNamespace(returncode=0, stdout=io.StringIO("Ran 3 tests"))
-            process.wait = lambda timeout: None
-            with patch.object(sys, "frozen", False, create=True), patch("babymind.approval.subprocess.Popen", return_value=process) as popen, patch.dict("os.environ", {"PATH": "C:/Windows/System32", "BABYMIND_API_KEY": "must-not-pass"}, clear=True):
-                result = _run_project_tests(project)
-            command = popen.call_args.args[0]
-            options = popen.call_args.kwargs
-            self.assertEqual(command, [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"])
-            self.assertNotIn("BABYMIND_API_KEY", options["env"])
-            self.assertEqual(Path(options["env"]["PYTHONPATH"].split(os.pathsep)[0]).resolve(), (project / "src").resolve())
-            self.assertFalse(options.get("shell", False))
-            self.assertTrue(result["success"])
-            self.assertEqual(result["output"], "Ran 3 tests")
-
-    def test_project_test_runner_bounds_captured_output(self) -> None:
-        import io
-        import sys
-        from babymind.approval import MAX_TEST_OUTPUT_CHARS, _run_project_tests
-        with TemporaryDirectory() as workspace:
-            project = Path(workspace)
-            (project / "tests").mkdir()
-            raw_output = "x" * (MAX_TEST_OUTPUT_CHARS + 500)
-            process = SimpleNamespace(returncode=0, stdout=io.StringIO(raw_output))
-            process.wait = lambda timeout: None
-            with patch.object(sys, "frozen", False, create=True):
-                with patch("babymind.approval.subprocess.Popen", return_value=process):
-                    result = _run_project_tests(project)
-        self.assertEqual(len(result["output"]), MAX_TEST_OUTPUT_CHARS)
-        self.assertEqual(result["output"], raw_output[-MAX_TEST_OUTPUT_CHARS:])
-        self.assertTrue(result["output_truncated"])
-
-    def test_project_test_runner_kills_timed_out_process_group(self) -> None:
-        import subprocess
-        from babymind.approval import _run_project_tests
-        with TemporaryDirectory() as workspace:
-            project = Path(workspace)
-            (project / "tests").mkdir()
-            import io
-            process = SimpleNamespace(returncode=-9, pid=1234, stdout=io.StringIO("stopped"))
-            process.wait = unittest.mock.Mock(side_effect=[
-                subprocess.TimeoutExpired("fixed-test-command", 90), None
-            ])
-            process.poll = lambda: None
-            process.kill = lambda: None
-            with patch("babymind.approval.sys.frozen", False, create=True):
-                if os.name == "nt":
-                    with patch("babymind.approval.subprocess.run") as kill_tree, \
-                         patch("babymind.approval.subprocess.Popen", return_value=process):
-                        result = _run_project_tests(project)
-                    kill_tree.assert_called_once()
-                else:
-                    with patch("babymind.approval.os.killpg") as kill_group, \
-                         patch("babymind.approval.subprocess.Popen", return_value=process):
-                        result = _run_project_tests(project)
-                    kill_group.assert_called_once()
-            self.assertTrue(result["timed_out"])
-            self.assertFalse(result["success"])
-
-
-    def test_failed_project_test_run_is_recorded_and_not_left_running(self) -> None:
-        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
-            (Path(workspace) / "demo" / "tests").mkdir(parents=True)
-            status, _, body = self.request("/api/tasks", {"title": "Run failing project tests"})
-            task_id = json.loads(body)["id"]
-            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
-            status, _, body = self.request(
-                f"/api/tasks/{task_id}/propose",
-                {"relative_path": "demo", "action": "run_tests"},
-            )
-            proposal = json.loads(body)
-            with patch("babymind.approval._run_project_tests", side_effect=RuntimeError("runner unavailable")):
-                status, _, body = self.request(
-                    f"/api/proposals/{proposal['id']}/approve",
-                    {"proposal_hash": proposal["proposal_hash"]},
-                )
-            self.assertEqual(status, 400)
-            self.assertEqual(json.loads(body)["status"], "failed")
-            status, _, body = self.request("/api/proposals")
-            saved = next(item for item in json.loads(body) if item["id"] == proposal["id"])
-            self.assertEqual(saved["status"], "failed")
-            self.assertIn("runner unavailable", saved["result"])
+    def test_project_test_execution_is_disabled_until_sandboxed(self) -> None:
+        from babymind.approval import build_readonly_proposal, execute_readonly_proposal
+        with self.assertRaisesRegex(ValueError, "Unsupported workspace action"):
+            build_readonly_proposal(".", action="run_tests")
+        with self.assertRaisesRegex(ValueError, "disabled until a real sandbox"):
+            execute_readonly_proposal({"relative_path": "."}, action="run_tests")
 
 
 if __name__ == "__main__":
