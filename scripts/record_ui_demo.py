@@ -52,7 +52,10 @@ def main() -> None:
         "BABYMIND_ENGINE": "llama.cpp",
         "BABYMIND_LLAMA_SERVER": env["BABYMIND_DEMO_LLAMA"],
         "BABYMIND_GGUF_MODEL": env["BABYMIND_DEMO_MODEL"],
-        "BABYMIND_CONTEXT_SIZE": "2048",
+        "BABYMIND_CONTEXT_SIZE": "8192",
+        "BABYMIND_TEMPERATURE": "0.35",
+        "BABYMIND_TOP_P": "0.9",
+        "BABYMIND_MAX_TOKENS": "1024",
         "BABYMIND_HOME": str(Path(os.environ["RUNNER_TEMP"]) / "babymind-demo-data"),
         "PYTHONUNBUFFERED": "1",
     })
@@ -88,7 +91,7 @@ def main() -> None:
                 # Ask the running local model a real question through the UI.
                 page.locator('[data-view="chat"]').click()
                 page.locator("#messageInput").fill(
-                    "For this interface demo, reply in two short sentences: introduce yourself as BabyMind and explain that you have specialist roles."
+                    "Give a practical three-step checklist for testing that BabyMind keeps chat data on the local PC and only exposes the iPhone companion on trusted Wi-Fi. Include one concrete verification for each step. Do not claim to have inspected settings or performed actions."
                 )
                 previous = page.locator("#messages .message .message-content").count()
                 page.locator("#sendButton").click()
