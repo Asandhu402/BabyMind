@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -21,8 +21,10 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q src tests
       - name: Check browser JavaScript syntax
-        run: node --check src/babymind/web/app.js && node --check src/babymind/web/approvals.js
+        run: node --check src/babymind/web/app.js; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; node --check src/babymind/web/approvals.js
+        shell: pwsh
       - name: Audit installed Python dependencies
-        run: python -m pip install pip-audit && python -m pip_audit
+        run: python -m pip install pip-audit; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; python -m pip_audit
+        shell: pwsh
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
