@@ -22,6 +22,9 @@ def main() -> int:
         return 2
 
     sys.path.insert(0, str(root))
+    source_dir = root / "src"
+    if source_dir.is_dir():
+        sys.path.insert(0, str(source_dir))
     suite = unittest.defaultTestLoader.discover(
         start_dir=str(tests_dir),
         pattern="test*.py",
