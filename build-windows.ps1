@@ -74,10 +74,15 @@ iPhone companion (trusted private Wi-Fi only):
 4. If Windows Firewall asks, allow access on Private networks only.
 5. Keep this console open and keep the PC awake. Follow the printed HTTPS URL,
    one-time token, and lan-ca.crt certificate instructions.
-6. Transfer only lan-ca.crt to the iPhone. Install the certificate profile,
-   then enable full trust in Settings > General > About > Certificate Trust
-   Settings.
-7. Open the exact HTTPS URL printed by BabyMind in Safari and enter the token.
+6. Transfer only the public lan-ca.crt file from Windows to your own iCloud
+   Drive or OneDrive (or email it to yourself as an attachment), then open it
+   on the iPhone. Windows cannot use AirDrop. Never transfer a private-key file
+   or use a public file-sharing link for the certificate.
+7. On iPhone, open Settings > General > VPN & Device Management, select the
+   downloaded BabyMind certificate profile, and install it. Then open
+   Settings > General > About > Certificate Trust Settings and enable full
+   trust for the BabyMind certificate.
+8. Open the exact HTTPS URL printed by BabyMind in Safari and enter the token.
    Keep the token private.
 
 Do not use guest/public Wi-Fi, enable Public firewall access, or configure
