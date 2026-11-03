@@ -1,4 +1,4 @@
-"""Discover optional integration availability without importing heavy packages."""
+"""Discover local engine availability for BabyMind's integrated capabilities without importing heavy packages."""
 
 from __future__ import annotations
 
@@ -51,19 +51,19 @@ def integration_status() -> list[dict[str, object]]:
             "Requires explicit launch approval and a functioning OS workspace sandbox.",
         ),
         IntegrationStatus(
-            "cognee", "Cognee", "Optional local knowledge graph and semantic retrieval",
+            "cognee", "Cognee", "Local knowledge graph and semantic retrieval for BabyMind",
             importlib.util.find_spec("cognee") is not None,
             'py -m pip install -e ".[knowledge-graph]"',
             "Disabled by default. Its separate graph/vector store is not encrypted by BabyMind; index only explicitly approved notes.",
         ),
         IntegrationStatus(
-            "voicebox", "Voicebox", "Local speech-to-text and text-to-speech server",
+            "voicebox", "Voicebox", "Local speech input and output engine",
             voicebox_ready,
             "Run the self-hosted server: https://github.com/agjs/voicebox",
             voicebox_detail + " Loopback endpoint only; no cloud speech service.",
         ),
         IntegrationStatus(
-            "promptfoo", "Promptfoo", "Local model evaluation and security test harness",
+            "promptfoo", "Promptfoo", "BabyMind local quality and security test harness",
             shutil.which("promptfoo") is not None,
             "Install Node.js 22.22+ and Promptfoo; see quality/README.md",
             "Smoke tests target BabyMind's loopback API; do not configure hosted graders or remote red-team generation.",
