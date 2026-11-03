@@ -71,6 +71,7 @@ class IntegrationTests(unittest.TestCase):
             self.assertIn("lmstudio", command)
             self.assertIn("local-model", command)
             self.assertIn('sandbox_mode="read-only"', command)
+            self.assertIn('approval_policy="untrusted"', command)
             self.assertEqual(
                 popen.call_args.kwargs["env"]["CODEX_OSS_BASE_URL"],
                 "http://127.0.0.1:1234/v1",
