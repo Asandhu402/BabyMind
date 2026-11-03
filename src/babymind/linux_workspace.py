@@ -157,15 +157,12 @@ class LinuxWorkspace:
         directory_fd = self._directory_fd(parts)
         try:
             entries = []
-            # Bound enumeration work; the UI can request another view later.
-            with os.scandir(directory_fd) as iterator:
-                names = []
-                for entry in iterator:
-                    if entry.name.startswith("."):
-                        continue
-                    names.append(entry.name)
-                    if len(names) >= 201:
-                        break
+            # os.listdir accepts a directory fd on Unix. os.scandir(fd) does
+            # not accept O_PATH descriptors on all supported Python/Linux builds.
+            names = [
+                name for name in os.listdir(directory_fd)
+                if not name.startswith(".")
+            ]
             for name in sorted(names[:200], key=str.casefold):
                 try:
                     info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
