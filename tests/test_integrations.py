@@ -1,5 +1,6 @@
 """Tests for optional integration adapters without third-party dependencies."""
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
