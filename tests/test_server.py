@@ -611,8 +611,9 @@ class BabyMindWebTests(unittest.TestCase):
             project = Path(workspace)
             (project / "tests").mkdir()
             (project / "src").mkdir()
-            process = SimpleNamespace(returncode=0)
-            process.communicate = lambda timeout: ("Ran 3 tests", None)
+            import io
+            process = SimpleNamespace(returncode=0, stdout=io.StringIO("Ran 3 tests"))
+            process.wait = lambda timeout: None
             with patch.object(sys, "frozen", False, create=True), \
                  patch("babymind.approval.subprocess.Popen", return_value=process) as popen, \
                  patch.dict("os.environ", {"PATH": "C:/Windows/System32", "BABYMIND_API_KEY": "must-not-pass"}, clear=True):
@@ -626,16 +627,36 @@ class BabyMindWebTests(unittest.TestCase):
             self.assertTrue(result["success"])
             self.assertEqual(result["output"], "Ran 3 tests")
 
+    def test_project_test_runner_bounds_captured_output(self) -> None:
+        import io
+        import sys
+        from babymind.approval import MAX_TEST_OUTPUT_CHARS, _run_project_tests
+        with TemporaryDirectory() as workspace:
+            project = Path(workspace)
+            (project / "tests").mkdir()
+            raw_output = "x" * (MAX_TEST_OUTPUT_CHARS + 500)
+            process = SimpleNamespace(returncode=0, stdout=io.StringIO(raw_output))
+            process.wait = lambda timeout: None
+            with patch.object(sys, "frozen", False, create=True), \\
+                 patch("babymind.approval.subprocess.Popen", return_value=process):
+                result = _run_project_tests(project)
+        self.assertEqual(len(result["output"]), MAX_TEST_OUTPUT_CHARS)
+        self.assertEqual(result["output"], raw_output[-MAX_TEST_OUTPUT_CHARS:])
+        self.assertTrue(result["output_truncated"])
+
     def test_project_test_runner_kills_timed_out_process_group(self) -> None:
         import subprocess
         from babymind.approval import _run_project_tests
         with TemporaryDirectory() as workspace:
             project = Path(workspace)
             (project / "tests").mkdir()
-            process = SimpleNamespace(returncode=-9, pid=1234)
-            process.communicate = unittest.mock.Mock(side_effect=[
-                subprocess.TimeoutExpired("fixed-test-command", 90), ("stopped", None)
+            import io
+            process = SimpleNamespace(returncode=-9, pid=1234, stdout=io.StringIO("stopped"))
+            process.wait = unittest.mock.Mock(side_effect=[
+                subprocess.TimeoutExpired("fixed-test-command", 90), None
             ])
+            process.poll = lambda: None
+            process.kill = lambda: None
             with patch("babymind.approval.sys.frozen", False, create=True):
                 if os.name == "nt":
                     with patch("babymind.approval.subprocess.run") as kill_tree, \
