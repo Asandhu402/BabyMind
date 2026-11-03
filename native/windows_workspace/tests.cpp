@@ -3,9 +3,11 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <barrier>
 #include <cwchar>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #define CHECK(expression) do { if (!(expression)) { std::wcerr << L"CHECK failed at line " << __LINE__ << L"\n"; return __LINE__; } } while (false)
@@ -81,6 +83,23 @@ int main() {
     CHECK(bytes_read == 0);
 
     CHECK(bm_ws_create_new_text(root, L"nested/hello.txt", payload, sizeof(payload), 1024) == BM_WS_IO_ERROR);
+
+    std::barrier start_race(3);
+    bm_ws_status race_results[2] = {BM_WS_NOT_IMPLEMENTED, BM_WS_NOT_IMPLEMENTED};
+    std::thread creator_one([&] {
+        start_race.arrive_and_wait();
+        race_results[0] = bm_ws_create_new_text(root, L"nested/race.txt", payload, sizeof(payload), 1024);
+    });
+    std::thread creator_two([&] {
+        start_race.arrive_and_wait();
+        race_results[1] = bm_ws_create_new_text(root, L"nested/race.txt", payload, sizeof(payload), 1024);
+    });
+    start_race.arrive_and_wait();
+    creator_one.join();
+    creator_two.join();
+    const bool first_won = race_results[0] == BM_WS_OK && race_results[1] == BM_WS_IO_ERROR;
+    const bool second_won = race_results[1] == BM_WS_OK && race_results[0] == BM_WS_IO_ERROR;
+    CHECK(first_won || second_won);
     CHECK(bm_ws_read_text(root, L"../outside.txt", 1024, output, sizeof(output), &bytes_read) == BM_WS_INVALID_RELATIVE_PATH);
     CHECK(bm_ws_read_text(root, L"nested/absent.txt", 1024, output, sizeof(output), &bytes_read) == BM_WS_IO_ERROR);
     CHECK(bm_ws_read_text(root, L"nested/hello.txt", 1024, output, 4, &bytes_read) == BM_WS_BUFFER_TOO_SMALL);
@@ -94,6 +113,7 @@ int main() {
 
     bm_ws_close_workspace_root(root);
     CHECK(DeleteFileW((nested + L"\\hello.txt").c_str()) != 0);
+    CHECK(DeleteFileW((nested + L"\\race.txt").c_str()) != 0);
     CHECK(RemoveDirectoryW(nested.c_str()) != 0);
     CHECK(DeleteFileW(outside_file.c_str()) != 0);
     CHECK(RemoveDirectoryW(outside.c_str()) != 0);
