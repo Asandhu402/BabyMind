@@ -642,5 +642,29 @@ class BabyMindWebTests(unittest.TestCase):
             self.assertFalse(result["success"])
 
 
+    def test_failed_project_test_run_is_recorded_and_not_left_running(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            (Path(workspace) / "demo" / "tests").mkdir(parents=True)
+            status, _, body = self.request("/api/tasks", {"title": "Run failing project tests"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": "demo", "action": "run_tests"},
+            )
+            proposal = json.loads(body)
+            with patch("babymind.approval._run_project_tests", side_effect=RuntimeError("runner unavailable")):
+                status, _, body = self.request(
+                    f"/api/proposals/{proposal['id']}/approve",
+                    {"proposal_hash": proposal["proposal_hash"]},
+                )
+            self.assertEqual(status, 400)
+            self.assertEqual(json.loads(body)["status"], "failed")
+            status, _, body = self.request("/api/proposals")
+            saved = next(item for item in json.loads(body) if item["id"] == proposal["id"])
+            self.assertEqual(saved["status"], "failed")
+            self.assertIn("runner unavailable", saved["result"])
+
+
 if __name__ == "__main__":
     unittest.main()
