@@ -348,5 +348,78 @@ class BabyMindWebTests(unittest.TestCase):
                 build_readonly_proposal("linked.txt", action="read_text_file")
 
 
+    def test_filename_search_lists_candidates_without_reading_contents(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(workspace, "invoice-2026.txt").write_text("private invoice body", encoding="utf-8")
+            Path(workspace, "notes.md").write_text("private notes body", encoding="utf-8")
+            Path(workspace, ".hidden-invoice.txt").write_text("hidden", encoding="utf-8")
+            Path(workspace, "invoice.png").write_bytes(b"binary")
+            Path(workspace, "nested").mkdir()
+            Path(workspace, "nested", "old-invoice.csv").write_text("private csv body", encoding="utf-8")
+            status, _, body = self.request("/api/tasks", {"title": "Find invoices"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": ".", "action": "find_files", "name_contains": "invoice"},
+            )
+            self.assertEqual(status, 201)
+            proposal = json.loads(body)
+            self.assertEqual(proposal["action"], "find_files")
+            self.assertNotIn("private invoice body", body.decode("utf-8"))
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve",
+                {"proposal_hash": proposal["proposal_hash"]},
+            )
+            self.assertEqual(status, 200)
+            result = json.loads(body)["result"]
+            paths = {item["relative_path"] for item in result["files"]}
+            self.assertEqual(paths, {"invoice-2026.txt", "nested/old-invoice.csv"})
+            self.assertNotIn("private invoice body", body.decode("utf-8"))
+            self.assertNotIn("private csv body", body.decode("utf-8"))
+
+    def test_each_found_file_requires_its_own_preview_proposal_and_approval(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(workspace, "one.txt").write_text("one private body", encoding="utf-8")
+            Path(workspace, "two.txt").write_text("two private body", encoding="utf-8")
+            status, _, body = self.request("/api/tasks", {"title": "Review notes"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": ".", "action": "find_files", "name_contains": ".txt"},
+            )
+            search_proposal = json.loads(body)
+            status, _, body = self.request(
+                f"/api/proposals/{search_proposal['id']}/approve",
+                {"proposal_hash": search_proposal["proposal_hash"]},
+            )
+            found = json.loads(body)["result"]["files"]
+            first_path = found[0]["relative_path"]
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": first_path, "action": "read_text_file"},
+            )
+            self.assertEqual(status, 201)
+            read_proposal = json.loads(body)
+            self.assertEqual(read_proposal["status"], "awaiting_approval")
+            status, _, body = self.request("/api/proposals")
+            self.assertEqual(status, 200)
+            self.assertNotIn("one private body", body.decode("utf-8"))
+            self.assertNotIn("two private body", body.decode("utf-8"))
+            status, _, body = self.request(
+                f"/api/proposals/{read_proposal['id']}/approve",
+                {"proposal_hash": read_proposal["proposal_hash"]},
+            )
+            self.assertEqual(status, 200)
+            self.assertIn(json.loads(body)["result"]["content"], {"one private body", "two private body"})
+
+    def test_filename_search_rejects_empty_query(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            from babymind.approval import build_readonly_proposal
+            with self.assertRaises(ValueError):
+                build_readonly_proposal(".", action="find_files", name_contains="  ")
+
+
 if __name__ == "__main__":
     unittest.main()
