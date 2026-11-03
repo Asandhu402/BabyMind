@@ -605,18 +605,16 @@ class BabyMindWebTests(unittest.TestCase):
                 build_readonly_proposal("empty-project", action="run_tests")
 
     def test_project_test_runner_uses_fixed_command_and_filtered_environment(self) -> None:
+        import io
         import sys
         from babymind.approval import _run_project_tests
         with TemporaryDirectory() as workspace:
             project = Path(workspace)
             (project / "tests").mkdir()
             (project / "src").mkdir()
-            import io
             process = SimpleNamespace(returncode=0, stdout=io.StringIO("Ran 3 tests"))
             process.wait = lambda timeout: None
-            with patch.object(sys, "frozen", False, create=True), patch("babymind.approval.subprocess.Popen", return_value=process):
-                 patch("babymind.approval.subprocess.Popen", return_value=process) as popen, \
-                 patch.dict("os.environ", {"PATH": "C:/Windows/System32", "BABYMIND_API_KEY": "must-not-pass"}, clear=True):
+            with patch.object(sys, "frozen", False, create=True), patch("babymind.approval.subprocess.Popen", return_value=process) as popen, patch.dict("os.environ", {"PATH": "C:/Windows/System32", "BABYMIND_API_KEY": "must-not-pass"}, clear=True):
                 result = _run_project_tests(project)
             command = popen.call_args.args[0]
             options = popen.call_args.kwargs
