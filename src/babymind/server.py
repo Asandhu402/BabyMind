@@ -426,27 +426,45 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("The task must remain active to approve this proposal.")
                     secure = text_store()
                     proposal_payload = json.loads(secure.decrypt(row["payload"]))
-                    result = execute_readonly_proposal(proposal_payload, action=row["action"])
-                    encoded_result = secure.encrypt(json.dumps(result, ensure_ascii=False))
-                    timestamp = now()
+                    action = row["action"]
                     connection.execute(
-                        "UPDATE execution_proposals SET status='completed', result=?, updated_at=? "
+                        "UPDATE execution_proposals SET status='running', updated_at=? "
                         "WHERE id=? AND status='awaiting_approval'",
-                        (encoded_result, timestamp, proposal_id)
+                        (now(), proposal_id)
                     )
+                # Never hold the database lock while a potentially long test run executes.
+                try:
+                    result = execute_readonly_proposal(proposal_payload, action=action)
+                    final_status = "completed"
+                except Exception as error:
+                    result = {"error": str(error)}
+                    final_status = "failed"
+                encoded_result = secure.encrypt(json.dumps(result, ensure_ascii=False))
+                with DB_LOCK, db() as connection:
+                    connection.execute(
+                        "UPDATE execution_proposals SET status=?, result=?, updated_at=? "
+                        "WHERE id=? AND status='running'",
+                        (final_status, encoded_result, now(), proposal_id)
+                    )
+                if final_status == "failed":
+                    self.send_json({
+                        "id": proposal_id, "status": "failed", "result": result,
+                        "error": result["error"]
+                    }, 400)
+                    return
                 self.send_json({
                     "id": proposal_id, "status": "completed", "result": result,
                     "notice": (
                         "Approved Python test run finished. Review the exit code and output; project tests are not sandboxed."
-                        if row["action"] == "run_tests"
+                        if action == "run_tests"
                         else "Approved text file edit completed after matching the reviewed original hash."
-                        if row["action"] == "edit_text_file"
+                        if action == "edit_text_file"
                         else "Approved new text file created. No existing file was overwritten."
-                        if row["action"] == "create_text_file"
+                        if action == "create_text_file"
                         else "Approved text-file preview completed. No files were modified."
-                        if row["action"] == "read_text_file"
+                        if action == "read_text_file"
                         else "Filename search completed. No file contents were opened."
-                        if row["action"] == "find_files"
+                        if action == "find_files"
                         else "Read-only directory listing completed. No file contents were opened or modified."
                     )
                 })
