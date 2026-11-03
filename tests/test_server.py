@@ -636,16 +636,17 @@ class BabyMindWebTests(unittest.TestCase):
             process.communicate = unittest.mock.Mock(side_effect=[
                 subprocess.TimeoutExpired("fixed-test-command", 90), ("stopped", None)
             ])
-            if os.name == "nt":
-                with patch("babymind.approval.subprocess.run") as kill_tree, \
-                     patch("babymind.approval.subprocess.Popen", return_value=process):
-                    result = _run_project_tests(project)
-                kill_tree.assert_called_once()
-            else:
-                with patch("babymind.approval.os.killpg") as kill_group, \
-                     patch("babymind.approval.subprocess.Popen", return_value=process):
-                    result = _run_project_tests(project)
-                kill_group.assert_called_once()
+            with patch("babymind.approval.sys.frozen", False, create=True):
+                if os.name == "nt":
+                    with patch("babymind.approval.subprocess.run") as kill_tree, \
+                         patch("babymind.approval.subprocess.Popen", return_value=process):
+                        result = _run_project_tests(project)
+                    kill_tree.assert_called_once()
+                else:
+                    with patch("babymind.approval.os.killpg") as kill_group, \
+                         patch("babymind.approval.subprocess.Popen", return_value=process):
+                        result = _run_project_tests(project)
+                    kill_group.assert_called_once()
             self.assertTrue(result["timed_out"])
             self.assertFalse(result["success"])
 
