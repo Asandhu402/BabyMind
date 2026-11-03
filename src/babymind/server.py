@@ -1,10 +1,11 @@
 """Local web application server for BabyMind.
 
-The server binds to localhost by default. LAN access is opt-in via --host 0.0.0.0.
+The server binds to localhost by default. LAN access is opt-in via --lan.
 """
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import mimetypes
 import os
@@ -28,6 +29,8 @@ DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
 DATA_HOME.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_HOME / "app.sqlite3"
 DB_LOCK = threading.Lock()
+# The local model is CPU/RAM intensive. Start with one inference at a time.
+INFERENCE_SEMAPHORE = threading.BoundedSemaphore(1)
 COORDINATOR = BabyMindCoordinator()
 
 
@@ -69,8 +72,18 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def is_loopback_host(host: str) -> bool:
+    """Return whether a bind host is a loopback address or localhost."""
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "BabyMind/0.2"
+    server_version = "BabyMind/0.3"
 
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"[BabyMind] {self.address_string()} - {fmt % args}")
@@ -81,10 +94,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
     def read_json(self) -> dict:
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.split(";", 1)[0].strip().lower() != "application/json":
+            raise ValueError("Content-Type must be application/json.")
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length < 0 or length > 1_000_000:
@@ -105,6 +122,21 @@ class Handler(BaseHTTPRequestHandler):
         if token and path.startswith("/api/"):
             self.send_json({"error": "This BabyMind server requires its local access token."}, 401)
             return False
+        return True
+
+    def validate_browser_origin(self) -> bool:
+        """Reject cross-site browser mutations while allowing non-browser local clients."""
+        fetch_site = self.headers.get("Sec-Fetch-Site", "").lower()
+        if fetch_site in {"cross-site"}:
+            self.send_json({"error": "Cross-site requests are not allowed."}, 403)
+            return False
+        origin = self.headers.get("Origin")
+        if origin:
+            parsed = urlparse(origin)
+            request_host = self.headers.get("Host", "").lower()
+            if not parsed.netloc or parsed.netloc.lower() != request_host:
+                self.send_json({"error": "Request origin does not match this BabyMind server."}, 403)
+                return False
         return True
 
     def do_GET(self) -> None:
@@ -174,12 +206,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(content)
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         if not self.authorize(path):
+            return
+        if not self.validate_browser_origin():
             return
         try:
             payload = self.read_json()
@@ -194,7 +229,13 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 self.send_json({"id": conversation_id, "title": title}, 201)
             elif path == "/api/chat":
-                self.handle_chat(payload)
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy with another model request. Please try again shortly."}, 429)
+                    return
+                try:
+                    self.handle_chat(payload)
+                finally:
+                    INFERENCE_SEMAPHORE.release()
             elif path == "/api/memory/clear":
                 deleted = COORDINATOR.memory.clear()
                 self.send_json({"deleted": deleted})
@@ -210,6 +251,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
         if not self.authorize(path):
+            return
+        if not self.validate_browser_origin():
             return
         if path.startswith("/api/conversations/"):
             conversation_id = path.rsplit("/", 1)[-1]
@@ -307,13 +350,16 @@ class Handler(BaseHTTPRequestHandler):
             "remembered": bool(payload.get("remember"))
         })
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Start the BabyMind local web app.")
-    parser.add_argument("--host", default="127.0.0.1", help="Bind address; localhost is safest.")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind address; non-loopback requires --lan.")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--lan", action="store_true", help="Allow trusted devices on your Wi-Fi using a one-time access token.")
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()
+    if not args.lan and not is_loopback_host(args.host):
+        parser.error("Non-loopback binding requires --lan, which enables access-token protection.")
     init_db()
     host = "0.0.0.0" if args.lan else args.host
     auth_token = secrets.token_urlsafe(24) if args.lan else None
@@ -334,9 +380,8 @@ def main() -> None:
             probe.close()
         print(f"Open on a trusted Wi-Fi device: http://{lan_ip}:{args.port}")
         print(f"One-time BabyMind access token: {auth_token}")
-        print("Keep this token private. Use only on a trusted local network.")
-    elif args.host not in ("127.0.0.1", "localhost", "::1"):
-        print("WARNING: Non-local binding is not protected. Use --lan instead.")
+        print("WARNING: LAN mode uses HTTP. Use only on a trusted private Wi-Fi network; do not use on public Wi-Fi.")
+        print("Keep this token private.")
     if not args.no_browser:
         webbrowser.open(url)
     try:
