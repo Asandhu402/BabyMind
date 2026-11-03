@@ -353,7 +353,9 @@ class Handler(BaseHTTPRequestHandler):
                     "details": secure.decrypt(updated["details"])
                 })
             elif path.startswith("/api/tasks/") and path.endswith("/propose"):
-                from .approval import build_readonly_proposal
+                from .approval import WORKSPACE_FILE_ACTIONS_ENABLED, build_readonly_proposal
+                if not WORKSPACE_FILE_ACTIONS_ENABLED:
+                    raise ValueError("Workspace file actions are temporarily disabled pending native race-resistant filesystem protection.")
                 parts = path.strip("/").split("/")
                 if len(parts) != 4:
                     raise ValueError("Invalid proposal path.")
@@ -402,7 +404,9 @@ class Handler(BaseHTTPRequestHandler):
                     "created_at": timestamp
                 }, 201)
             elif path.startswith("/api/proposals/") and path.endswith("/approve"):
-                from .approval import execute_readonly_proposal
+                from .approval import WORKSPACE_FILE_ACTIONS_ENABLED, execute_readonly_proposal
+                if not WORKSPACE_FILE_ACTIONS_ENABLED:
+                    raise ValueError("Workspace file actions are temporarily disabled pending native race-resistant filesystem protection.")
                 parts = path.strip("/").split("/")
                 if len(parts) != 4:
                     raise ValueError("Invalid approval path.")
