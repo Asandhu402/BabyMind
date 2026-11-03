@@ -755,8 +755,13 @@ class Handler(BaseHTTPRequestHandler):
         except ImportError as error:
             self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except ProviderError as error:
+            # Keep actionable provider diagnostics in the local server log. The
+            # browser receives the same safe message, but CI logs must expose
+            # the actual cause instead of only an HTTP 503 status.
+            print(f"[BabyMind] Model provider error: {error}", flush=True)
             self.send_json({"error": str(error), "kind": "model_unavailable"}, 503)
         except RuntimeError as error:
+            print(f"[BabyMind] Integration error: {error}", flush=True)
             self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except Exception as error:
             self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
