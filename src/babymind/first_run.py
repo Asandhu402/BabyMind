@@ -17,14 +17,14 @@ from pathlib import Path
 from typing import Callable
 
 MODEL_URL = (
-    "https://huggingface.co/SoAIHQ/Qwen3.5-4B-GGUF/resolve/main/"
-    "Qwen3.5-4B-Q4_K_M.gguf?download=true"
+    "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/55e05aba5a4e1e2d6c4919753a68941c4ad4cb11/"
+    "Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true"
 )
-MODEL_FILENAME = "Qwen3.5-4B-Q4_K_M.gguf"
+MODEL_FILENAME = "Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf"
 MODEL_SHA256 = (
-    "2ebe6eb67cb92adeffc7073c48dd4e3baf79465ac650793dc751cad2b29cf219"
+    "79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741"
 )
-MODEL_SIZE_LABEL = "approximately 2.8 GB"
+MODEL_SIZE_LABEL = "approximately 2.71 GB"
 CHUNK_SIZE = 4 * 1024 * 1024
 
 
@@ -148,7 +148,7 @@ def _ensure_model(model_path: Path) -> None:
     status.pack(padx=18, pady=(18, 8), anchor="w")
     bar = ttk.Progressbar(root, length=460, mode="determinate", maximum=100)
     bar.pack(padx=18, pady=8)
-    detail = ttk.Label(root, text="The first download is approximately 2.8 GB.")
+    detail = ttk.Label(root, text="The first download is approximately 2.71 GB.")
     detail.pack(padx=18, pady=(0, 12), anchor="w")
 
     updates: queue.Queue[tuple] = queue.Queue()
