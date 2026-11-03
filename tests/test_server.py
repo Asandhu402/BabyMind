@@ -462,5 +462,25 @@ class BabyMindWebTests(unittest.TestCase):
                 build_readonly_proposal("new.txt", action="create_text_file", content="\x00")
 
 
+    def test_new_text_file_does_not_overwrite_target_added_after_proposal(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            status, _, body = self.request("/api/tasks", {"title": "Create a draft safely"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": "late.txt", "action": "create_text_file", "content": "new content"},
+            )
+            proposal = json.loads(body)
+            target = Path(workspace, "late.txt")
+            target.write_text("existing content", encoding="utf-8")
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve",
+                {"proposal_hash": proposal["proposal_hash"]},
+            )
+            self.assertEqual(status, 400)
+            self.assertEqual(target.read_text(encoding="utf-8"), "existing content")
+
+
 if __name__ == "__main__":
     unittest.main()
