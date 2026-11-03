@@ -1,11 +1,12 @@
 """Bounded public web search and safe, text-only page reading."""
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import socket
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlencode, urlparse
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener, urlopen
+from urllib.request import HTTPHandler, HTTPSHandler, HTTPRedirectHandler, ProxyHandler, Request, build_opener, urlopen
 
 
 SEARCH_ENDPOINT = "https://html.duckduckgo.com/html/"
@@ -98,6 +99,23 @@ def _destination(raw: str) -> str:
     return ""
 
 
+def _public_ip_for_host(host: str, port: int) -> str:
+    """Resolve once, reject non-public answers, and return an IP to pin the socket to."""
+    try:
+        addresses = {ipaddress.ip_address(host)}
+    except ValueError:
+        try:
+            addresses = {
+                ipaddress.ip_address(item[4][0])
+                for item in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+            }
+        except OSError as error:
+            raise ValueError("The website hostname could not be resolved.") from error
+    if not addresses or any(not address.is_global for address in addresses):
+        raise ValueError("Pages hosted on private, local, or reserved network addresses are blocked.")
+    return str(sorted(addresses, key=lambda address: (address.version, int(address)))[0])
+
+
 def _validate_public_url(url: str) -> None:
     """Reject non-web URLs and hosts that resolve to non-public IP addresses."""
     parsed = urlparse(url)
@@ -110,18 +128,39 @@ def _validate_public_url(url: str) -> None:
     host = parsed.hostname.rstrip(".").lower()
     if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
         raise ValueError("Local network hostnames are not allowed.")
-    try:
-        addresses = {ipaddress.ip_address(host)}
-    except ValueError:
-        try:
-            addresses = {
-                ipaddress.ip_address(item[4][0])
-                for item in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
-            }
-        except OSError as error:
-            raise ValueError("The website hostname could not be resolved.") from error
-    if not addresses or any(not address.is_global for address in addresses):
-        raise ValueError("Pages hosted on private, local, or reserved network addresses are blocked.")
+    _public_ip_for_host(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host, *args, **kwargs):
+        super().__init__(host, *args, **kwargs)
+        self._pinned_ip = _public_ip_for_host(self.host, self.port)
+
+    def connect(self):
+        self.sock = socket.create_connection((self._pinned_ip, self.port), self.timeout, self.source_address)
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host, *args, **kwargs):
+        super().__init__(host, *args, **kwargs)
+        self._pinned_ip = _public_ip_for_host(self.host, self.port)
+
+    def connect(self):
+        sock = socket.create_connection((self._pinned_ip, self.port), self.timeout, self.source_address)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTPHandler(HTTPHandler):
+    def http_open(self, request):
+        return self.do_open(_PinnedHTTPConnection, request)
+
+
+class _PinnedHTTPSHandler(HTTPSHandler):
+    def https_open(self, request):
+        return self.do_open(
+            _PinnedHTTPSConnection, request,
+            context=self._context, check_hostname=self._check_hostname
+        )
 
 
 class _SafeRedirectHandler(HTTPRedirectHandler):
@@ -173,7 +212,7 @@ def fetch_page(url: str) -> dict[str, str | int]:
             "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9",
         },
     )
-    opener = build_opener(ProxyHandler({}), _SafeRedirectHandler())
+    opener = build_opener(ProxyHandler({}), _PinnedHTTPHandler(), _PinnedHTTPSHandler(), _SafeRedirectHandler())
     try:
         with opener.open(request, timeout=PAGE_TIMEOUT_SECONDS) as response:
             final_url = response.geturl()
