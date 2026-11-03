@@ -69,10 +69,50 @@ def _safe_text_file(relative_path: str) -> tuple[Path, Path]:
     return root, target
 
 
+
+def _safe_new_text_file(relative_path: str, content: str) -> tuple[Path, Path, str]:
+    """Validate a new text file target without following links or overwriting."""
+    if not isinstance(relative_path, str) or not relative_path or len(relative_path) > 500 or "\x00" in relative_path:
+        raise ValueError("Workspace file path is invalid or too long.")
+    part = Path(relative_path)
+    if part.is_absolute() or any(piece in {"..", ""} for piece in part.parts):
+        raise ValueError("Use a new relative file path inside the selected workspace.")
+    if any(piece.startswith(".") for piece in part.parts):
+        raise ValueError("Hidden workspace paths are not supported.")
+    if part.suffix.lower() not in ALLOWED_TEXT_SUFFIXES:
+        raise ValueError("This file type is not supported for creation.")
+    if not isinstance(content, str) or "\x00" in content:
+        raise ValueError("New file content must be plain UTF-8 text.")
+    encoded = content.encode("utf-8")
+    if len(encoded) > MAX_TEXT_FILE_BYTES:
+        raise ValueError("New text files are limited to 32 KB.")
+    root = _workspace_root()
+    parent = root / part.parent
+    current = root
+    for piece in part.parent.parts:
+        if piece in {"", "."}:
+            continue
+        current = current / piece
+        if current.is_symlink():
+            raise ValueError("Symbolic links are not supported in approved workspace actions.")
+    resolved_parent = parent.resolve(strict=True)
+    if not resolved_parent.is_dir() or not resolved_parent.is_relative_to(root):
+        raise ValueError("The parent folder must exist inside the configured workspace.")
+    target = resolved_parent / part.name
+    if target.exists() or target.is_symlink():
+        raise ValueError("The target file already exists. BabyMind will never overwrite an existing file.")
+    return root, target, content
+
+
 def build_readonly_proposal(
-    relative_path: str, action: str = "list_directory", name_contains: str = ""
+    relative_path: str, action: str = "list_directory", name_contains: str = "",
+    content: str = ""
 ) -> dict:
-    if action == "list_directory":
+    if action == "create_text_file":
+        root, target, clean_content = _safe_new_text_file(relative_path.strip(), content)
+        relative = target.relative_to(root).as_posix()
+        payload = {"relative_path": relative, "content": clean_content}
+    elif action == "list_directory":
         root, target = _safe_directory(relative_path.strip())
         relative = target.relative_to(root).as_posix() or "."
         payload = {"relative_path": relative}
@@ -96,11 +136,33 @@ def build_readonly_proposal(
         "payload": payload,
         "proposal_hash": digest,
         "display_target": relative,
-        "max_bytes": MAX_TEXT_FILE_BYTES if action == "read_text_file" else None,
+        "max_bytes": MAX_TEXT_FILE_BYTES if action in {"read_text_file", "create_text_file"} else None,
     }
 
 
 def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> dict:
+    if action == "create_text_file":
+        if (not isinstance(payload, dict) or set(payload) != {"relative_path", "content"}
+                or not isinstance(payload["relative_path"], str)
+                or not isinstance(payload["content"], str)):
+            raise ValueError("Unsupported or malformed approved action.")
+        root, target, content = _safe_new_text_file(payload["relative_path"], payload["content"])
+        encoded = content.encode("utf-8")
+        try:
+            # O_EXCL prevents overwriting a file created after proposal review.
+            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError as error:
+            raise ValueError("The target file now exists. No file was overwritten.") from error
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+        return {"relative_path": target.relative_to(root).as_posix(), "created": True,
+                "bytes": len(encoded), "notice": "New UTF-8 text file created; existing files are never overwritten."}
     if action == "find_files":
         if (not isinstance(payload, dict) or set(payload) != {"relative_path", "name_contains"}
                 or not isinstance(payload["relative_path"], str)
