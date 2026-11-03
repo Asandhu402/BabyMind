@@ -160,9 +160,25 @@ Run the automated test suite from the repository root:
 - No analytics, account service, or cloud model is included in the application.
 - The model runner is local; the model's own behavior and resource requirements depend on the selected model and runtime.
 
+## Public web research (opt-in)
+
+The chat composer includes a **Web research** toggle. When enabled, BabyMind
+sends the current question to DuckDuckGo's public HTML search endpoint and
+passes up to five result titles, URLs, and short snippets to the same local
+model for synthesis. The search query leaves the computer and is processed by
+the search provider; model inference and conversation storage remain local.
+Search snippets are third-party, unverified content. BabyMind does not execute
+page scripts or automatically fetch arbitrary result pages in this phase.
+Review linked sources before relying on claims.
+
+The local API endpoint is `POST /api/research` with JSON
+`{"query":"your research question","limit":5}`; the limit is 1–10 and query
+length is capped at 500 characters. Requests remain subject to the existing
+local/LAN authorization and origin checks.
+
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, internet search, or public-internet remote access. The packaged model is an aggressively uncensored community fine-tune, but no
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, arbitrary web-page browsing, or public-internet remote access. Opt-in search-result discovery is available as described above. The packaged model is an aggressively uncensored community fine-tune, but no
 model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
