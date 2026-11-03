@@ -236,5 +236,61 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in ask.call_args_list], ["BM-02", "BM-49", "BM-01"])
 
 
+    def test_proposals_api_lists_pending_and_completed_results(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(workspace, "readme.txt").write_text("must stay private", encoding="utf-8")
+            status, _, body = self.request("/api/tasks", {"title": "Review files"})
+            self.assertEqual(status, 201)
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            status, _, body = self.request(f"/api/tasks/{task_id}/propose", {"relative_path": "."})
+            self.assertEqual(status, 201)
+            proposal = json.loads(body)
+
+            status, _, body = self.request("/api/proposals")
+            self.assertEqual(status, 200)
+            pending = json.loads(body)
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0]["id"], proposal["id"])
+            self.assertEqual(pending[0]["status"], "awaiting_approval")
+            self.assertEqual(pending[0]["payload"], {"relative_path": "."})
+            self.assertEqual(pending[0]["result"], "")
+
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve",
+                {"proposal_hash": proposal["proposal_hash"]},
+            )
+            self.assertEqual(status, 200)
+
+            status, _, body = self.request("/api/proposals")
+            self.assertEqual(status, 200)
+            completed = json.loads(body)[0]
+            self.assertEqual(completed["status"], "completed")
+            result = json.loads(completed["result"])
+            self.assertEqual(result["entries"], [{"name": "readme.txt", "type": "file"}])
+            self.assertNotIn("must stay private", body.decode("utf-8"))
+
+    def test_proposal_requires_active_task(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            status, _, body = self.request("/api/tasks", {"title": "Not started"})
+            task_id = json.loads(body)["id"]
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose", {"relative_path": "."}
+            )
+            self.assertEqual(status, 400)
+            self.assertIn(b"Start the task", body)
+
+    def test_approval_workspace_assets_are_served(self) -> None:
+        status, content_type, body = self.request("/")
+        self.assertEqual(status, 200)
+        self.assertIn(b'data-view="approvals"', body)
+        self.assertIn(b'/assets/approvals.js', body)
+        for asset in ("approvals.js", "approvals.css"):
+            status, content_type, body = self.request(f"/assets/{asset}")
+            self.assertEqual(status, 200)
+            self.assertTrue(body)
+            self.assertTrue(content_type)
+
+
 if __name__ == "__main__":
     unittest.main()
