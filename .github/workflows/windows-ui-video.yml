@@ -41,22 +41,48 @@ jobs:
           python -m pip install playwright
           python -m playwright install chromium
 
-      - name: Download pinned model and llama.cpp CPU runtime
+      - name: Restore verified pinned model cache
+        id: model-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/babymind-demo.gguf
+          key: babymind-model-79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741
+
+      - name: Restore verified llama.cpp archive cache
+        id: llama-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/llama-cpu.zip
+          key: babymind-llama-b11960-73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287
+
+      - name: Download (if needed) and verify pinned model and llama.cpp runtime
         shell: pwsh
         run: |
           $model = Join-Path $env:RUNNER_TEMP "babymind-demo.gguf"
           $url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/55e05aba5a4e1e2d6c4919753a68941c4ad4cb11/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true"
-          Invoke-WebRequest -Uri $url -OutFile $model -TimeoutSec 1800
+          if (Test-Path -LiteralPath $model -PathType Leaf) {
+            Write-Host "Found cached model; verifying SHA-256..."
+          } else {
+            Write-Host "Model cache miss; downloading pinned model..."
+            Invoke-WebRequest -Uri $url -OutFile $model -TimeoutSec 1800
+          }
           $actual = (Get-FileHash -LiteralPath $model -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne "79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741") {
+            Remove-Item -LiteralPath $model -Force -ErrorAction SilentlyContinue
             throw "Model SHA-256 verification failed: $actual"
           }
 
           $zip = Join-Path $env:RUNNER_TEMP "llama-cpu.zip"
           $extract = Join-Path $env:RUNNER_TEMP "llama-cpu"
-          Invoke-WebRequest -Uri "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-cpu-x64.zip" -OutFile $zip
+          if (Test-Path -LiteralPath $zip -PathType Leaf) {
+            Write-Host "Found cached llama.cpp archive; verifying SHA-256..."
+          } else {
+            Write-Host "llama.cpp cache miss; downloading pinned CPU runtime..."
+            Invoke-WebRequest -Uri "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-cpu-x64.zip" -OutFile $zip
+          }
           $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -ne "73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287") {
+            Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
             throw "llama.cpp archive SHA-256 verification failed: $hash"
           }
           Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
@@ -64,6 +90,19 @@ jobs:
           if (-not $server) { throw "llama-server.exe was not found in verified archive." }
           "BABYMIND_DEMO_MODEL=$model" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_DEMO_LLAMA=$($server.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Save verified pinned model cache
+        if: success() && steps.model-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/babymind-demo.gguf
+          key: babymind-model-79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741
+
+      - name: Save verified llama.cpp archive cache
+        if: success() && steps.llama-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/llama-cpu.zip
+          key: babymind-llama-b11960-73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287
           "BABYMIND_CONTEXT_SIZE=8192" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_TEMPERATURE=0.35" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_TOP_P=0.9" | Out-File -FilePath $env:GITHUB_ENV -Append
