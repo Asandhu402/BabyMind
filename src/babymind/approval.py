@@ -8,6 +8,8 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
+from collections import deque
 from pathlib import Path
 
 MAX_TEXT_FILE_BYTES = 32 * 1024
@@ -120,7 +122,10 @@ MAX_TEST_OUTPUT_CHARS = 20_000
 
 
 def _run_project_tests(project_root: Path) -> dict:
-    """Run only unittest discovery; project tests are user code, not sandboxed."""
+    """Run fixed unittest discovery; drain output while retaining only its bounded tail.
+
+    Project tests are arbitrary user code and are not sandboxed.
+    """
     project_root = Path(project_root).resolve(strict=True)
     tests_dir = project_root / "tests"
     if tests_dir.is_symlink() or not tests_dir.is_dir():
@@ -158,35 +163,72 @@ def _run_project_tests(project_root: Path) -> dict:
         options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
     else:
         options["start_new_session"] = True
+
     process = subprocess.Popen(command, **options)
+    output_chunks = deque()
+    output_chars = 0
+    output_truncated = False
+    output_lock = threading.Lock()
+
+    def drain_output() -> None:
+        nonlocal output_chars, output_truncated
+        try:
+            while True:
+                chunk = process.stdout.read(4096)
+                if not chunk:
+                    break
+                with output_lock:
+                    output_chunks.append(chunk)
+                    output_chars += len(chunk)
+                    while output_chars > MAX_TEST_OUTPUT_CHARS:
+                        excess = output_chars - MAX_TEST_OUTPUT_CHARS
+                        first = output_chunks[0]
+                        if len(first) <= excess:
+                            output_chunks.popleft()
+                            output_chars -= len(first)
+                        else:
+                            output_chunks[0] = first[excess:]
+                            output_chars -= excess
+                        output_truncated = True
+        finally:
+            process.stdout.close()
+
+    reader = threading.Thread(target=drain_output, name="babymind-test-output", daemon=True)
+    reader.start()
     timed_out = False
     try:
-        output, _ = process.communicate(timeout=MAX_TEST_RUNTIME_SECONDS)
+        process.wait(timeout=MAX_TEST_RUNTIME_SECONDS)
     except subprocess.TimeoutExpired:
         timed_out = True
         if os.name == "nt":
             try:
-                subprocess.run(
+                killed = subprocess.run(
                     ["taskkill", "/PID", str(process.pid), "/T", "/F"],
                     capture_output=True, timeout=5, check=False,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
+                if killed.returncode != 0 and process.poll() is None:
+                    process.kill()
             except Exception:
-                process.kill()
+                if process.poll() is None:
+                    process.kill()
         else:
             try:
-                os.killpg(process.pid, getattr(signal, "SIGKILL", signal.SIGTERM))
+                os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-        output, _ = process.communicate()
-    output = output or ""
+        process.wait()
+    reader.join()
+    with output_lock:
+        output = "".join(output_chunks)
+        truncated = output_truncated
     return {
         "exit_code": process.returncode,
         "success": process.returncode == 0 and not timed_out,
         "timed_out": timed_out,
         "runtime_limit_seconds": MAX_TEST_RUNTIME_SECONDS,
-        "output": output[-MAX_TEST_OUTPUT_CHARS:],
-        "output_truncated": len(output) > MAX_TEST_OUTPUT_CHARS,
+        "output": output,
+        "output_truncated": truncated,
     }
 
 
