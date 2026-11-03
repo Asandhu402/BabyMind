@@ -44,6 +44,8 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 
 ### Required security work before re-enabling workspace file actions
 
+See [the detailed native filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.md). Linux has a documented `openat2` direction, but the exact Windows user-mode no-reparse/handle-relative contract and same-user concurrent-writer guarantees still require resolution. Do not implement against an assumed Windows guarantee.
+
 - Implement platform-specific native handle/descriptor-relative file operations.
 - On Windows, reject reparse points and junctions using handle-based inspection; on POSIX, use directory descriptors and no-follow flags.
 - Ensure every operation remains anchored to the opened workspace root, without reopening untrusted path strings.
