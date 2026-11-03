@@ -874,7 +874,7 @@ def main() -> None:
     if not args.lan and not is_loopback_host(args.host):
         parser.error("Non-loopback binding requires --lan, which enables access-token protection.")
     init_db()
-    host = "0.0.0.0" if args.lan else args.host
+    host = lan_ip if args.lan else args.host
     auth_token = secrets.token_urlsafe(24) if args.lan else None
     lan_ip = None
     tls_context = None
