@@ -77,6 +77,11 @@ class IntegrationTests(unittest.TestCase):
                 "http://127.0.0.1:1234/v1",
             )
             self.assertFalse(popen.call_args.kwargs["shell"])
+            import subprocess
+            self.assertEqual(
+                popen.call_args.kwargs["creationflags"],
+                getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if os.name == "nt" else 0,
+            )
 
     def test_open_interpreter_rejects_nonlocal_model_endpoint(self):
         with tempfile.TemporaryDirectory() as folder:
