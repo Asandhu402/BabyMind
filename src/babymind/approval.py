@@ -1,4 +1,4 @@
-"""Approval-gated, read-only local workspace actions."""
+"""Approval-gated local workspace actions with bounded file and test operations."""
 from __future__ import annotations
 
 import hashlib
@@ -234,7 +234,7 @@ def build_readonly_proposal(
         relative = target.relative_to(root).as_posix() or "."
         payload = {"relative_path": relative, "name_contains": query}
     else:
-        raise ValueError("Unsupported read-only action.")
+        raise ValueError("Unsupported workspace action.")
     canonical = json.dumps({"action": action, "payload": payload}, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return {
