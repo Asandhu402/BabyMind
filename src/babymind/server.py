@@ -410,7 +410,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 try:
                     from .backup import create_backup
-                    with DB_LOCK:
+                    from .memory import MEMORY_LOCK
+                    with DB_LOCK, MEMORY_LOCK:
                         result = create_backup(DATA_HOME, destination, password)
                 finally:
                     INFERENCE_SEMAPHORE.release()
@@ -429,8 +430,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 try:
                     from .backup import restore_backup
-                    from .memory import LocalMemory
-                    with DB_LOCK:
+                    from .memory import MEMORY_LOCK, LocalMemory
+                    with DB_LOCK, MEMORY_LOCK:
                         result = restore_backup(
                             DATA_HOME, source, password, confirmation=confirmation,
                         )
