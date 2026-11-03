@@ -5,6 +5,7 @@ The server binds to localhost by default. LAN access is opt-in via --lan.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import ipaddress
 import json
 import mimetypes
@@ -194,6 +195,9 @@ class Handler(BaseHTTPRequestHandler):
                 "model_available": model_ready, "model_name": model_name,
                 "privacy": "Local server; conversation data stays on this device."
             })
+        elif path == "/api/integrations":
+            from .integrations.catalog import integration_status
+            self.send_json(integration_status())
         elif path == "/api/agents":
             self.send_json([{
                 "id": agent.agent_id, "name": agent.name,
@@ -291,6 +295,71 @@ class Handler(BaseHTTPRequestHandler):
                     self.handle_chat(payload)
                 finally:
                     INFERENCE_SEMAPHORE.release()
+            elif path == "/api/integrations/document":
+                source = str(payload.get("path", "")).strip()
+                if not source or len(source) > 2048:
+                    raise ValueError("Enter a local document path of 1–2,048 characters.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy with another model request."}, 429)
+                    return
+                try:
+                    result, extracted_chars = COORDINATOR.process_document(
+                        str(payload.get("agent_id", "BM-01")), source,
+                        str(payload.get("instruction", "Summarize this document and identify its key points.")),
+                        use_memory=bool(payload.get("use_memory")),
+                        remember=bool(payload.get("remember")),
+                    )
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                self.send_json({
+                    "response": result.response, "agent_id": result.agent_id,
+                    "agent_name": result.agent_name, "extracted_characters": extracted_chars,
+                    "memories_used": result.memories_used, "remembered": result.remembered,
+                })
+            elif path == "/api/integrations/audio":
+                source = str(payload.get("path", "")).strip()
+                if not source or len(source) > 2048:
+                    raise ValueError("Enter a local audio path of 1–2,048 characters.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy with another model request."}, 429)
+                    return
+                try:
+                    result, transcript = COORDINATOR.process_audio(
+                        str(payload.get("agent_id", "BM-01")), source,
+                        str(payload.get("instruction", "Summarize this recording and extract important points.")),
+                        language=str(payload.get("language", "")).strip() or None,
+                        use_memory=bool(payload.get("use_memory")),
+                        remember=bool(payload.get("remember")),
+                    )
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                self.send_json({
+                    "response": result.response, "agent_id": result.agent_id,
+                    "agent_name": result.agent_name, "transcript": transcript,
+                    "memories_used": result.memories_used, "remembered": result.remembered,
+                })
+            elif path == "/api/integrations/browser":
+                if payload.get("user_approved") is not True:
+                    raise PermissionError("Confirm the browser task explicitly before it can run.")
+                task = str(payload.get("task", "")).strip()
+                if not task or len(task) > 4000:
+                    raise ValueError("Browser task must contain 1–4,000 characters.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy with another model request."}, 429)
+                    return
+                try:
+                    result = asyncio.run(COORDINATOR.run_browser_task(task, user_approved=True))
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                self.send_json({"result": result, "notice": "Browser task completed in a supervised local browser. Review any website changes."})
+            elif path == "/api/integrations/coding":
+                if payload.get("user_approved") is not True:
+                    raise PermissionError("Confirm the read-only coding session explicitly before it can launch.")
+                workspace = str(payload.get("workspace", "")).strip()
+                if not workspace or len(workspace) > 2048:
+                    raise ValueError("Enter a local workspace directory path.")
+                pid = COORDINATOR.launch_coding_session(workspace, user_approved=True)
+                self.send_json({"pid": pid, "mode": "read-only", "notice": "Open Interpreter launched. Its own sandbox must enforce read-only access; terminate it if it requests broader permissions."}, 201)
             elif path == "/api/tasks":
                 title = str(payload.get("title", "")).strip()
                 details = str(payload.get("details", "")).strip()
@@ -496,6 +565,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Not found"}, 404)
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
+        except (PermissionError, FileNotFoundError) as error:
+            self.send_json({"error": str(error)}, 400)
+        except ImportError as error:
+            self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except ProviderError as error:
             self.send_json({"error": str(error), "kind": "model_unavailable"}, 503)
         except Exception as error:
