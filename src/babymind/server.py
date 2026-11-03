@@ -351,7 +351,12 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 finally:
                     INFERENCE_SEMAPHORE.release()
+                user_message = f"Analyze local document: {source}\\n{payload.get('instruction', 'Summarize this document and identify its key points.')}"
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, result.response, result.agent_id
+                )
                 self.send_json({
+                    "conversation_id": conversation_id, "user_message": user_message,
                     "response": result.response, "agent_id": result.agent_id,
                     "agent_name": result.agent_name, "extracted_characters": extracted_chars,
                     "memories_used": result.memories_used, "remembered": result.remembered,
@@ -373,7 +378,12 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 finally:
                     INFERENCE_SEMAPHORE.release()
+                user_message = f"Transcribe and analyze local audio: {source}\\n{payload.get('instruction', 'Summarize this recording and extract important points.')}"
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, result.response, result.agent_id
+                )
                 self.send_json({
+                    "conversation_id": conversation_id, "user_message": user_message,
                     "response": result.response, "agent_id": result.agent_id,
                     "agent_name": result.agent_name, "transcript": transcript,
                     "memories_used": result.memories_used, "remembered": result.remembered,
@@ -391,7 +401,12 @@ class Handler(BaseHTTPRequestHandler):
                     result = asyncio.run(COORDINATOR.run_browser_task(task, user_approved=True))
                 finally:
                     INFERENCE_SEMAPHORE.release()
-                self.send_json({"result": result, "notice": "Browser task completed in a supervised local browser. Review any website changes."})
+                notice = "Browser task completed in a supervised local browser. Review any website changes."
+                user_message = "Supervised browser task: " + task
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, str(result or notice), "BM-01"
+                )
+                self.send_json({"conversation_id": conversation_id, "user_message": user_message, "result": result, "notice": notice})
             elif path == "/api/integrations/coding":
                 if payload.get("user_approved") is not True:
                     raise PermissionError("Confirm the read-only coding session explicitly before it can launch.")
@@ -399,7 +414,12 @@ class Handler(BaseHTTPRequestHandler):
                 if not workspace or len(workspace) > 2048:
                     raise ValueError("Enter a local workspace directory path.")
                 pid = COORDINATOR.launch_coding_session(workspace, user_approved=True)
-                self.send_json({"pid": pid, "mode": "read-only", "notice": "Open Interpreter launched. Its own sandbox must enforce read-only access; terminate it if it requests broader permissions."}, 201)
+                notice = f"Open Interpreter started in read-only mode (process {pid}). Its own sandbox must enforce read-only access; terminate it if it requests broader permissions."
+                user_message = "Launch the read-only coding assistant in: " + workspace
+                conversation_id = persist_integration_exchange(
+                    str(payload.get("conversation_id", "")), user_message, notice, "BM-01"
+                )
+                self.send_json({"conversation_id": conversation_id, "user_message": user_message, "pid": pid, "mode": "read-only", "notice": notice}, 201)
             elif path == "/api/tasks":
                 title = str(payload.get("title", "")).strip()
                 details = str(payload.get("details", "")).strip()
