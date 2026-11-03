@@ -134,8 +134,8 @@ class BabyMindCoordinator:
         )
 
     def launch_coding_session(self, workspace: str | Path, *, user_approved: bool = False) -> int:
-        """Launch the external coding assistant in its constrained read-only mode."""
-        from .integrations.open_interpreter import launch_read_only_session
+        """Launch the external coding assistant with workspace-scoped write access."""
+        from .integrations.open_interpreter import launch_workspace_session
 
         provider = self.provider
         base_url = str(getattr(provider, "base_url", ""))
@@ -146,7 +146,7 @@ class BabyMindCoordinator:
             raise ValueError("The coding assistant must use BabyMind's local model endpoint.")
         resolver = getattr(provider, "_resolve_model", None)
         model = str(resolver() if callable(resolver) else getattr(provider, "model", None) or "")
-        process = launch_read_only_session(
+        process = launch_workspace_session(
             workspace, model=model, base_url=base_url, user_approved=user_approved,
         )
         return int(process.pid)
