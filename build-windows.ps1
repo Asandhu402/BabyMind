@@ -6,6 +6,16 @@ py -m pip install -e ".[build]"
 
 py -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --collect-all cryptography --add-data "src/babymind/web;babymind/web" run_desktop.py
 
+# Bundle a separate console runner so the packaged desktop app can execute
+# only the fixed Python unittest-discovery workflow after explicit approval.
+py -m PyInstaller --noconfirm --clean --console --name BabyMindTestRunner --paths src --collect-all cryptography src/babymind/test_runner.py
+$testRunnerTarget = Join-Path $PSScriptRoot "dist\\BabyMind\\tools\\BabyMindTestRunner"
+New-Item -ItemType Directory -Force -Path $testRunnerTarget | Out-Null
+Copy-Item -Path (Join-Path $PSScriptRoot "dist\\BabyMindTestRunner\\*") -Destination $testRunnerTarget -Recurse -Force
+if (-not (Test-Path (Join-Path $testRunnerTarget "BabyMindTestRunner.exe"))) {
+    throw "Could not stage the approved project test runner."
+}
+
 # Bundle the official llama.cpp Windows CPU runtime. The GGUF model is
 # downloaded and checksum-verified by BabyMind on first launch.
 $runtimeUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-win-cpu-x64.zip"
