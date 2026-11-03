@@ -89,6 +89,8 @@ jobs:
 
       - name: Record actual BabyMind interface and model response
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           python scripts/record_ui_demo.py
