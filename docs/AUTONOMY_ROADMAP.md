@@ -25,7 +25,7 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Provide queued, active, paused, completed, cancelled, and terminated states.
 - Enforce valid state transitions on the server; the browser cannot set arbitrary statuses.
 - Provide Start, Pause, Resume, Complete, Cancel, and Terminate controls.
-- The task tracker remains separate from execution. Phase 2B now supports an approval-gated, read-only directory listing inside a configured workspace; it does not read file contents, write files, run commands, browse pages, or perform external side effects.
+- The task tracker remains separate from execution. Workspace file actions are currently **disabled** because path-based checks have a time-of-check/time-of-use race and do not reliably protect against Windows reparse points. No workspace listing, search, preview, creation, or edit operation is available until native handle-based protections are implemented and tested. Project test execution is also disabled.
 
 ## Phase 1.2 — relevance-ranked encrypted local memory (implemented foundation)
 
@@ -79,3 +79,6 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Search results are untrusted. Prompt-injection text in pages/results must not override BabyMind's system instructions or authorize tools.
 - No public-internet server exposure. LAN access remains opt-in, TLS-protected, and intended only for trusted private Wi-Fi.
 - The Windows DPAPI key and database key files must be backed up together according to the existing recovery guidance.
+
+
+**Security gate:** Do not re-enable workspace file operations by flipping a Python flag or adding more path checks. Implement platform-specific handle-relative operations with no-follow/reparse-point protections, then add race-focused tests on Windows and Linux before enabling any API or UI path.
