@@ -382,8 +382,8 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     INFERENCE_SEMAPHORE.release()
                 self.send_json({
-                    "conversation_id": conversation_id, "response": result.response,
-                    "results": results, "count": len(results), "agent_id": result.agent_id,
+                    "conversation_id": conversation_id, "user_message": "Search local knowledge: " + query,
+                    "response": result.response, "results": results, "count": len(results), "agent_id": result.agent_id,
                     "agent_name": result.agent_name, "memories_used": result.memories_used,
                 })
             elif path == "/api/conversations":
