@@ -135,9 +135,10 @@ same model and local data folder.
    one-time token when prompted. Keep the token private.
 
 The companion uses the same local model, encrypted data directory, and
-token-protected HTTPS server as BabyMind. It does not create a cloud account
-or intentionally expose the service to the public internet. Do not configure
-router port forwarding. The certificate authority is generated locally and
+token-protected HTTPS server as BabyMind. In LAN mode it binds to the detected
+local network address rather than every network interface. It does not create
+a cloud account or intentionally expose the service to the public internet.
+Do not configure router port forwarding. The certificate authority is generated locally and
 its private key stays on the PC. The public CA certificate normally remains
 the same between starts on this Windows installation; the server certificate
 is renewed when the companion starts. A fresh access token is generated on
