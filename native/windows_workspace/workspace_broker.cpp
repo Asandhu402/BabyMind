@@ -101,6 +101,24 @@ bool is_reparse_or_wrong_type(HANDLE handle, bool want_directory, bm_ws_status* 
     return false;
 }
 
+using NtCreateFileFunction = NTSTATUS (NTAPI*)(
+    PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK,
+    PLARGE_INTEGER, ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
+
+NtCreateFileFunction resolve_nt_create_file() {
+    static NtCreateFileFunction function = []() -> NtCreateFileFunction {
+        HMODULE module = GetModuleHandleW(L"ntdll.dll");
+        if (module == nullptr) return nullptr;
+        FARPROC address = GetProcAddress(module, "NtCreateFile");
+#pragma warning(push)
+#pragma warning(disable: 4191)
+        NtCreateFileFunction resolved = reinterpret_cast<NtCreateFileFunction>(address);
+#pragma warning(pop)
+        return resolved;
+    }();
+    return function;
+}
+
 bool nt_open_relative(HANDLE parent, std::wstring_view component,
                       ACCESS_MASK access, ULONG disposition, ULONG options,
                       ULONG share_access, UniqueHandle* output) {
@@ -119,7 +137,9 @@ bool nt_open_relative(HANDLE parent, std::wstring_view component,
 
     IO_STATUS_BLOCK io_status{};
     HANDLE opened = INVALID_HANDLE_VALUE;
-    const NTSTATUS status = NtCreateFile(
+    const NtCreateFileFunction create_file = resolve_nt_create_file();
+    if (create_file == nullptr) return false;
+    const NTSTATUS status = create_file(
         &opened, access | SYNCHRONIZE, &attributes, &io_status, nullptr,
         FILE_ATTRIBUTE_NORMAL, share_access,
         disposition, options | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
