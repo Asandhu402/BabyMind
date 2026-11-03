@@ -32,7 +32,7 @@ jobs:
       - name: Run unit tests on Windows (including DPAPI)
         run: python -m unittest discover -s tests -v
       - name: Upload portable application
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BabyMind-Windows-Portable
           path: dist/BabyMind/
