@@ -107,7 +107,7 @@ class LocalMemory:
             "through", "was", "what", "when", "where", "which", "with", "would",
             "you", "your"
         }
-        terms = {token for token in re.findall(r"[\\w]{2,}", clean.casefold()) if token not in stop_words}
+        terms = {token for token in re.findall(r"[\w]{2,}", clean.casefold()) if token not in stop_words}
         if not terms:
             return self.recent(limit)
         with self._connect() as connection:
@@ -122,7 +122,7 @@ class LocalMemory:
             for row in rows
         ]
         token_sets = [
-            set(re.findall(r"[\\w]{2,}", (item["task"] + " " + item["response"]).casefold()))
+            set(re.findall(r"[\w]{2,}", (item["task"] + " " + item["response"]).casefold()))
             for item in documents
         ]
         document_frequency = {
