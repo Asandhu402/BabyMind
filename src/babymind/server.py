@@ -33,7 +33,7 @@ WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
 DATA_HOME.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_HOME / "app.sqlite3"
-DB_LOCK = threading.Lock()
+DB_LOCK = threading.RLock()
 # The local model is CPU/RAM intensive. Start with one inference at a time.
 INFERENCE_SEMAPHORE = threading.BoundedSemaphore(1)
 COORDINATOR = BabyMindCoordinator()
@@ -41,18 +41,21 @@ COORDINATOR = BabyMindCoordinator()
 
 @contextmanager
 def db():
-    connection = sqlite3.connect(DB_PATH, timeout=15)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA secure_delete = ON")
-    try:
-        yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
+    # Serialize access so a validated restore cannot replace a database while
+    # another request still has an open SQLite handle.
+    with DB_LOCK:
+        connection = sqlite3.connect(DB_PATH, timeout=15)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA secure_delete = ON")
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
 
 def text_store() -> SecureTextStore:
