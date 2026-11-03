@@ -70,3 +70,14 @@ See [the Windows filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.
 - The Windows DPAPI key and database key files must be backed up together according to the existing recovery guidance.
 
 **Security gate:** Do not re-enable workspace file operations by flipping a Python flag or adding more path checks. Implement Windows handle-relative operations with reparse-point protections, then add race-focused Windows tests before enabling any API or UI path. Project-code execution additionally requires a real Windows OS-level sandbox.
+
+
+## Phase 1.3 — optional local capability adapters (integration foundation)
+
+- Add Docling as an optional local-file-to-Markdown conversion adapter with a 100 MB input limit and bounded output; persistent indexing/RAG remains future work.
+- Add faster-whisper as optional CPU/INT8 transcription for user-selected local audio.
+- Add Browser Use as an optional local-browser adapter. Require explicit approval and a separate opt-in environment flag; do not select hosted browser services.
+- Add Open Interpreter as an external CLI launched read-only only. Do not expose workspace writes, shell escalation, project execution, or approval bypass.
+- Keep all four integrations out of core dependencies and lazy-load heavy packages.
+- Treat converted documents, audio transcripts, and browser content as untrusted user/data content, never system instructions.
+- Do not claim the adapters are wired into the chat UI or independently sandboxed. Add a central per-action approval broker and finish the Windows security gate before any write-capable computer control.

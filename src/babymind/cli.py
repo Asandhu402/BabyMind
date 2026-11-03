@@ -13,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("health", help="Check runtime and agent registry")
     subparsers.add_parser("doctor", help="Run non-destructive installation and security diagnostics")
     subparsers.add_parser("list", help="List all registered agents")
+    subparsers.add_parser("integrations", help="Show availability of optional integrations")
 
     run_parser = subparsers.add_parser("run", help="Route a task without model inference")
     run_parser.add_argument("agent_id", help="Agent ID, for example BM-01")
@@ -43,6 +44,13 @@ def main() -> None:
             print(f"[{item['status']}] {item['name']}: {item['detail']}")
         if any(item["status"] == "FAIL" for item in results):
             raise SystemExit(1)
+    elif args.command == "integrations":
+        from .integrations.catalog import integration_status
+        for item in integration_status():
+            state = "AVAILABLE" if item["available"] else "NOT INSTALLED"
+            print(f"{state}: {item['name']} — {item['purpose']}")
+            if not item["available"]:
+                print(f"  Install: {item['install_hint']}")
     elif args.command == "list":
         for agent in BabyMindRuntime().agents:
             print(f"{agent.agent_id}  {agent.name} [{agent.domain}] — {agent.purpose}")

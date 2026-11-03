@@ -206,3 +206,20 @@ and the current workspace/execution security gates. It never starts a model,
 executes project code, or creates a replacement encryption key. A disconnected
 model is reported as a warning so you can start LM Studio and run the command
 again. A missing memory key is a failure: do not delete or replace it.
+
+
+## Optional integrations
+
+BabyMind can add local document ingestion (Docling), local speech-to-text (faster-whisper), supervised browser automation (Browser Use), and a read-only external coding-agent session (Open Interpreter). These are optional adapters, not separate AI identities or required cloud services.
+
+Install only the capabilities you want:
+
+    py -m pip install -e ".[documents]"
+    py -m pip install -e ".[voice]"
+    py -m pip install -e ".[browser]"
+
+Browser Use requires Python 3.11 or newer. Open Interpreter is installed separately from its upstream project. See [Optional integrations](docs/OPTIONAL_INTEGRATIONS.md) for usage, local-only configuration, privacy details, and safety limits.
+
+Check availability without starting any service:
+
+    babymind integrations
