@@ -1,6 +1,6 @@
 # BabyMind autonomy roadmap
 
-This roadmap adds capabilities incrementally while preserving the core invariant: **one BabyMind identity, one configured local language model, and 50 specialist role prompts sharing that same model.** No second model, cloud inference fallback, or LM Studio dependency is introduced.
+This roadmap targets **Windows 10/11 only**. The product goal remains one BabyMind identity, one configured local language model, and 50 specialist role prompts sharing that same model. No Linux backend or Linux CI target is planned.
 
 ## Phase 1 — bounded web research
 
@@ -16,7 +16,7 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Optionally read up to two search-result pages per chat request.
 - Accept only HTTP(S) on standard ports; reject private, local, reserved, credential-bearing, and unsafe redirect targets.
 - Fetch at most 1 MB per page with a 12-second timeout; accept HTML and plain text only.
-- Extract up to 12,000 characters of text, omit scripts/styles/navigation/forms, and never execute page code.
+- Extract bounded text, omit scripts/styles/navigation/forms, and never execute page code.
 - Treat all extracted page text as untrusted instructions and evidence. Reading a page does not verify its claims.
 
 ## Phase 2A — visible task queue (implemented foundation)
@@ -25,56 +25,48 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Provide queued, active, paused, completed, cancelled, and terminated states.
 - Enforce valid state transitions on the server; the browser cannot set arbitrary statuses.
 - Provide Start, Pause, Resume, Complete, Cancel, and Terminate controls.
-- The task tracker remains separate from execution. Phase 2B now supports an approval-gated, read-only directory listing inside a configured workspace; it does not read file contents, write files, run commands, browse pages, or perform external side effects.
+- The task tracker remains separate from execution. Workspace file actions and project test execution remain disabled until Windows-native filesystem protections and a real Windows OS-level execution sandbox are implemented and tested.
 
 ## Phase 1.2 — relevance-ranked encrypted local memory (implemented foundation)
 
 - Keep memory opt-in for saving and using prior notes.
-- When memory is enabled, rank up to 1,000 recent encrypted records by local lexical relevance and recency.
+- Rank recent encrypted records by local lexical relevance and recency.
 - Provide a local search field for saved memories.
 - Do not generate embeddings, call a second model, or send memory content to a cloud service.
 
-## Phase 2B — controlled task execution (not yet implemented)
+## Phase 2B — controlled task execution (security-blocked)
 
-- Add a visible task queue with explicit user approval before external side effects.
-- Start with reversible, local actions (read files in a user-selected workspace, create draft files, run tests).
-- Require confirmation before overwriting/deleting files, installing software, sending messages, spending money, or changing accounts.
-- Provide pause, resume, cancel, and terminate controls; log each action and its result.
+- The task queue exists, but it does not currently authorize workspace file access or project-code execution.
+- Workspace listing, filename search, text preview, file creation, and text editing are disabled in the application and API.
+- Project test execution is disabled until a real Windows OS-level sandbox is available.
+- Do not re-enable these features by changing a flag or adding more string/path checks.
 
-### Phase 2B.1 — approval-gated read-only listing (implemented foundation)
+### Required Windows security work before re-enabling workspace file actions
 
-- Set `BABYMIND_WORKSPACE_ROOT` to an existing folder on the BabyMind computer.
-- Start a task, request a `list_directory` proposal for a relative subfolder, review its target and SHA-256 proposal fingerprint, then explicitly approve that exact fingerprint.
-- The server revalidates the path at execution time, rejects absolute paths and parent traversal, and lists at most 200 entry names/types. It never opens file contents or follows symlinks.
-- This is a narrow API foundation; it is not a general-purpose executor and does not yet provide a complete graphical proposal/approval experience.
+See [the Windows filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.md) and the [native Windows workspace security design](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md). The native design has experimental C++ primitives for fixed-local-NTFS root admission, handle-relative bounded reads, and exclusive new-file creation; they are not connected to Python or approved for enablement. The Windows handle-relative/no-reparse contract, secure root admission, and same-user concurrent-writer guarantees require implementation and independent review. Do not implement against an assumed Windows guarantee.
 
-### Phase 2B.2 — approval-gated new text files (implemented foundation)
-
-- Create a new allowlisted UTF-8 text file up to 32 KB inside an existing workspace folder.
-- Keep proposed content encrypted in the local proposal store until approval.
-- Require approval of the exact SHA-256 proposal. Revalidate the target and use exclusive file creation so a file added after review is never overwritten.
-- No edits, deletes, shell commands, or arbitrary file types are supported.
-
-### Phase 2B.3 — approval-gated text edits (implemented foundation)
-
-- Edit only an existing allowlisted UTF-8 text file up to 32 KB.
-- Show the complete before/after contents and target path before approval.
-- Bind the proposal to the original file SHA-256 and exact proposed content.
-- At approval, verify the original file is unchanged and replace it atomically; stale proposals are refused.
-- This does not support binary files, arbitrary paths, or silent edits.
+- Complete and independently review the C++ prototype in [WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md), then expose it behind a narrow versioned ABI; Python must not fall back to path-based operations.
+- Start with directory listing, bounded text reads, and exclusive creation only. Editing, deletion, recursive search, and execution are out of scope for the first release.
+- Add directory enumeration through pinned directory handles.
+- Complete deterministic race-focused tests that swap path components and targets during each operation on Windows.
+- Add approval-token binding and define the supported concurrent-writer threat model.
+- Add a restricted broker identity/ACL boundary before claiming protection against hostile same-user processes.
+- Keep the feature disabled until security review and Windows CI pass.
 
 ## Phase 3 — reviewed code changes
 
 - Restrict code-editing to a user-selected project folder.
 - Generate diffs first; never silently replace files.
-- Run tests in a bounded subprocess with timeout and captured output.
+- Do not execute project tests until a real Windows OS-level sandbox with filesystem, network, process, and resource restrictions is implemented and reviewed.
 - Require approval before applying changes and before any Git push or merge.
 - Keep secrets, model files, databases, and encryption keys outside generated patches.
 
 ## Security and privacy boundaries
 
-- Local inference remains on the user's computer.
+- Local inference remains on the user's Windows computer.
 - Web research necessarily sends the search query to the configured public search provider; this is not offline operation.
 - Search results are untrusted. Prompt-injection text in pages/results must not override BabyMind's system instructions or authorize tools.
 - No public-internet server exposure. LAN access remains opt-in, TLS-protected, and intended only for trusted private Wi-Fi.
 - The Windows DPAPI key and database key files must be backed up together according to the existing recovery guidance.
+
+**Security gate:** Do not re-enable workspace file operations by flipping a Python flag or adding more path checks. Implement Windows handle-relative operations with reparse-point protections, then add race-focused Windows tests before enabling any API or UI path. Project-code execution additionally requires a real Windows OS-level sandbox.

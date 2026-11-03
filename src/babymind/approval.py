@@ -1,4 +1,4 @@
-"""Approval-gated, read-only local workspace actions."""
+"""Approval-gated local workspace file actions."""
 from __future__ import annotations
 
 import hashlib
@@ -7,6 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
+WORKSPACE_FILE_ACTIONS_ENABLED = False  # Fail closed pending native handle-based path protection.
 MAX_TEXT_FILE_BYTES = 32 * 1024
 MAX_SEARCH_DIRECTORIES = 250
 MAX_SEARCH_FILES = 2000
@@ -111,10 +112,13 @@ def _safe_new_text_file(relative_path: str, content: str) -> tuple[Path, Path, s
     return root, target, content
 
 
+
 def build_readonly_proposal(
     relative_path: str, action: str = "list_directory", name_contains: str = "",
     content: str = ""
 ) -> dict:
+    if not WORKSPACE_FILE_ACTIONS_ENABLED:
+        raise ValueError("Workspace file actions are disabled until native race-resistant filesystem protection is available.")
     if action == "create_text_file":
         root, target, clean_content = _safe_new_text_file(relative_path.strip(), content)
         relative = target.relative_to(root).as_posix()
@@ -146,6 +150,7 @@ def build_readonly_proposal(
             "original_content": original_text,
             "content": content,
         }
+
     elif action == "find_files":
         root, target = _safe_directory(relative_path.strip())
         query = name_contains.strip()
@@ -154,7 +159,7 @@ def build_readonly_proposal(
         relative = target.relative_to(root).as_posix() or "."
         payload = {"relative_path": relative, "name_contains": query}
     else:
-        raise ValueError("Unsupported read-only action.")
+        raise ValueError("Unsupported workspace action.")
     canonical = json.dumps({"action": action, "payload": payload}, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return {
@@ -167,6 +172,8 @@ def build_readonly_proposal(
 
 
 def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> dict:
+    if not WORKSPACE_FILE_ACTIONS_ENABLED:
+        raise ValueError("Workspace file actions are disabled until native race-resistant filesystem protection is available.")
     if action == "edit_text_file":
         required = {"relative_path", "expected_sha256", "original_content", "content"}
         if not isinstance(payload, dict) or set(payload) != required or any(not isinstance(payload[key], str) for key in required):
@@ -216,6 +223,9 @@ def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> 
                 "old_sha256": payload["expected_sha256"],
                 "new_sha256": hashlib.sha256(new_content).hexdigest(),
                 "bytes": len(new_content)}
+    if action == "run_tests":
+        raise ValueError("Project test execution is disabled until a real sandbox is available.")
+
     if action == "create_text_file":
         if (not isinstance(payload, dict) or set(payload) != {"relative_path", "content"}
                 or not isinstance(payload["relative_path"], str)
