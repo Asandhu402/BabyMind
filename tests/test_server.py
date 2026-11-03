@@ -614,7 +614,7 @@ class BabyMindWebTests(unittest.TestCase):
             import io
             process = SimpleNamespace(returncode=0, stdout=io.StringIO("Ran 3 tests"))
             process.wait = lambda timeout: None
-            with patch.object(sys, "frozen", False, create=True), \
+            with patch.object(sys, "frozen", False, create=True), patch("babymind.approval.subprocess.Popen", return_value=process):
                  patch("babymind.approval.subprocess.Popen", return_value=process) as popen, \
                  patch.dict("os.environ", {"PATH": "C:/Windows/System32", "BABYMIND_API_KEY": "must-not-pass"}, clear=True):
                 result = _run_project_tests(project)
