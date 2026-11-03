@@ -565,5 +565,82 @@ class BabyMindWebTests(unittest.TestCase):
         search.assert_called_once_with("Vancouver trucking", limit=5)
 
 
+    def test_project_test_run_requires_exact_approval(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            project = Path(workspace, "demo")
+            (project / "tests").mkdir(parents=True)
+            status, _, body = self.request("/api/tasks", {"title": "Check project tests"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            with patch("babymind.approval._run_project_tests", return_value={
+                "exit_code": 0, "success": True, "timed_out": False,
+                "runtime_limit_seconds": 90, "output": "Ran 2 tests", "output_truncated": False
+            }) as run:
+                status, _, body = self.request(
+                    f"/api/tasks/{task_id}/propose",
+                    {"relative_path": "demo", "action": "run_tests"},
+                )
+                self.assertEqual(status, 201)
+                proposal = json.loads(body)
+                self.assertEqual(proposal["action"], "run_tests")
+                status, _, body = self.request(
+                    f"/api/proposals/{proposal['id']}/approve", {"proposal_hash": "wrong"}
+                )
+                self.assertEqual(status, 400)
+                run.assert_not_called()
+                status, _, body = self.request(
+                    f"/api/proposals/{proposal['id']}/approve",
+                    {"proposal_hash": proposal["proposal_hash"]},
+                )
+                self.assertEqual(status, 200)
+                self.assertTrue(json.loads(body)["result"]["success"])
+                run.assert_called_once()
+
+    def test_project_test_run_requires_existing_tests_folder(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(workspace, "empty-project").mkdir()
+            from babymind.approval import build_readonly_proposal
+            with self.assertRaisesRegex(ValueError, "tests subfolder"):
+                build_readonly_proposal("empty-project", action="run_tests")
+
+    def test_project_test_runner_uses_fixed_command_and_filtered_environment(self) -> None:
+        import sys
+        from babymind.approval import _run_project_tests
+        with TemporaryDirectory() as workspace:
+            project = Path(workspace)
+            (project / "tests").mkdir()
+            process = SimpleNamespace(returncode=0)
+            process.communicate = lambda timeout: ("Ran 3 tests", None)
+            with patch.object(sys, "frozen", False, create=True), \\
+                 patch("babymind.approval.subprocess.Popen", return_value=process) as popen, \\
+                 patch.dict("os.environ", {"PATH": "C:/Windows/System32", "BABYMIND_API_KEY": "must-not-pass"}, clear=True):
+                result = _run_project_tests(project)
+            command = popen.call_args.args[0]
+            options = popen.call_args.kwargs
+            self.assertEqual(command, [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"])
+            self.assertNotIn("BABYMIND_API_KEY", options["env"])
+            self.assertFalse(options.get("shell", False))
+            self.assertTrue(result["success"])
+            self.assertEqual(result["output"], "Ran 3 tests")
+
+    def test_project_test_runner_kills_timed_out_process_group(self) -> None:
+        import subprocess
+        from babymind.approval import _run_project_tests
+        with TemporaryDirectory() as workspace:
+            project = Path(workspace)
+            (project / "tests").mkdir()
+            process = SimpleNamespace(returncode=-9)
+            process.communicate = unittest.mock.Mock(side_effect=[
+                subprocess.TimeoutExpired("fixed-test-command", 90), ("stopped", None)
+            ])
+            with patch("babymind.approval.os.name", "posix"), \\
+                 patch("babymind.approval.os.killpg") as kill_group, \\
+                 patch("babymind.approval.subprocess.Popen", return_value=process):
+                result = _run_project_tests(project)
+            kill_group.assert_called_once()
+            self.assertTrue(result["timed_out"])
+            self.assertFalse(result["success"])
+
+
 if __name__ == "__main__":
     unittest.main()
