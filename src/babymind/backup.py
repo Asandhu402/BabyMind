@@ -245,13 +245,18 @@ def restore_backup(
         changed: list[Path] = []
         previous: dict[str, bytes | None] = {}
         try:
-            for name, data in files.items():
+            # Replace the complete known database/key set, including removing
+            # stores that did not exist when this backup was created.
+            for name in (*_DATABASES, *_KEY_FILES):
                 destination = root / name
                 previous[name] = destination.read_bytes() if destination.is_file() else None
-                staged = work / name
-                staged_target = root / (name + ".restore-tmp")
-                shutil.copyfile(staged, staged_target)
-                os.replace(staged_target, destination)
+                if name not in files:
+                    destination.unlink(missing_ok=True)
+                else:
+                    staged = work / name
+                    staged_target = root / (name + ".restore-tmp")
+                    shutil.copyfile(staged, staged_target)
+                    os.replace(staged_target, destination)
                 changed.append(destination)
         except Exception:
             for destination in reversed(changed):
