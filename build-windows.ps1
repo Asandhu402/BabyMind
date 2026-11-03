@@ -9,9 +9,9 @@ py -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --c
 # Bundle a separate console runner so the packaged desktop app can execute
 # only the fixed Python unittest-discovery workflow after explicit approval.
 py -m PyInstaller --noconfirm --clean --console --name BabyMindTestRunner --paths src --collect-all cryptography src/babymind/test_runner.py
-$testRunnerTarget = Join-Path $PSScriptRoot "dist\\BabyMind\\tools\\BabyMindTestRunner"
+$testRunnerTarget = Join-Path $PSScriptRoot "dist\BabyMind\tools\BabyMindTestRunner"
 New-Item -ItemType Directory -Force -Path $testRunnerTarget | Out-Null
-Copy-Item -Path (Join-Path $PSScriptRoot "dist\\BabyMindTestRunner\\*") -Destination $testRunnerTarget -Recurse -Force
+Copy-Item -Path (Join-Path $PSScriptRoot "dist\BabyMindTestRunner\*") -Destination $testRunnerTarget -Recurse -Force
 if (-not (Test-Path (Join-Path $testRunnerTarget "BabyMindTestRunner.exe"))) {
     throw "Could not stage the approved project test runner."
 }
