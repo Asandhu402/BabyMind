@@ -46,7 +46,10 @@ def _relative_path(relative_path: str) -> tuple[Path, Path, Path]:
         current = current / piece
         if current.is_symlink():
             raise ValueError("Symbolic links are not supported in approved workspace actions.")
-    target = candidate.resolve(strict=True)
+    try:
+        target = candidate.resolve(strict=True)
+    except OSError as error:
+        raise ValueError("The selected path must already exist inside the configured workspace.") from error
     if not target.is_relative_to(root):
         raise ValueError("The selected path must remain inside the configured workspace.")
     return root, candidate, target
