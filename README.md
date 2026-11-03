@@ -110,6 +110,12 @@ under `%USERPROFILE%\.babymind\models`. Later launches reuse that model
 locally; the download is not repeated. The first download requires internet
 access and at least 4.5 GB of free disk space.
 
+A permanent, versioned Windows release is published by the **BabyMind
+Windows release** workflow. Run it from GitHub Actions with a tag matching
+`pyproject.toml` (currently `v0.3.0`), or push that tag. The workflow repeats
+the Windows tests and build, then attaches a versioned ZIP and SHA-256 checksum
+to the GitHub Release. The package is portable but currently unsigned.
+
 The packaged desktop app selects its bundled llama.cpp engine automatically
 and does not require LM Studio, Python, or an API key. Inference and chat
 storage remain on the user's computer. The desktop window requires Microsoft
