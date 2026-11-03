@@ -383,3 +383,13 @@ BabyMind can connect to three additional open-source projects without creating n
 - **Promptfoo** adds developer-only local evaluation in quality/. It targets BabyMind's loopback API and uses no hosted grader in the included smoke suite.
 
 See Optional integrations (docs/OPTIONAL_INTEGRATIONS.md) and Quality checks (quality/README.md) for setup and privacy boundaries.
+
+
+## Local self-inspection demo
+
+The Windows UI demo reads a strict allowlist of BabyMind source files from the
+same local checkout used to launch the app, then sends a bounded source snapshot
+to BabyMind's fixed local model for a single prioritized code review. It does
+not query the private GitHub repository or send source code to a web search
+service. The snapshot excludes environment files, credentials, user databases,
+memory stores, certificates, model weights, and arbitrary workspace files.
