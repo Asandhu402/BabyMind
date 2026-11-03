@@ -138,6 +138,11 @@ def _run_project_tests(project_root: Path) -> dict:
         "HOME", "LANG", "LC_ALL"
     }
     environment = {key: value for key, value in os.environ.items() if key.upper() in allowed_environment}
+    import_paths = [str(project_root)]
+    source_dir = project_root / "src"
+    if source_dir.is_dir():
+        import_paths.insert(0, str(source_dir))
+    environment["PYTHONPATH"] = os.pathsep.join(import_paths)
     environment["PYTHONIOENCODING"] = "utf-8"
     options = {
         "cwd": project_root,
@@ -169,7 +174,7 @@ def _run_project_tests(project_root: Path) -> dict:
                 process.kill()
         else:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
+                os.killpg(process.pid, getattr(signal, "SIGKILL", signal.SIGTERM))
             except ProcessLookupError:
                 pass
         output, _ = process.communicate()
