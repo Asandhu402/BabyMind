@@ -95,7 +95,10 @@ def _safe_new_text_file(relative_path: str, content: str) -> tuple[Path, Path, s
         current = current / piece
         if current.is_symlink():
             raise ValueError("Symbolic links are not supported in approved workspace actions.")
-    resolved_parent = parent.resolve(strict=True)
+    try:
+        resolved_parent = parent.resolve(strict=True)
+    except OSError as error:
+        raise ValueError("The parent folder must already exist inside the configured workspace.") from error
     if not resolved_parent.is_dir() or not resolved_parent.is_relative_to(root):
         raise ValueError("The parent folder must exist inside the configured workspace.")
     target = resolved_parent / part.name
