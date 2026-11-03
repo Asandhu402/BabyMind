@@ -73,24 +73,17 @@ server process it started when BabyMind exits. The default context size is
 the CPU build by default; acceleration depends on the llama.cpp build you
 download and its compatible runtime libraries.
 
-### Improve answer quality and choose a stronger local model
+### Fixed local model and answer quality
 
-BabyMind's specialist roles are prompt configurations that share one model;
-adding roles does not increase the underlying model's reasoning capability.
-The bundled 4B Q4 model is a lightweight starter model, not a top-tier reasoning
-or coding model. For stronger answers on a 24 GB RAM computer, compare an
-instruction-tuned 7B–9B GGUF at Q4_K_M in LM Studio or llama.cpp. Keep enough
-memory for Windows and other applications; larger models may be noticeably
-slower on an Intel CPU with integrated graphics. Do not assume GPU acceleration
-unless the selected runtime reports that it is actually using a compatible backend.
+BabyMind uses one bundled, SHA-256-pinned local model. Its model identity is
+fixed: configuration, updates, and specialist roles must never silently switch
+to another model. A relocated copy is accepted only when its contents match the
+pinned SHA-256. All 50 specialist roles share this same model; adding roles does
+not create separate models or increase its underlying reasoning capability.
 
-The bundled model is not silently replaced. You can test another GGUF by setting
-`BABYMIND_GGUF_MODEL` to its full path and `BABYMIND_ENGINE=llama.cpp`, or
-load a different model in LM Studio and use `BABYMIND_ENGINE=lm-studio`.
-A user-selected GGUF is not checked against the bundled model's checksum:
-download it only from a source you trust and verify the publisher's checksum
-yourself. Model quality varies; compare candidates with the same prompts rather
-than choosing by parameter count alone.
+Answer quality is improved in BabyMind's core orchestration, bounded context,
+retrieval, safety checks, and evaluation—not by changing the model. The model
+runs locally through the bundled llama.cpp CPU runtime.
 
 Generation defaults are configurable for either local OpenAI-compatible backend:
 - `BABYMIND_TEMPERATURE` (default `0.4`)
