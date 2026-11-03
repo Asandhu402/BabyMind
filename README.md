@@ -73,6 +73,33 @@ server process it started when BabyMind exits. The default context size is
 the CPU build by default; acceleration depends on the llama.cpp build you
 download and its compatible runtime libraries.
 
+### Improve answer quality and choose a stronger local model
+
+BabyMind's specialist roles are prompt configurations that share one model;
+adding roles does not increase the underlying model's reasoning capability.
+The bundled 4B Q4 model is a lightweight starter model, not a top-tier reasoning
+or coding model. For stronger answers on a 24 GB RAM computer, compare an
+instruction-tuned 7B–9B GGUF at Q4_K_M in LM Studio or llama.cpp. Keep enough
+memory for Windows and other applications; larger models may be noticeably
+slower on an Intel CPU with integrated graphics. Do not assume GPU acceleration
+unless the selected runtime reports that it is actually using a compatible backend.
+
+The bundled model is not silently replaced. You can test another GGUF by setting
+`BABYMIND_GGUF_MODEL` to its full path and `BABYMIND_ENGINE=llama.cpp`, or
+load a different model in LM Studio and use `BABYMIND_ENGINE=lm-studio`.
+Model quality varies; compare candidates with the same prompts rather than
+choosing by parameter count alone.
+
+Generation defaults are configurable for either local OpenAI-compatible backend:
+- `BABYMIND_TEMPERATURE` (default `0.4`)
+- `BABYMIND_TOP_P` (default `0.9`)
+- `BABYMIND_MAX_TOKENS` (default `2048`)
+
+Conversation history is limited to the most recent 10 messages and approximately
+10,000 characters so older dialogue does not consume the entire context window.
+For llama.cpp, set `BABYMIND_CONTEXT_SIZE` to a value supported by the model and
+available memory (for example, `8192`); a larger context also consumes more RAM.
+
 ### Switch back to LM Studio
 
 For source/developer launches, set `BABYMIND_ENGINE=lm-studio` to use LM Studio.
