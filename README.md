@@ -102,9 +102,10 @@ BabyMind, its Python runtime, and the official llama.cpp Windows CPU runtime.
 Download the complete `BabyMind-Windows-Portable` artifact from the latest
 successful Windows build, extract it, and double-click `BabyMind.exe`.
 
-On first launch, BabyMind asks permission to download the default Qwen3.5-4B
-Q4_K_M model (approximately 2.8 GB). It displays download progress, verifies
-the file against the model publisher's SHA-256 checksum, and stores the model
+On first launch, BabyMind asks permission to download the Qwen3.5-4B
+Uncensored HauhauCS Aggressive Q4_K_M fine-tune (approximately 2.71 GB).
+It displays download progress, verifies the file against the SHA-256 checksum
+published in the Hugging Face file metadata, and stores the model
 under `%USERPROFILE%\.babymind\models`. Later launches reuse that model
 locally; the download is not repeated. The first download requires internet
 access and at least 4.5 GB of free disk space.
@@ -121,9 +122,12 @@ For developers building from source, install Python 3.10 or newer and run:
 
 The output is `dist\BabyMind\BabyMind.exe`; copy the entire
 `dist\BabyMind` folder, not just the EXE. The build is not code-signed and
-is not a traditional installer yet. The default Qwen model is the standard
-Apache-2.0 Qwen release, not an "uncensored" fine-tune; model behaviour and
-refusal tendencies are determined by the selected model.
+is not a traditional installer yet. The packaged default is the community
+fine-tuned Qwen3.5-4B Uncensored HauhauCS Aggressive Q4_K_M model, pinned to a
+specific Hugging Face revision and verified against its published SHA-256
+checksum. It is a third-party fine-tune, not an official Alibaba release.
+Its publisher describes it as aggressively uncensored; actual behaviour and
+quality must still be tested.
 
 ## Use the command line
 
@@ -157,7 +161,8 @@ Run the automated test suite from the repository root:
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, internet search, or public-internet remote access. Selecting llama.cpp removes the LM Studio dependency, but it does not guarantee unrestricted model behaviour. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, internet search, or public-internet remote access. The packaged model is an aggressively uncensored community fine-tune, but no
+model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
 
