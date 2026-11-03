@@ -98,7 +98,8 @@ The terminal prints an HTTPS address, a one-time access token, and the public lo
 ### Portable Windows desktop package
 
 The GitHub Actions workflow builds a portable Windows package containing
-BabyMind, its Python runtime, and the official llama.cpp Windows CPU runtime.
+BabyMind, its Python runtime, a separate fixed-command project test runner,
+and the official llama.cpp Windows CPU runtime.
 Download the complete `BabyMind-Windows-Portable` artifact from the latest
 successful Windows build, extract it, and double-click `BabyMind.exe`.
 
