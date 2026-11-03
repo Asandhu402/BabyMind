@@ -47,6 +47,7 @@
     const cards = [...pending, ...finished].sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)));
     if (!cards.length) {
       $("#approvalList").innerHTML = '<div class="approval-empty">No proposals yet. Start a task, then create a folder-listing proposal from this screen.</div>';
+      renderCreateForm(activeTasks);
       return;
     }
     $("#approvalList").innerHTML = cards.map(item => {
@@ -116,6 +117,5 @@
     }
   });
   $("#refreshApprovals")?.addEventListener("click", load);
-  document.addEventListener("DOMContentLoaded", load);
-  if (document.readyState !== "loading") load();
+  load();
 })();
