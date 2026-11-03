@@ -93,6 +93,56 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(json.loads(body)["transcript"]["text"], "Hello there")
         process.assert_called_once()
 
+    def test_voicebox_speech_route_uses_core_coordinator(self) -> None:
+        with patch.object(server.COORDINATOR, "synthesize_speech", return_value=b"RIFFaudio") as speak:
+            status, _, body = self.request("/api/integrations/voicebox/speech", {"text": "Hello"})
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["mime_type"], "audio/wav")
+        self.assertEqual(payload["audio_base64"], "UklGRmF1ZGlv")
+        speak.assert_called_once_with("Hello", voice=None, speed=1.0)
+
+    def test_voicebox_transcription_route_uses_core_coordinator(self) -> None:
+        fake = SimpleNamespace(
+            response="Audio summary", agent_id="BM-01", agent_name="Coordinator",
+            memories_used=0, remembered=False,
+        )
+        transcript = {"text": "Local speech", "language": "en"}
+        with patch.object(server.COORDINATOR, "process_voicebox_audio", return_value=(fake, transcript)) as process:
+            status, _, body = self.request("/api/integrations/voicebox/transcribe", {"path": "C:/voice.wav"})
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["response"], "Audio summary")
+        self.assertEqual(payload["transcript"]["text"], "Local speech")
+        process.assert_called_once()
+
+    def test_cognee_index_route_uses_approved_core_coordinator(self) -> None:
+        with patch.object(server.COORDINATOR, "index_knowledge_note", return_value="babymind-approved") as index:
+            status, _, body = self.request("/api/integrations/cognee/index", {
+                "text": "An approved note", "user_approved": True,
+            })
+        self.assertEqual(status, 201)
+        self.assertEqual(json.loads(body)["dataset"], "babymind-approved")
+        index.assert_called_once_with("An approved note", user_approved=True)
+
+    def test_cognee_search_route_uses_shared_coordinator_and_persists_answer(self) -> None:
+        fake = SimpleNamespace(
+            response="The note says hello.", agent_id="BM-02", agent_name="Researcher",
+            memories_used=1, remembered=False,
+        )
+        with patch.object(server.COORDINATOR, "ask_with_knowledge", return_value=(fake, ["Hello note"])) as ask:
+            status, _, body = self.request("/api/integrations/cognee/search", {
+                "query": "What does my note say?", "agent_id": "BM-02", "use_memory": True,
+            })
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertEqual(payload["response"], "The note says hello.")
+        self.assertEqual(payload["results"], ["Hello note"])
+        self.assertTrue(payload["conversation_id"])
+        ask.assert_called_once_with(
+            "BM-02", "What does my note say?", use_memory=True, remember=False,
+        )
+
     def test_browser_and_coding_integrations_fail_closed_without_explicit_approval(self) -> None:
         for endpoint, payload in [
             ("/api/integrations/browser", {"task": "Open a website"}),
