@@ -81,5 +81,24 @@ class CoordinatorTests(unittest.TestCase):
             provider.complete("system", "task")
 
 
+    def test_relevant_memory_search_ranks_matching_topics_over_newer_unrelated_notes(self) -> None:
+        self.memory.remember("BM-01", "Vancouver Class 1 trucking jobs", "Compare local truck driver wages.")
+        self.memory.remember("BM-02", "Punjabi song recording", "Practice vocal takes.")
+        results = self.memory.relevant("Find Vancouver Class 1 truck driving work", limit=2)
+        self.assertEqual(results[0]["task"], "Vancouver Class 1 trucking jobs")
+
+    def test_relevant_memory_search_falls_back_to_recent_when_no_terms_match(self) -> None:
+        self.memory.remember("BM-01", "Earlier private note", "First response.")
+        self.memory.remember("BM-02", "Another note", "Second response.")
+        results = self.memory.relevant("follow up on that", limit=2)
+        self.assertEqual(results[0]["task"], "Another note")
+
+    def test_relevant_memory_search_validates_query_and_limit(self) -> None:
+        with self.assertRaises(ValueError):
+            self.memory.relevant("")
+        with self.assertRaises(ValueError):
+            self.memory.relevant("valid query", limit=21)
+
+
 if __name__ == "__main__":
     unittest.main()

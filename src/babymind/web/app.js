@@ -164,11 +164,15 @@ async function changeTask(id,action){
   catch(error){toast(error.message);}
 }
 
-async function loadMemory() {
+async function loadMemory(query="") {
   try {
-    const memories=await api("/api/memory");
-    $("#memoryTotal").textContent=`${memories.length} saved memor${memories.length===1?"y":"ies"}`;
-    $("#memoryList").innerHTML=memories.map(item=>`<article class="memory-item"><small>${escapeHTML(item.agent_id)} · ${new Date(item.created_at).toLocaleString()}</small><p><strong>Task:</strong> ${escapeHTML(item.task)}</p><p><strong>Response:</strong> ${escapeHTML(item.response.slice(0,500))}${item.response.length>500?"…":""}</p></article>`).join("")||'<div class="empty-state">No saved memories yet. Turn on “Remember” when sending a message to save useful context.</div>';
+    const memories=query
+      ? await api("/api/memory/search",{method:"POST",body:JSON.stringify({query,limit:20})})
+      : await api("/api/memory");
+    $("#memoryTotal").textContent=query
+      ? memories.length+" matching memor"+(memories.length===1?"y":"ies")
+      : memories.length+" saved memor"+(memories.length===1?"y":"ies");
+    $("#memoryList").innerHTML=memories.map(item=>'<article class="memory-item"><small>'+escapeHTML(item.agent_id)+' · '+new Date(item.created_at).toLocaleString()+'</small><p><strong>Task:</strong> '+escapeHTML(item.task)+'</p><p><strong>Response:</strong> '+escapeHTML(item.response.slice(0,500))+(item.response.length>500?"…":"")+'</p></article>').join("")||'<div class="empty-state">No matching saved memories. Turn on “Remember” when sending a message to save useful context.</div>';
   } catch(error){toast(error.message);}
 }
 async function checkHealth() {
@@ -222,6 +226,8 @@ async function init() {
   $("#newChat").addEventListener("click",newConversation);
   $("#taskForm").addEventListener("submit",async event=>{event.preventDefault();const title=$("#taskTitle").value.trim();if(!title)return;try{await api("/api/tasks",{method:"POST",body:JSON.stringify({title,details:$("#taskDetails").value.trim()})});$("#taskForm").reset();await loadTasks();toast("Task added to queue");}catch(error){toast(error.message);}});
   $("#refreshTasks").addEventListener("click",loadTasks);
+  $("#memorySearchForm").addEventListener("submit",event=>{event.preventDefault();loadMemory($("#memorySearch").value.trim());});
+  $("#clearMemorySearch").addEventListener("click",()=>{$("#memorySearch").value="";loadMemory();});
   $("#agentSearch").addEventListener("input",renderAgents);
   $("#fileInput").addEventListener("change",async event=>{
     const file=event.target.files[0];if(!file)return;

@@ -463,6 +463,10 @@ class Handler(BaseHTTPRequestHandler):
                     "count": len(results),
                     "notice": "Search snippets are unverified third-party content. Review sources before relying on them."
                 })
+            elif path == "/api/memory/search":
+                query = str(payload.get("query", "")).strip()
+                limit = int(payload.get("limit", 100))
+                self.send_json(COORDINATOR.memory.relevant(query, limit=min(20, max(1, limit))))
             elif path == "/api/memory/clear":
                 deleted = COORDINATOR.memory.clear()
                 self.send_json({"deleted": deleted})

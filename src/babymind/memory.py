@@ -1,5 +1,7 @@
 """Opt-in local SQLite memory for BabyMind, encrypted at rest."""
+import math
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -88,6 +90,56 @@ class LocalMemory:
             }
             for row in rows
         ]
+
+
+    def relevant(self, query: str, limit: int = 5) -> list[dict[str, str]]:
+        """Return recent memories ranked by local lexical relevance, without a model call."""
+        clean = " ".join(str(query).split())
+        if not clean or len(clean) > 20000:
+            raise ValueError("Memory search query must contain 1–20,000 characters.")
+        if not 1 <= int(limit) <= 20:
+            raise ValueError("Memory result limit must be between 1 and 20.")
+        stop_words = {
+            "about", "after", "again", "also", "and", "are", "can", "could",
+            "does", "for", "from", "have", "help", "how", "into", "just",
+            "more", "most", "not", "our", "please", "should", "that", "the",
+            "their", "them", "then", "there", "these", "this", "those",
+            "through", "was", "what", "when", "where", "which", "with", "would",
+            "you", "your"
+        }
+        terms = {token for token in re.findall(r"[\w]{2,}", clean.casefold()) if token not in stop_words}
+        if not terms:
+            return self.recent(limit)
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT created_at, agent_id, task, response FROM memories ORDER BY id DESC LIMIT 1000"
+            ).fetchall()
+        documents = [
+            {
+                "created_at": row[0], "agent_id": row[1],
+                "task": self.secure.decrypt(row[2]), "response": self.secure.decrypt(row[3])
+            }
+            for row in rows
+        ]
+        token_sets = [
+            set(re.findall(r"[\w]{2,}", (item["task"] + " " + item["response"]).casefold()))
+            for item in documents
+        ]
+        document_frequency = {
+            term: sum(1 for tokens in token_sets if term in tokens) for term in terms
+        }
+        ranked = []
+        total = max(1, len(documents))
+        for index, (item, tokens) in enumerate(zip(documents, token_sets)):
+            matched = terms.intersection(tokens)
+            if not matched:
+                continue
+            score = sum(math.log((total + 1) / (document_frequency[term] + 1)) + 1 for term in matched)
+            ranked.append((score, -index, item))
+        if not ranked:
+            return documents[:limit]
+        ranked.sort(key=lambda entry: (entry[0], entry[1]), reverse=True)
+        return [entry[2] for entry in ranked[:limit]]
 
     def clear(self) -> int:
         with self._connect() as connection:

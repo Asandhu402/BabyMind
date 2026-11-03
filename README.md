@@ -11,7 +11,7 @@ The 50 agents are specialist configurations that share one underlying language m
 - **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue, each with a focused domain playbook and responsibility.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
 - **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
-- **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows.
+- **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows. When enabled, BabyMind ranks relevant notes locally using lightweight text matching; no embeddings or extra AI model are used. The Memory workspace also supports local search.
 - **Encrypted conversation storage:** local SQLite history on the computer running BabyMind; message text and titles are encrypted at rest with AES-256-GCM.
 - **Local model adapters:** LM Studio's OpenAI-compatible API or a BabyMind-managed llama.cpp server using a local GGUF model.
 - **CLI:** health, list, ask, route, and memory commands.

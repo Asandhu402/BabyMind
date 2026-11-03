@@ -47,7 +47,7 @@ class BabyMindCoordinator:
         except KeyError as error:
             raise KeyError(f"Unknown agent ID: {normalized_id}") from error
 
-        memories = self.memory.recent() if use_memory else []
+        memories = self.memory.relevant(clean_task) if use_memory else []
         system_prompt = (
             "You are BabyMind, one unified personal AI with a consistent, "
             "helpful, honest, privacy-conscious personality. You are currently "

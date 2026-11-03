@@ -27,6 +27,13 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Provide Start, Pause, Resume, Complete, Cancel, and Terminate controls.
 - The task tracker remains separate from execution. Phase 2B now supports an approval-gated, read-only directory listing inside a configured workspace; it does not read file contents, write files, run commands, browse pages, or perform external side effects.
 
+## Phase 1.2 — relevance-ranked encrypted local memory (implemented foundation)
+
+- Keep memory opt-in for saving and using prior notes.
+- When memory is enabled, rank up to 1,000 recent encrypted records by local lexical relevance and recency.
+- Provide a local search field for saved memories.
+- Do not generate embeddings, call a second model, or send memory content to a cloud service.
+
 ## Phase 2B — controlled task execution (not yet implemented)
 
 - Add a visible task queue with explicit user approval before external side effects.
