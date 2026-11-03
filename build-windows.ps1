@@ -65,9 +65,10 @@ Microsoft Edge WebView2 Runtime is required by the desktop window and is
 normally present on current Windows 11 systems.
 
 iPhone companion (same trusted private Wi-Fi only):
-1. Connect the iPhone and this PC to the same private Wi-Fi network.
-2. Double-click Start-BabyMind-iPhone.bat. Either launcher can perform the
-   first model download; the model is shared between both launchers.
+1. Close BabyMind.exe first; run only one BabyMind launcher at a time.
+2. Connect the iPhone and this PC to the same private Wi-Fi network.
+3. Double-click Start-BabyMind-iPhone.bat. Either launcher can perform the
+   first model download; the model file is shared between both launchers.
 3. Allow Windows Firewall access on Private networks only, if prompted.
 4. Keep this console open and keep the PC awake. Follow the printed HTTPS URL,
    one-time token, and lan-ca.crt certificate instructions.
