@@ -70,7 +70,8 @@
         : "";
       const isFileRead = item.action === "read_text_file";
       const isFileSearch = item.action === "find_files";
-      return `<article class="approval-card"><div class="approval-card-head"><div><span class="approval-status ${item.status === "completed" ? "completed" : ""}">${escapeHTML(item.status.replaceAll("_"," "))}</span><h3>${isFileRead ? "Preview text file" : isFileSearch ? "Search filenames" : "List folder contents"}</h3><p>Workspace path: <strong>${escapeHTML(target)}</strong></p></div><small>${escapeHTML(new Date(item.created_at).toLocaleString())}</small></div><p>Effect: ${isFileRead ? "Read up to 32 KB of UTF-8 text after approval. The preview may contain sensitive information." : isFileSearch ? "Search eligible filenames only. File contents are not opened; each file preview needs separate approval." : "Read names and basic item types only. No file contents are opened or modified."}</p><div class="approval-meta"><span>Task: ${escapeHTML(item.task_id)}</span><span>Action: ${escapeHTML(item.action)}</span></div><div class="approval-hash">Proposal fingerprint: ${escapeHTML(item.proposal_hash)}</div>${approve}${resultHTML}</article>`;
+      const isFileCreate = item.action === "create_text_file";
+      return `<article class="approval-card"><div class="approval-card-head"><div><span class="approval-status ${item.status === "completed" ? "completed" : ""}">${escapeHTML(item.status.replaceAll("_"," "))}</span><h3>${isFileCreate ? "Create new text file" : isFileRead ? "Preview text file" : isFileSearch ? "Search filenames" : "List folder contents"}</h3><p>Workspace path: <strong>${escapeHTML(target)}</strong></p></div><small>${escapeHTML(new Date(item.created_at).toLocaleString())}</small></div><p>Effect: ${isFileCreate ? "Create a new UTF-8 text file up to 32 KB. Existing files are never overwritten." : isFileRead ? "Read up to 32 KB of UTF-8 text after approval. The preview may contain sensitive information." : isFileSearch ? "Search eligible filenames only. File contents are not opened; each file preview needs separate approval." : "Read names and basic item types only. No file contents are opened or modified."}</p><div class="approval-meta"><span>Task: ${escapeHTML(item.task_id)}</span><span>Action: ${escapeHTML(item.action)}</span></div><div class="approval-hash">Proposal fingerprint: ${escapeHTML(item.proposal_hash)}</div>${approve}${resultHTML}</article>`;
     }).join("");
     $("#approvalList").querySelectorAll("[data-approve]").forEach(button => button.addEventListener("click", () => approve(button.dataset.approve)));
     $("#approvalList").querySelectorAll("[data-preview-path]").forEach(button => button.addEventListener("click", () => requestFilePreview(button.dataset.taskId, button.dataset.previewPath)));
@@ -89,15 +90,21 @@
       $("#goTasks").addEventListener("click", () => document.querySelector('[data-view="tasks"]')?.click());
       return;
     }
-    form.innerHTML = `<strong>Create a read-only proposal</strong><label for="proposalTask">Active task</label><select id="proposalTask">${activeTasks.map(task => `<option value="${escapeHTML(task.id)}">${escapeHTML(task.title)}</option>`).join("")}</select><label for="proposalAction">Action</label><select id="proposalAction"><option value="list_directory">List folder names and types</option><option value="find_files">Search filenames (no contents read)</option><option value="read_text_file">Preview a text file (max 32 KB)</option></select><label for="proposalPath">Folder or file path inside your workspace</label><input id="proposalPath" maxlength="500" value="." placeholder="e.g. projects"><label for="proposalQuery" id="proposalQueryLabel" hidden>Filename contains</label><input id="proposalQuery" maxlength="80" placeholder="e.g. invoice" hidden><small>Search checks eligible filenames only, up to 3 folder levels and fixed safety limits. It does not open file contents. Each text preview is a separate proposal requiring your approval.</small><button class="task-primary" type="submit" ${state.busy ? "disabled" : ""}>＋ Create proposal for review</button>`;
+    form.innerHTML = `<strong>Create a read-only proposal</strong><label for="proposalTask">Active task</label><select id="proposalTask">${activeTasks.map(task => `<option value="${escapeHTML(task.id)}">${escapeHTML(task.title)}</option>`).join("")}</select><label for="proposalAction">Action</label><select id="proposalAction"><option value="list_directory">List folder names and types</option><option value="find_files">Search filenames (no contents read)</option><option value="read_text_file">Preview a text file (max 32 KB)</option><option value="create_text_file">Create a new text file (max 32 KB)</option></select><label for="proposalPath">Folder or file path inside your workspace</label><input id="proposalPath" maxlength="500" value="." placeholder="e.g. projects"><label for="proposalQuery" id="proposalQueryLabel" hidden>Filename contains</label><input id="proposalQuery" maxlength="80" placeholder="e.g. invoice" hidden><label for="proposalContent" id="proposalContentLabel" hidden>New file content (max 32 KB)</label><textarea id="proposalContent" maxlength="32768" rows="8" placeholder="Write the new file contents…" hidden></textarea><small>Search does not open file contents. Text previews and new file creation each require separate approval. New files are never allowed to overwrite existing files.</small><button class="task-primary" type="submit" ${state.busy ? "disabled" : ""}>＋ Create proposal for review</button>`;
     const actionSelect = $("#proposalAction");
     const queryInput = $("#proposalQuery");
     const queryLabel = $("#proposalQueryLabel");
+    const contentInput = $("#proposalContent");
+    const contentLabel = $("#proposalContentLabel");
     const updateQueryVisibility = () => {
       const visible = actionSelect.value === "find_files";
+      const creating = actionSelect.value === "create_text_file";
       queryInput.hidden = !visible;
       queryLabel.hidden = !visible;
       queryInput.required = visible;
+      contentInput.hidden = !creating;
+      contentLabel.hidden = !creating;
+      contentInput.required = creating;
     };
     actionSelect.addEventListener("change", updateQueryVisibility);
     updateQueryVisibility();
@@ -108,9 +115,10 @@
       const relativePath = $("#proposalPath").value.trim();
       const action = $("#proposalAction").value;
       const name_contains = $("#proposalQuery").value.trim();
+      const content = $("#proposalContent").value;
       state.busy = true;
       try {
-        await api(`/api/tasks/${encodeURIComponent(taskId)}/propose`, {method:"POST", body:JSON.stringify({relative_path:relativePath, action, name_contains})});
+        await api(`/api/tasks/${encodeURIComponent(taskId)}/propose`, {method:"POST", body:JSON.stringify({relative_path:relativePath, action, name_contains, content})});
         toast("Proposal created. Review it below before approving.");
         await load();
       } catch (error) { toast(error.message); }
@@ -136,7 +144,10 @@
     const target = item.payload?.relative_path || ".";
     const isFileRead = item.action === "read_text_file";
     const isFileSearch = item.action === "find_files";
-    const confirmation = isFileRead
+    const isFileCreate = item.action === "create_text_file";
+    const confirmation = isFileCreate
+      ? `Approve creating this new UTF-8 text file?\n\n${target}\n\nSize: ${new TextEncoder().encode(item.payload?.content || "").length} bytes\n\nThe target must not already exist. BabyMind will never overwrite a file.`
+      : isFileRead
       ? `Approve reading up to 32 KB of UTF-8 text from this exact workspace file?\n\n${target}\n\nThe contents may be sensitive and will be shown in BabyMind. No file will be modified.`
       : isFileSearch
         ? `Approve searching filenames inside this workspace folder?\n\nFolder: ${target}\nFilename contains: ${item.payload?.name_contains || ""}\n\nOnly eligible filenames will be inspected. No file contents will be opened.`
@@ -145,7 +156,7 @@
     state.busy = true;
     try {
       await api(`/api/proposals/${encodeURIComponent(id)}/approve`, {method:"POST", body:JSON.stringify({proposal_hash:item.proposal_hash})});
-      toast(isFileRead ? "Approved. Text preview complete." : isFileSearch ? "Approved. Filename search complete." : "Approved. The read-only listing is complete.");
+      toast(isFileCreate ? "Approved. New file created." : isFileRead ? "Approved. Text preview complete." : isFileSearch ? "Approved. Filename search complete." : "Approved. The read-only listing is complete.");
       await load();
     } catch (error) { toast(error.message); }
     finally { state.busy = false; }
