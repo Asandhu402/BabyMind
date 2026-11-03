@@ -58,9 +58,11 @@
           const result = typeof item.result === "string" ? JSON.parse(item.result) : item.result;
           const entries = Array.isArray(result.entries) ? result.entries : [];
           const foundFiles = Array.isArray(result.files) ? result.files : [];
-          resultHTML = item.action === "read_text_file"
-            ? `<div class="approval-result"><strong>Text preview · ${escapeHTML(result.bytes)} bytes</strong><pre class="approval-file-preview">${escapeHTML(result.content)}</pre></div>`
-            : item.action === "find_files"
+          resultHTML = item.action === "create_text_file"
+            ? `<div class="approval-result"><strong>New file created · ${escapeHTML(result.bytes)} bytes</strong><p>${escapeHTML(result.relative_path)}</p></div>`
+            : item.action === "read_text_file"
+              ? `<div class="approval-result"><strong>Text preview · ${escapeHTML(result.bytes)} bytes</strong><pre class="approval-file-preview">${escapeHTML(result.content)}</pre></div>`
+              : item.action === "find_files"
               ? `<div class="approval-result"><strong>Filename matches · ${escapeHTML(result.count)}</strong><p>File contents were not opened. Create a separate preview proposal for each file; each preview requires its own approval.</p><ul>${foundFiles.map(file => `<li><code>${escapeHTML(file.relative_path)}</code> <button type="button" class="approval-file-propose" data-preview-path="${escapeHTML(file.relative_path)}" data-task-id="${escapeHTML(item.task_id)}">Request preview</button></li>`).join("") || "<li>No matching text files found.</li>"}</ul>${result.truncated ? "<p>Search reached a safety limit; narrow the filename or folder to see more.</p>" : ""}</div>`
               : `<div class="approval-result"><strong>Directory listing result</strong><ul>${entries.map(entry => `<li>${escapeHTML(entry.name)} <span>· ${escapeHTML(entry.type)}</span></li>`).join("") || "<li>Folder is empty.</li>"}</ul>${result.truncated ? "<p>Only the first 200 entries are shown.</p>" : ""}</div>`;
         } catch { resultHTML = '<div class="approval-result">Completed. Result could not be displayed.</div>'; }
