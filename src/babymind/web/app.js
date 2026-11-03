@@ -36,6 +36,7 @@ function setView(name) {
   $("#sidebar").classList.remove("open");
   if(name==="memory") loadMemory();
   if(name==="tasks") loadTasks();
+  if(name==="settings") loadIntegrations();
 }
 function renderAgentSelect() {
   $("#agentSelect").innerHTML=state.agents.map(agent=>`<option value="${agent.id}">${agent.id} · ${escapeHTML(agent.name)}</option>`).join("");
@@ -209,6 +210,26 @@ async function exportConversation(){
     link.href=url;link.download="babymind-conversation.md";link.click();URL.revokeObjectURL(url);
   }catch(error){toast(error.message);}
 }
+async function loadIntegrations(){
+  try{
+    const items=await api("/api/integrations");
+    const targets={"docling":"documentStatus","faster-whisper":"audioStatus","browser-use":"browserStatus","open-interpreter":"codingStatus"};
+    items.forEach(item=>{
+      const target=$("#"+targets[item.integration_id]);if(!target)return;
+      target.textContent=(item.available?"Available · ":"Not installed · ")+item.purpose+(item.available?"":" · "+item.install_hint);
+      target.dataset.available=String(item.available);
+    });
+  }catch(error){toast(error.message);}
+}
+async function runCoreTool(endpoint,payload,label){
+  try{
+    const result=await api(endpoint,{method:"POST",body:JSON.stringify(payload)});
+    setView("chat");
+    addMessage("assistant",result.response||result.result||result.notice||"The integration completed.", "BabyMind · "+label);
+    if(result.transcript?.text)addMessage("assistant","**Transcript**\n\n"+result.transcript.text,"BabyMind · Voice transcript");
+    toast(label+" completed");
+  }catch(error){toast(error.message);}
+}
 async function init() {
   try {
     state.agents=await api("/api/agents");renderAgentSelect();renderFilters();renderAgents();
@@ -226,6 +247,24 @@ async function init() {
   $("#newChat").addEventListener("click",newConversation);
   $("#taskForm").addEventListener("submit",async event=>{event.preventDefault();const title=$("#taskTitle").value.trim();if(!title)return;try{await api("/api/tasks",{method:"POST",body:JSON.stringify({title,details:$("#taskDetails").value.trim()})});$("#taskForm").reset();await loadTasks();toast("Task added to queue");}catch(error){toast(error.message);}});
   $("#refreshTasks").addEventListener("click",loadTasks);
+  $("#processDocument").addEventListener("click",()=>{
+    const path=$("#documentPath").value.trim();if(!path){toast("Enter a local document path.");return;}
+    runCoreTool("/api/integrations/document",{path,agent_id:$("#agentSelect").value,instruction:$("#documentInstruction").value.trim()||"Summarize this document.",use_memory:$("#memoryToggle").checked,remember:$("#rememberToggle").checked},"Document analysis");
+  });
+  $("#processAudio").addEventListener("click",()=>{
+    const path=$("#audioPath").value.trim();if(!path){toast("Enter a local audio path.");return;}
+    runCoreTool("/api/integrations/audio",{path,agent_id:$("#agentSelect").value,instruction:$("#audioInstruction").value.trim()||"Summarize this recording.",use_memory:$("#memoryToggle").checked,remember:$("#rememberToggle").checked},"Voice analysis");
+  });
+  $("#runBrowserTask").addEventListener("click",()=>{
+    const task=$("#browserTask").value.trim();if(!task){toast("Describe the browser task first.");return;}
+    if(!confirm("Browser automation can click, type, submit forms and change websites. Run this task visibly? Review each website action yourself."))return;
+    runCoreTool("/api/integrations/browser",{task,user_approved:true},"Browser task");
+  });
+  $("#launchCodingSession").addEventListener("click",()=>{
+    const workspace=$("#codingWorkspace").value.trim();if(!workspace){toast("Enter a local workspace folder.");return;}
+    if(!confirm("Launch Open Interpreter in read-only mode? Its own sandbox must enforce read-only access. BabyMind cannot independently sandbox this external process."))return;
+    runCoreTool("/api/integrations/coding",{workspace,user_approved:true},"Read-only coding session");
+  });
   $("#memorySearchForm").addEventListener("submit",event=>{event.preventDefault();loadMemory($("#memorySearch").value.trim());});
   $("#clearMemorySearch").addEventListener("click",()=>{$("#memorySearch").value="";loadMemory();});
   $("#agentSearch").addEventListener("input",renderAgents);
