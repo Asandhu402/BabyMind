@@ -33,7 +33,7 @@ WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
 DATA_HOME.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_HOME / "app.sqlite3"
-DB_LOCK = threading.Lock()
+DB_LOCK = threading.RLock()
 # The local model is CPU/RAM intensive. Start with one inference at a time.
 INFERENCE_SEMAPHORE = threading.BoundedSemaphore(1)
 COORDINATOR = BabyMindCoordinator()
@@ -41,18 +41,21 @@ COORDINATOR = BabyMindCoordinator()
 
 @contextmanager
 def db():
-    connection = sqlite3.connect(DB_PATH, timeout=15)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA secure_delete = ON")
-    try:
-        yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
+    # Serialize access so a validated restore cannot replace a database while
+    # another request still has an open SQLite handle.
+    with DB_LOCK:
+        connection = sqlite3.connect(DB_PATH, timeout=15)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA secure_delete = ON")
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
 
 def text_store() -> SecureTextStore:
@@ -259,6 +262,17 @@ class Handler(BaseHTTPRequestHandler):
                     "WHERE conversation_id=? ORDER BY id", (conversation_id,)
                 ).fetchall()
             self.send_json([{**dict(row), "content": text_store().decrypt(row["content"])} for row in rows])
+        elif path == "/api/backup/status":
+            files = []
+            for name in ("app.sqlite3", "memory.sqlite3"):
+                database = DATA_HOME / name
+                key = DATA_HOME / ("app.key" if name == "app.sqlite3" else "memory.key")
+                files.append({
+                    "database": name, "available": database.is_file(),
+                    "bytes": database.stat().st_size if database.is_file() else 0,
+                    "key_available": key.is_file(),
+                })
+            self.send_json({"home": str(DATA_HOME), "databases": files})
         elif path == "/api/memory":
             self.send_json(COORDINATOR.memory.recent(limit=100))
         elif path == "/api/tasks":
@@ -385,6 +399,48 @@ class Handler(BaseHTTPRequestHandler):
                     "conversation_id": conversation_id, "user_message": "Search local knowledge: " + query,
                     "response": result.response, "results": results, "count": len(results), "agent_id": result.agent_id,
                     "agent_name": result.agent_name, "memories_used": result.memories_used,
+                })
+            elif path == "/api/backup/export":
+                destination = str(payload.get("path", "")).strip()
+                password = str(payload.get("password", ""))
+                if not destination or len(destination) > 2048:
+                    raise ValueError("Enter a local backup file path.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy; try the backup again shortly."}, 429)
+                    return
+                try:
+                    from .backup import create_backup
+                    from .memory import MEMORY_LOCK
+                    with DB_LOCK, MEMORY_LOCK:
+                        result = create_backup(DATA_HOME, destination, password)
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                self.send_json({
+                    **result,
+                    "notice": "Encrypted backup created. It contains encrypted databases and key files, not plaintext chat or memory. On Windows, DPAPI keys can only be restored by the same Windows user on the same device.",
+                }, 201)
+            elif path == "/api/backup/restore":
+                source = str(payload.get("path", "")).strip()
+                password = str(payload.get("password", ""))
+                confirmation = str(payload.get("confirmation", ""))
+                if not source or len(source) > 2048:
+                    raise ValueError("Enter the local BabyMind backup file path.")
+                if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+                    self.send_json({"error": "BabyMind is busy; try the restore again shortly."}, 429)
+                    return
+                try:
+                    from .backup import restore_backup
+                    from .memory import MEMORY_LOCK, LocalMemory
+                    with DB_LOCK, MEMORY_LOCK:
+                        result = restore_backup(
+                            DATA_HOME, source, password, confirmation=confirmation,
+                        )
+                        COORDINATOR.memory = LocalMemory(DATA_HOME / "memory.sqlite3")
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+                self.send_json({
+                    **result,
+                    "notice": "Backup restored and encrypted memory reloaded. Close and reopen BabyMind before continuing.",
                 })
             elif path == "/api/conversations":
                 conversation_id = secrets.token_urlsafe(12)

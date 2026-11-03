@@ -313,6 +313,32 @@ async function init() {
   $("#removeAttachment").addEventListener("click",()=>{state.attachment=null;renderAttachment();});
   $("#exportButton").addEventListener("click",exportConversation);
   $("#settingsButton").addEventListener("click",()=>setView("settings"));
+  $("#createBackup").addEventListener("click",async()=>{
+    const path=$("#backupPath").value.trim(),password=$("#backupPassword").value;
+    if(!path||!password){toast("Enter a backup path and password.");return;}
+    if(password.length<12){toast("Use a backup password with at least 12 characters.");return;}
+    if(!confirm("Create an encrypted backup at this path? Keep the password safe. Windows DPAPI-protected backups can only be restored by the same Windows user on this device."))return;
+    const button=$("#createBackup");button.disabled=true;$("#backupStatus").textContent="Creating and verifying encrypted backup…";
+    try{
+      const result=await api("/api/backup/export",{method:"POST",body:JSON.stringify({path,password})});
+      $("#backupStatus").textContent=result.notice+" File: "+result.path;
+      toast("Encrypted BabyMind backup created");
+    }catch(error){$("#backupStatus").textContent=error.message;toast(error.message);}
+    finally{button.disabled=false;}
+  });
+  $("#restoreBackup").addEventListener("click",async()=>{
+    const path=$("#backupPath").value.trim(),password=$("#backupPassword").value,confirmation=$("#restoreConfirmation").value.trim();
+    if(!path||!password){toast("Enter the backup path and its password.");return;}
+    if(confirmation!=="RESTORE BABYMIND"){toast("Type RESTORE BABYMIND to confirm.");return;}
+    if(!confirm("This replaces BabyMind's current conversations, tasks and memories with the selected backup. Make a backup of the current data first. Continue?"))return;
+    const button=$("#restoreBackup");button.disabled=true;$("#backupStatus").textContent="Authenticating and validating backup before restore…";
+    try{
+      const result=await api("/api/backup/restore",{method:"POST",body:JSON.stringify({path,password,confirmation})});
+      $("#backupStatus").textContent=result.notice;
+      toast("Backup restored. Restart BabyMind before continuing.");
+    }catch(error){$("#backupStatus").textContent=error.message;toast(error.message);}
+    finally{button.disabled=false;}
+  });
   $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories`);loadMemory();}catch(error){toast(error.message);}});
   $("#openSidebar").addEventListener("click",()=>$("#sidebar").classList.add("open"));
   $("#closeSidebar").addEventListener("click",()=>$("#sidebar").classList.remove("open"));

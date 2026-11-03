@@ -208,6 +208,24 @@ model is reported as a warning so you can start LM Studio and run the command
 again. A missing memory key is a failure: do not delete or replace it.
 
 
+## Encrypted backup and restore
+
+Open **Settings → Encrypted backup** to create a password-protected `.bmbak`
+file or restore one. BabyMind snapshots its encrypted conversation/task
+database and encrypted memory database without exporting plaintext chat or
+memory. The archive is authenticated with AES-256-GCM and a key derived from
+your backup password using scrypt. Use a strong password of at least 12
+characters and keep it separately; BabyMind cannot recover a forgotten
+password.
+
+On Windows, the database encryption keys are protected by DPAPI and remain
+bound to the same Windows user on the same computer. This backup is intended
+for disaster recovery on that installation, not migration to another device
+or Windows account. Restoring replaces the current local databases, requires
+typing `RESTORE BABYMIND`, validates the archive, database integrity and
+encryption keys before replacing files, and should be followed by restarting
+BabyMind. Keep a separate copy of the backup outside `~/.babymind/`.
+
 ## Integrated capabilities
 
 Open **Settings → Connected tools** in BabyMind. These are product capabilities routed through the same BabyMind coordinator, identity, local model and encrypted conversation history; they are not separate assistants.
