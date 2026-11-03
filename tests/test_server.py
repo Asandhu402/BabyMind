@@ -102,6 +102,21 @@ class BabyMindWebTests(unittest.TestCase):
             self.assertEqual(status, 400)
             self.assertIn(b"explicitly", body.lower())
 
+    def test_integration_exchanges_are_saved_in_encrypted_conversation_history(self) -> None:
+        conversation_id = server.persist_integration_exchange(
+            "", "Analyze local document: report.pdf", "This is the summary."
+        )
+        status, _, body = self.request("/api/conversations/" + conversation_id)
+        self.assertEqual(status, 200)
+        messages = json.loads(body)
+        self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
+        self.assertEqual(messages[-1]["content"], "This is the summary.")
+        with server.db() as connection:
+            rows = connection.execute(
+                "SELECT content FROM messages WHERE conversation_id=?", (conversation_id,)
+            ).fetchall()
+        self.assertTrue(all(row["content"].startswith("bmenc:v1:") for row in rows))
+
     def test_task_queue_create_and_lifecycle(self) -> None:
         status, _, body = self.request("/api/tasks", {
             "title": "Prepare project plan", "details": "Draft steps only"
