@@ -28,10 +28,9 @@ async def run_browser_task(
         raise ValueError("Browser task must contain 1–4,000 characters.")
     if not base_url.startswith(("http://127.0.0.1:", "http://localhost:")):
         raise ValueError("Browser Use model endpoint must be local to this computer.")
-    if os.getenv("BABYMIND_BROWSER_AUTOMATION_ENABLED", "").lower() != "true":
+    if os.getenv("BABYMIND_BROWSER_AUTOMATION_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
         raise PermissionError(
-            "Browser automation is disabled. Set BABYMIND_BROWSER_AUTOMATION_ENABLED=true "
-            "after reviewing the integration safety notes."
+            "Browser automation is disabled by BABYMIND_BROWSER_AUTOMATION_ENABLED."
         )
 
     try:
