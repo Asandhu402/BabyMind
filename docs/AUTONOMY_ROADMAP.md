@@ -17,7 +17,7 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Provide queued, active, paused, completed, cancelled, and terminated states.
 - Enforce valid state transitions on the server; the browser cannot set arbitrary statuses.
 - Provide Start, Pause, Resume, Complete, Cancel, and Terminate controls.
-- This phase is a task tracker only. It does not execute commands, read or write files, browse pages, or perform external side effects.
+- The task tracker remains separate from execution. Phase 2B now supports an approval-gated, read-only directory listing inside a configured workspace; it does not read file contents, write files, run commands, browse pages, or perform external side effects.
 
 ## Phase 2B — controlled task execution (not yet implemented)
 
@@ -26,7 +26,7 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Require confirmation before overwriting/deleting files, installing software, sending messages, spending money, or changing accounts.
 - Provide pause, resume, cancel, and terminate controls; log each action and its result.
 
-## Phase 3 — reviewed code changes
+### Phase 2B.1 — approval-gated read-only listing (implemented foundation)\n\n- Set `BABYMIND_WORKSPACE_ROOT` to an existing folder on the BabyMind computer.\n- Start a task, request a `list_directory` proposal for a relative subfolder, review its target and SHA-256 proposal fingerprint, then explicitly approve that exact fingerprint.\n- The server revalidates the path at execution time, rejects absolute paths and parent traversal, and lists at most 200 entry names/types. It never opens file contents or follows symlinks.\n- This is a narrow API foundation; it is not a general-purpose executor and does not yet provide a complete graphical proposal/approval experience.\n\n## Phase 3 — reviewed code changes
 
 - Restrict code-editing to a user-selected project folder.
 - Generate diffs first; never silently replace files.

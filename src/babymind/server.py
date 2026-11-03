@@ -73,6 +73,14 @@ def init_db() -> None:
             )
         """)
         connection.execute("""
+            CREATE TABLE IF NOT EXISTS execution_proposals (
+                id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+                action TEXT NOT NULL, payload TEXT NOT NULL, proposal_hash TEXT NOT NULL,
+                status TEXT NOT NULL, result TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )
+        """)
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -219,6 +227,17 @@ class Handler(BaseHTTPRequestHandler):
                 **dict(row), "title": secure.decrypt(row["title"]),
                 "details": secure.decrypt(row["details"])
             } for row in rows])
+        elif path == "/api/proposals":
+            with db() as connection:
+                rows = connection.execute(
+                    "SELECT id, task_id, action, payload, proposal_hash, status, result, created_at, updated_at "
+                    "FROM execution_proposals ORDER BY created_at DESC LIMIT 100"
+                ).fetchall()
+            secure = text_store()
+            self.send_json([{
+                **dict(row), "payload": json.loads(secure.decrypt(row["payload"])),
+                "result": secure.decrypt(row["result"]) if row["result"] else ""
+            } for row in rows])
         elif path == "/":
             self.serve_file("index.html")
         elif path.startswith("/assets/"):
@@ -332,6 +351,73 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({
                     **dict(updated), "title": secure.decrypt(updated["title"]),
                     "details": secure.decrypt(updated["details"])
+                })
+            elif path.startswith("/api/tasks/") and path.endswith("/propose"):
+                from .approval import build_readonly_proposal
+                parts = path.strip("/").split("/")
+                if len(parts) != 4:
+                    raise ValueError("Invalid proposal path.")
+                task_id = parts[2]
+                with db() as connection:
+                    task_row = connection.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
+                if not task_row:
+                    self.send_json({"error": "Task not found."}, 404)
+                    return
+                if task_row["status"] != "active":
+                    raise ValueError("Start the task before requesting an execution proposal.")
+                proposal = build_readonly_proposal(str(payload.get("relative_path", "")))
+                proposal_id = secrets.token_urlsafe(12)
+                timestamp = now()
+                secure = text_store()
+                with DB_LOCK, db() as connection:
+                    connection.execute(
+                        "INSERT INTO execution_proposals "
+                        "(id, task_id, action, payload, proposal_hash, status, result, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, 'awaiting_approval', '', ?, ?)",
+                        (proposal_id, task_id, proposal["action"],
+                         secure.encrypt(json.dumps(proposal["payload"], ensure_ascii=False)),
+                         proposal["proposal_hash"], timestamp, timestamp)
+                    )
+                self.send_json({
+                    "id": proposal_id, "task_id": task_id, "action": proposal["action"],
+                    "payload": proposal["payload"], "proposal_hash": proposal["proposal_hash"],
+                    "status": "awaiting_approval", "effects": "Read directory names only; no files are opened or changed.",
+                    "created_at": timestamp
+                }, 201)
+            elif path.startswith("/api/proposals/") and path.endswith("/approve"):
+                from .approval import execute_readonly_proposal
+                parts = path.strip("/").split("/")
+                if len(parts) != 4:
+                    raise ValueError("Invalid approval path.")
+                proposal_id = parts[2]
+                supplied_hash = str(payload.get("proposal_hash", ""))
+                with DB_LOCK, db() as connection:
+                    row = connection.execute(
+                        "SELECT * FROM execution_proposals WHERE id=?", (proposal_id,)
+                    ).fetchone()
+                    if not row:
+                        self.send_json({"error": "Proposal not found."}, 404)
+                        return
+                    if row["status"] != "awaiting_approval":
+                        raise ValueError("This proposal is no longer awaiting approval.")
+                    if not secrets.compare_digest(supplied_hash, row["proposal_hash"]):
+                        raise ValueError("Approval does not match the exact proposal shown.")
+                    task_row = connection.execute("SELECT status FROM tasks WHERE id=?", (row["task_id"],)).fetchone()
+                    if not task_row or task_row["status"] != "active":
+                        raise ValueError("The task must remain active to approve this proposal.")
+                    secure = text_store()
+                    proposal_payload = json.loads(secure.decrypt(row["payload"]))
+                    result = execute_readonly_proposal(proposal_payload)
+                    encoded_result = secure.encrypt(json.dumps(result, ensure_ascii=False))
+                    timestamp = now()
+                    connection.execute(
+                        "UPDATE execution_proposals SET status='completed', result=?, updated_at=? "
+                        "WHERE id=? AND status='awaiting_approval'",
+                        (encoded_result, timestamp, proposal_id)
+                    )
+                self.send_json({
+                    "id": proposal_id, "status": "completed", "result": result,
+                    "notice": "Read-only directory listing completed. No files were opened or modified."
                 })
             elif path == "/api/research":
                 query = str(payload.get("query", "")).strip()
