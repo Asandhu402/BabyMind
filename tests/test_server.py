@@ -292,5 +292,61 @@ class BabyMindWebTests(unittest.TestCase):
             self.assertTrue(content_type)
 
 
+    def test_approved_text_file_preview_reads_only_after_matching_approval(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(workspace, "notes.txt").write_text("hello from the workspace", encoding="utf-8")
+            status, _, body = self.request("/api/tasks", {"title": "Preview a note"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": "notes.txt", "action": "read_text_file"},
+            )
+            self.assertEqual(status, 201)
+            proposal = json.loads(body)
+            self.assertEqual(proposal["action"], "read_text_file")
+            self.assertNotIn("hello from the workspace", body.decode("utf-8"))
+
+            status, _, body = self.request("/api/proposals")
+            self.assertEqual(status, 200)
+            pending = json.loads(body)[0]
+            self.assertEqual(pending["status"], "awaiting_approval")
+            self.assertEqual(pending["result"], "")
+            self.assertNotIn("hello from the workspace", body.decode("utf-8"))
+
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve",
+                {"proposal_hash": proposal["proposal_hash"]},
+            )
+            self.assertEqual(status, 200)
+            result = json.loads(body)["result"]
+            self.assertEqual(result["content"], "hello from the workspace")
+            self.assertEqual(result["bytes"], len("hello from the workspace".encode("utf-8")))
+            self.assertEqual(Path(workspace, "notes.txt").read_text(encoding="utf-8"), "hello from the workspace")
+
+    def test_text_file_preview_rejects_unsupported_hidden_and_oversized_files(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(workspace, ".env").write_text("SECRET=value", encoding="utf-8")
+            Path(workspace, "large.txt").write_text("x" * (32 * 1024 + 1), encoding="utf-8")
+            Path(workspace, "image.png").write_bytes(b"not text")
+            from babymind.approval import build_readonly_proposal
+            for name in (".env", "large.txt", "image.png"):
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    build_readonly_proposal(name, action="read_text_file")
+
+    def test_text_file_preview_rejects_parent_traversal_and_symlinks(self) -> None:
+        with TemporaryDirectory() as workspace, TemporaryDirectory() as outside, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(outside, "secret.txt").write_text("outside", encoding="utf-8")
+            try:
+                Path(workspace, "linked.txt").symlink_to(Path(outside, "secret.txt"))
+            except (OSError, NotImplementedError):
+                self.skipTest("Symlink creation is unavailable on this platform.")
+            from babymind.approval import build_readonly_proposal
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("../secret.txt", action="read_text_file")
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("linked.txt", action="read_text_file")
+
+
 if __name__ == "__main__":
     unittest.main()

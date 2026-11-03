@@ -57,13 +57,16 @@
         try {
           const result = typeof item.result === "string" ? JSON.parse(item.result) : item.result;
           const entries = Array.isArray(result.entries) ? result.entries : [];
-          resultHTML = `<div class="approval-result"><strong>Directory listing result</strong><ul>${entries.map(entry => `<li>${escapeHTML(entry.name)} <span>· ${escapeHTML(entry.type)}</span></li>`).join("") || "<li>Folder is empty.</li>"}</ul>${result.truncated ? "<p>Only the first 200 entries are shown.</p>" : ""}</div>`;
+          resultHTML = item.action === "read_text_file"
+            ? `<div class="approval-result"><strong>Text preview · ${escapeHTML(result.bytes)} bytes</strong><pre class="approval-file-preview">${escapeHTML(result.content)}</pre></div>`
+            : `<div class="approval-result"><strong>Directory listing result</strong><ul>${entries.map(entry => `<li>${escapeHTML(entry.name)} <span>· ${escapeHTML(entry.type)}</span></li>`).join("") || "<li>Folder is empty.</li>"}</ul>${result.truncated ? "<p>Only the first 200 entries are shown.</p>" : ""}</div>`;
         } catch { resultHTML = '<div class="approval-result">Completed. Result could not be displayed.</div>'; }
       }
       const approve = item.status === "awaiting_approval"
         ? `<div class="approval-actions"><button class="approval-approve" data-approve="${escapeHTML(item.id)}" ${state.busy ? "disabled" : ""}>Approve this exact action</button></div>`
         : "";
-      return `<article class="approval-card"><div class="approval-card-head"><div><span class="approval-status ${item.status === "completed" ? "completed" : ""}">${escapeHTML(item.status.replaceAll("_"," "))}</span><h3>List folder contents</h3><p>Workspace path: <strong>${escapeHTML(target)}</strong></p></div><small>${escapeHTML(new Date(item.created_at).toLocaleString())}</small></div><p>Effect: Read names and basic item types only. No file contents are opened or modified.</p><div class="approval-meta"><span>Task: ${escapeHTML(item.task_id)}</span><span>Action: ${escapeHTML(item.action)}</span></div><div class="approval-hash">Proposal fingerprint: ${escapeHTML(item.proposal_hash)}</div>${approve}${resultHTML}</article>`;
+      const isFileRead = item.action === "read_text_file";
+      return `<article class="approval-card"><div class="approval-card-head"><div><span class="approval-status ${item.status === "completed" ? "completed" : ""}">${escapeHTML(item.status.replaceAll("_"," "))}</span><h3>${isFileRead ? "Preview text file" : "List folder contents"}</h3><p>Workspace path: <strong>${escapeHTML(target)}</strong></p></div><small>${escapeHTML(new Date(item.created_at).toLocaleString())}</small></div><p>Effect: ${isFileRead ? "Read up to 32 KB of UTF-8 text after approval. The preview may contain sensitive information." : "Read names and basic item types only. No file contents are opened or modified."}</p><div class="approval-meta"><span>Task: ${escapeHTML(item.task_id)}</span><span>Action: ${escapeHTML(item.action)}</span></div><div class="approval-hash">Proposal fingerprint: ${escapeHTML(item.proposal_hash)}</div>${approve}${resultHTML}</article>`;
     }).join("");
     $("#approvalList").querySelectorAll("[data-approve]").forEach(button => button.addEventListener("click", () => approve(button.dataset.approve)));
     renderCreateForm(activeTasks);
@@ -81,15 +84,16 @@
       $("#goTasks").addEventListener("click", () => document.querySelector('[data-view="tasks"]')?.click());
       return;
     }
-    form.innerHTML = `<strong>Propose a read-only folder listing</strong><label for="proposalTask">Active task</label><select id="proposalTask">${activeTasks.map(task => `<option value="${escapeHTML(task.id)}">${escapeHTML(task.title)}</option>`).join("")}</select><label for="proposalPath">Folder path inside your configured workspace</label><input id="proposalPath" maxlength="500" value="." placeholder="e.g. projects"><small>Use a relative path. The workspace must be configured with BABYMIND_WORKSPACE_ROOT on your PC.</small><button class="task-primary" type="submit" ${state.busy ? "disabled" : ""}>＋ Create proposal for review</button>`;
+    form.innerHTML = `<strong>Create a read-only proposal</strong><label for="proposalTask">Active task</label><select id="proposalTask">${activeTasks.map(task => `<option value="${escapeHTML(task.id)}">${escapeHTML(task.title)}</option>`).join("")}</select><label for="proposalAction">Action</label><select id="proposalAction"><option value="list_directory">List folder names and types</option><option value="read_text_file">Preview a text file (max 32 KB)</option></select><label for="proposalPath">Relative path inside your configured workspace</label><input id="proposalPath" maxlength="500" value="." placeholder="e.g. projects or notes.txt"><small>Use a relative path. Hidden paths and symbolic links are blocked. Text preview supports selected UTF-8 formats only and may expose sensitive content after approval.</small><button class="task-primary" type="submit" ${state.busy ? "disabled" : ""}>＋ Create proposal for review</button>`;
     form.onsubmit = async event => {
       event.preventDefault();
       if (state.busy) return;
       const taskId = $("#proposalTask").value;
       const relativePath = $("#proposalPath").value.trim();
+      const action = $("#proposalAction").value;
       state.busy = true;
       try {
-        await api(`/api/tasks/${encodeURIComponent(taskId)}/propose`, {method:"POST", body:JSON.stringify({relative_path:relativePath})});
+        await api(`/api/tasks/${encodeURIComponent(taskId)}/propose`, {method:"POST", body:JSON.stringify({relative_path:relativePath, action})});
         toast("Proposal created. Review it below before approving.");
         await load();
       } catch (error) { toast(error.message); }
@@ -100,11 +104,15 @@
     const item = state.proposals.find(proposal => proposal.id === id);
     if (!item || item.status !== "awaiting_approval" || state.busy) return;
     const target = item.payload?.relative_path || ".";
-    if (!confirm(`Approve this exact read-only action?\n\nList names and types in workspace folder: ${target}\n\nNo files will be opened or changed.`)) return;
+    const isFileRead = item.action === "read_text_file";
+    const confirmation = isFileRead
+      ? `Approve reading up to 32 KB of UTF-8 text from this exact workspace file?\n\n${target}\n\nThe contents may be sensitive and will be shown in BabyMind. No file will be modified.`
+      : `Approve this exact read-only action?\n\nList names and types in workspace folder: ${target}\n\nNo files will be opened or changed.`;
+    if (!confirm(confirmation)) return;
     state.busy = true;
     try {
       await api(`/api/proposals/${encodeURIComponent(id)}/approve`, {method:"POST", body:JSON.stringify({proposal_hash:item.proposal_hash})});
-      toast("Approved. The read-only listing is complete.");
+      toast(isFileRead ? "Approved. Text preview complete." : "Approved. The read-only listing is complete.");
       await load();
     } catch (error) { toast(error.message); }
     finally { state.busy = false; }

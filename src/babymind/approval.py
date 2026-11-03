@@ -1,14 +1,17 @@
-"""Approval-gated, read-only local workspace actions.
-
-Only directory listings are supported in this first execution increment.
-No shell, file reads, writes, deletes, network access, or arbitrary commands.
-"""
+"""Approval-gated, read-only local workspace actions."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
 from pathlib import Path
+
+MAX_TEXT_FILE_BYTES = 32 * 1024
+ALLOWED_TEXT_SUFFIXES = {
+    ".txt", ".md", ".markdown", ".csv", ".json", ".jsonl", ".xml",
+    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".log", ".py", ".js",
+    ".ts", ".html", ".css", ".sql", ".sh", ".ps1"
+}
 
 
 def _workspace_root() -> Path:
@@ -21,39 +24,93 @@ def _workspace_root() -> Path:
     return root
 
 
-def _safe_target(relative_path: str) -> tuple[Path, Path]:
-    if len(relative_path) > 500 or "\x00" in relative_path:
+def _relative_path(relative_path: str) -> tuple[Path, Path, Path]:
+    if not isinstance(relative_path, str) or len(relative_path) > 500 or "\x00" in relative_path:
         raise ValueError("Workspace path is invalid or too long.")
-    candidate_part = Path(relative_path or ".")
-    if candidate_part.is_absolute() or any(part == ".." for part in candidate_part.parts):
+    part = Path(relative_path or ".")
+    if part.is_absolute() or any(piece == ".." for piece in part.parts):
         raise ValueError("Use a relative path inside the selected workspace; parent traversal is not allowed.")
     root = _workspace_root()
-    target = (root / candidate_part).resolve(strict=True)
-    if not target.is_dir() or not target.is_relative_to(root):
+    candidate = root / part
+    current = root
+    for piece in part.parts:
+        if piece in {"", "."}:
+            continue
+        if piece.startswith("."):
+            raise ValueError("Hidden workspace paths are not supported.")
+        current = current / piece
+        if current.is_symlink():
+            raise ValueError("Symbolic links are not supported in approved workspace actions.")
+    target = candidate.resolve(strict=True)
+    if not target.is_relative_to(root):
+        raise ValueError("The selected path must remain inside the configured workspace.")
+    return root, candidate, target
+
+
+def _safe_directory(relative_path: str) -> tuple[Path, Path]:
+    root, _, target = _relative_path(relative_path)
+    if not target.is_dir():
         raise ValueError("The selected path must be an existing directory inside the workspace.")
     return root, target
 
 
-def build_readonly_proposal(relative_path: str) -> dict:
-    root, target = _safe_target(relative_path.strip())
-    payload = {"relative_path": target.relative_to(root).as_posix() or "."}
-    canonical = json.dumps({"action": "list_directory", "payload": payload}, sort_keys=True, separators=(",", ":"))
+def _safe_text_file(relative_path: str) -> tuple[Path, Path]:
+    root, _, target = _relative_path(relative_path)
+    if not target.is_file():
+        raise ValueError("Choose an existing regular text file inside the workspace.")
+    if target.suffix.lower() not in ALLOWED_TEXT_SUFFIXES:
+        raise ValueError("This file type is not supported for preview.")
+    if target.stat().st_size > MAX_TEXT_FILE_BYTES:
+        raise ValueError("Text-file previews are limited to 32 KB.")
+    return root, target
+
+
+def build_readonly_proposal(relative_path: str, action: str = "list_directory") -> dict:
+    if action == "list_directory":
+        root, target = _safe_directory(relative_path.strip())
+    elif action == "read_text_file":
+        root, target = _safe_text_file(relative_path.strip())
+    else:
+        raise ValueError("Unsupported read-only action.")
+    relative = target.relative_to(root).as_posix() or "."
+    payload = {"relative_path": relative}
+    canonical = json.dumps({"action": action, "payload": payload}, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return {
-        "action": "list_directory",
+        "action": action,
         "payload": payload,
         "proposal_hash": digest,
-        "display_target": payload["relative_path"]
+        "display_target": relative,
+        "max_bytes": MAX_TEXT_FILE_BYTES if action == "read_text_file" else None,
     }
 
 
-def execute_readonly_proposal(payload: dict) -> dict:
-    if set(payload) != {"relative_path"} or not isinstance(payload["relative_path"], str):
+def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> dict:
+    if not isinstance(payload, dict) or set(payload) != {"relative_path"} or not isinstance(payload["relative_path"], str):
         raise ValueError("Unsupported or malformed approved action.")
-    root, target = _safe_target(payload["relative_path"])
+    if action == "read_text_file":
+        root, target = _safe_text_file(payload["relative_path"])
+        with target.open("rb") as handle:
+            raw = handle.read(MAX_TEXT_FILE_BYTES + 1)
+        if len(raw) > MAX_TEXT_FILE_BYTES:
+            raise ValueError("Text-file previews are limited to 32 KB.")
+        if b"\x00" in raw:
+            raise ValueError("The selected file does not appear to be plain text.")
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("Only valid UTF-8 text files can be previewed.") from error
+        return {
+            "relative_path": target.relative_to(root).as_posix(),
+            "content": content,
+            "bytes": len(raw),
+        }
+    if action != "list_directory":
+        raise ValueError("Unsupported or malformed approved action.")
+    root, target = _safe_directory(payload["relative_path"])
+    items = sorted(target.iterdir(), key=lambda entry: entry.name.casefold())
     entries = []
-    for item in sorted(target.iterdir(), key=lambda entry: entry.name.casefold())[:200]:
-        # Names and basic types only; do not follow symlinks or read file contents.
+    for item in items[:200]:
         entries.append({
             "name": item.name[:255],
             "type": "directory" if item.is_dir() and not item.is_symlink() else
@@ -62,5 +119,5 @@ def execute_readonly_proposal(payload: dict) -> dict:
     return {
         "relative_path": target.relative_to(root).as_posix() or ".",
         "entries": entries,
-        "truncated": len(list(target.iterdir())) > 200
+        "truncated": len(items) > 200
     }
