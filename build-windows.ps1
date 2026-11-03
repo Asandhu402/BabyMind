@@ -15,6 +15,10 @@ Copy-Item -Path (Join-Path $PSScriptRoot "dist\BabyMindTestRunner\*") -Destinati
 if (-not (Test-Path (Join-Path $testRunnerTarget "BabyMindTestRunner.exe"))) {
     throw "Could not stage the approved project test runner."
 }
+& (Join-Path $testRunnerTarget "BabyMindTestRunner.exe") --project-root $PSScriptRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "The packaged project test runner failed its self-test."
+}
 
 # Bundle the official llama.cpp Windows CPU runtime. The GGUF model is
 # downloaded and checksum-verified by BabyMind on first launch.
