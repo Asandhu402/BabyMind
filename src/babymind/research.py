@@ -123,7 +123,8 @@ def _validate_public_url(url: str) -> None:
         raise ValueError("Only public HTTP or HTTPS web pages can be read.")
     if parsed.username or parsed.password:
         raise ValueError("URLs containing embedded credentials are not allowed.")
-    if parsed.port not in {None, 80, 443}:
+    expected_port = 443 if parsed.scheme == "https" else 80
+    if parsed.port not in {None, expected_port}:
         raise ValueError("Only standard HTTP and HTTPS ports can be accessed.")
     host = parsed.hostname.rstrip(".").lower()
     if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
