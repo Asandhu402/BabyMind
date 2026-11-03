@@ -4,12 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import signal
-import subprocess
-import sys
 import tempfile
-import threading
-from collections import deque
 from pathlib import Path
 
 MAX_TEXT_FILE_BYTES = 32 * 1024
@@ -117,121 +112,6 @@ def _safe_new_text_file(relative_path: str, content: str) -> tuple[Path, Path, s
 
 
 
-MAX_TEST_RUNTIME_SECONDS = 90
-MAX_TEST_OUTPUT_CHARS = 20_000
-
-
-def _run_project_tests(project_root: Path) -> dict:
-    """Run fixed unittest discovery; drain output while retaining only its bounded tail.
-
-    Project tests are arbitrary user code and are not sandboxed.
-    """
-    project_root = Path(project_root).resolve(strict=True)
-    tests_dir = project_root / "tests"
-    if tests_dir.is_symlink() or not tests_dir.is_dir():
-        raise ValueError("The selected project must contain an existing, non-symlink tests folder.")
-    if not tests_dir.resolve(strict=True).is_relative_to(project_root):
-        raise ValueError("The tests folder must remain inside the selected project.")
-    if getattr(sys, "frozen", False):
-        runner = Path(sys.executable).resolve().parent / "tools" / "BabyMindTestRunner" / "BabyMindTestRunner.exe"
-        if not runner.is_file():
-            raise ValueError("The packaged project test runner is missing. Reinstall the complete BabyMind package.")
-        command = [str(runner), "--project-root", str(project_root)]
-    else:
-        command = [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"]
-    allowed_environment = {
-        "PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE",
-        "HOME", "LANG", "LC_ALL"
-    }
-    environment = {key: value for key, value in os.environ.items() if key.upper() in allowed_environment}
-    import_paths = [str(project_root)]
-    source_dir = project_root / "src"
-    if source_dir.is_dir():
-        import_paths.insert(0, str(source_dir))
-    environment["PYTHONPATH"] = os.pathsep.join(import_paths)
-    environment["PYTHONIOENCODING"] = "utf-8"
-    options = {
-        "cwd": project_root,
-        "stdout": subprocess.PIPE,
-        "stderr": subprocess.STDOUT,
-        "text": True,
-        "encoding": "utf-8",
-        "errors": "replace",
-        "env": environment,
-    }
-    if os.name == "nt":
-        options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-    else:
-        options["start_new_session"] = True
-
-    process = subprocess.Popen(command, **options)
-    output_chunks = deque()
-    output_chars = 0
-    output_truncated = False
-    output_lock = threading.Lock()
-
-    def drain_output() -> None:
-        nonlocal output_chars, output_truncated
-        try:
-            while True:
-                chunk = process.stdout.read(4096)
-                if not chunk:
-                    break
-                with output_lock:
-                    output_chunks.append(chunk)
-                    output_chars += len(chunk)
-                    while output_chars > MAX_TEST_OUTPUT_CHARS:
-                        excess = output_chars - MAX_TEST_OUTPUT_CHARS
-                        first = output_chunks[0]
-                        if len(first) <= excess:
-                            output_chunks.popleft()
-                            output_chars -= len(first)
-                        else:
-                            output_chunks[0] = first[excess:]
-                            output_chars -= excess
-                        output_truncated = True
-        finally:
-            process.stdout.close()
-
-    reader = threading.Thread(target=drain_output, name="babymind-test-output", daemon=True)
-    reader.start()
-    timed_out = False
-    try:
-        process.wait(timeout=MAX_TEST_RUNTIME_SECONDS)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        if os.name == "nt":
-            try:
-                killed = subprocess.run(
-                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                    capture_output=True, timeout=5, check=False,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-                if killed.returncode != 0 and process.poll() is None:
-                    process.kill()
-            except Exception:
-                if process.poll() is None:
-                    process.kill()
-        else:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        process.wait()
-    reader.join()
-    with output_lock:
-        output = "".join(output_chunks)
-        truncated = output_truncated
-    return {
-        "exit_code": process.returncode,
-        "success": process.returncode == 0 and not timed_out,
-        "timed_out": timed_out,
-        "runtime_limit_seconds": MAX_TEST_RUNTIME_SECONDS,
-        "output": output,
-        "output_truncated": truncated,
-    }
-
-
 def build_readonly_proposal(
     relative_path: str, action: str = "list_directory", name_contains: str = "",
     content: str = ""
@@ -267,13 +147,7 @@ def build_readonly_proposal(
             "original_content": original_text,
             "content": content,
         }
-    elif action == "run_tests":
-        root, target = _safe_directory(relative_path.strip())
-        tests_dir = target / "tests"
-        if tests_dir.is_symlink() or not tests_dir.is_dir() or not tests_dir.resolve(strict=True).is_relative_to(target):
-            raise ValueError("Choose a project folder with an existing tests subfolder inside it.")
-        relative = target.relative_to(root).as_posix() or "."
-        payload = {"relative_path": relative}
+
     elif action == "find_files":
         root, target = _safe_directory(relative_path.strip())
         query = name_contains.strip()
@@ -345,15 +219,8 @@ def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> 
                 "new_sha256": hashlib.sha256(new_content).hexdigest(),
                 "bytes": len(new_content)}
     if action == "run_tests":
-        if not isinstance(payload, dict) or set(payload) != {"relative_path"} or not isinstance(payload["relative_path"], str):
-            raise ValueError("Unsupported or malformed approved action.")
-        root, target = _safe_directory(payload["relative_path"])
-        result = _run_project_tests(target)
-        result.update({
-            "project_path": target.relative_to(root).as_posix() or ".",
-            "notice": "Fixed Python unittest discovery completed. Test code was executed with the current user's permissions and was not sandboxed."
-        })
-        return result
+        raise ValueError("Project test execution is disabled until a real sandbox is available.")
+
     if action == "create_text_file":
         if (not isinstance(payload, dict) or set(payload) != {"relative_path", "content"}
                 or not isinstance(payload["relative_path"], str)
