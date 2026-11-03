@@ -223,21 +223,16 @@ def prepare_local_engine() -> None:
             "BabyMind Windows package again; do not move only BabyMind.exe."
         )
 
-    configured_model = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
+    # BabyMind always uses the single bundled, SHA-256-pinned model.
+    # The environment variable may relocate that exact file for packaging/tests,
+    # but _ensure_model verifies its contents and replaces mismatches safely.
+    configured_path = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
     model_path = (
-        Path(configured_model).expanduser()
-        if configured_model
+        Path(configured_path).expanduser()
+        if configured_path
         else _data_home() / "models" / MODEL_FILENAME
     )
-    if configured_model:
-        # A user-selected alternative model is not the bundled, pinned file.
-        # Never delete or overwrite it based on the bundled model's checksum.
-        if not model_path.is_file() or model_path.suffix.lower() != ".gguf":
-            raise RuntimeError(
-                "BABYMIND_GGUF_MODEL must point to an existing user-selected .gguf file."
-            )
-    else:
-        _ensure_model(model_path)
+    _ensure_model(model_path)
 
     os.environ["BABYMIND_ENGINE"] = "llama.cpp"
     os.environ["BABYMIND_LLAMA_SERVER"] = str(server)
