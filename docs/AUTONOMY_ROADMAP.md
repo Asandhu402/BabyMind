@@ -34,7 +34,7 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Provide a local search field for saved memories.
 - Do not generate embeddings, call a second model, or send memory content to a cloud service.
 
-## Phase 2B — controlled task execution (not yet implemented)
+## Phase 2B — controlled task execution (in progress)
 
 - Add a visible task queue with explicit user approval before external side effects.
 - Start with reversible, local actions (read files in a user-selected workspace, create draft files, run tests).
@@ -62,6 +62,13 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Bind the proposal to the original file SHA-256 and exact proposed content.
 - At approval, verify the original file is unchanged and replace it atomically; stale proposals are refused.
 - This does not support binary files, arbitrary paths, or silent edits.
+
+### Phase 2B.4 — approval-gated project test runs (implemented foundation)
+
+- Run only fixed Python unittest discovery in a selected project folder containing a non-symlink `tests` directory.
+- Require exact proposal approval, with a 90-second runtime limit and captured output capped at 20,000 characters.
+- Do not accept model-generated shell commands or arguments; do not use a shell.
+- Project tests are arbitrary code and are not sandboxed. They run with the current user's permissions and can access resources available to that user. The approval screen warns users to run only trusted projects.
 
 ## Phase 3 — reviewed code changes
 
