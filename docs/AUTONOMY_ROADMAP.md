@@ -26,7 +26,14 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Require confirmation before overwriting/deleting files, installing software, sending messages, spending money, or changing accounts.
 - Provide pause, resume, cancel, and terminate controls; log each action and its result.
 
-### Phase 2B.1 — approval-gated read-only listing (implemented foundation)\n\n- Set `BABYMIND_WORKSPACE_ROOT` to an existing folder on the BabyMind computer.\n- Start a task, request a `list_directory` proposal for a relative subfolder, review its target and SHA-256 proposal fingerprint, then explicitly approve that exact fingerprint.\n- The server revalidates the path at execution time, rejects absolute paths and parent traversal, and lists at most 200 entry names/types. It never opens file contents or follows symlinks.\n- This is a narrow API foundation; it is not a general-purpose executor and does not yet provide a complete graphical proposal/approval experience.\n\n## Phase 3 — reviewed code changes
+### Phase 2B.1 — approval-gated read-only listing (implemented foundation)\n\n- Set `BABYMIND_WORKSPACE_ROOT` to an existing folder on the BabyMind computer.\n- Start a task, request a `list_directory` proposal for a relative subfolder, review its target and SHA-256 proposal fingerprint, then explicitly approve that exact fingerprint.\n- The server revalidates the path at execution time, rejects absolute paths and parent traversal, and lists at most 200 entry names/types. It never opens file contents or follows symlinks.\n- This is a narrow API foundation; it is not a general-purpose executor and does not yet provide a complete graphical proposal/approval experience.\n\n### Phase 2B.2 — approval-gated new text files (implemented foundation)
+
+- Create a new allowlisted UTF-8 text file up to 32 KB inside an existing workspace folder.
+- Keep proposed content encrypted in the local proposal store until approval.
+- Require approval of the exact SHA-256 proposal. Revalidate the target and use exclusive file creation so a file added after review is never overwritten.
+- No edits, deletes, shell commands, or arbitrary file types are supported.
+
+## Phase 3 — reviewed code changes
 
 - Restrict code-editing to a user-selected project folder.
 - Generate diffs first; never silently replace files.
