@@ -223,8 +223,15 @@ async function loadIntegrations(){
 }
 async function runCoreTool(endpoint,payload,label){
   try{
+    payload.conversation_id=state.conversationId||"";
     const result=await api(endpoint,{method:"POST",body:JSON.stringify(payload)});
     setView("chat");
+    if(result.conversation_id){
+      state.conversationId=result.conversation_id;
+      $("#exportButton").disabled=false;
+      if(result.user_message)addMessage("user",result.user_message);
+      await loadConversations();
+    }
     addMessage("assistant",result.response||result.result||result.notice||"The integration completed.", "BabyMind · "+label);
     if(result.transcript?.text)addMessage("assistant","**Transcript**\n\n"+result.transcript.text,"BabyMind · Voice transcript");
     toast(label+" completed");
