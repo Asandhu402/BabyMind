@@ -553,5 +553,17 @@ class BabyMindWebTests(unittest.TestCase):
                 self.assertEqual(status, 400)
 
 
+    def test_memory_search_api_uses_local_relevance_results(self) -> None:
+        expected = [{
+            "created_at": "2026-11-01T00:00:00+00:00", "agent_id": "BM-01",
+            "task": "Vancouver Class 1 trucking jobs", "response": "Compare local wages."
+        }]
+        with patch.object(server.COORDINATOR.memory, "relevant", return_value=expected) as search:
+            status, _, body = self.request("/api/memory/search", {"query": "Vancouver trucking", "limit": 5})
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), expected)
+        search.assert_called_once_with("Vancouver trucking", limit=5)
+
+
 if __name__ == "__main__":
     unittest.main()
