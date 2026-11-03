@@ -571,6 +571,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except ProviderError as error:
             self.send_json({"error": str(error), "kind": "model_unavailable"}, 503)
+        except RuntimeError as error:
+            self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except Exception as error:
             self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
 
