@@ -21,7 +21,7 @@ jobs:
         shell: pwsh
         run: ./build-windows.ps1
       - name: Run unit tests on Windows (including DPAPI)
-        run: py -m unittest discover -s tests -v
+        run: python -m unittest discover -s tests -v
       - name: Upload portable application
         uses: actions/upload-artifact@v4
         with:
