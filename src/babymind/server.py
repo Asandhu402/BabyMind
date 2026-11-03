@@ -106,6 +106,46 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def persist_integration_exchange(
+    conversation_id: str, user_content: str, assistant_content: str, agent_id: str = "BM-01"
+) -> str:
+    """Persist a completed local-tool exchange in the same encrypted chat history."""
+    clean_user = user_content.strip()
+    clean_assistant = assistant_content.strip()
+    if not clean_user or not clean_assistant:
+        raise ValueError("Integration exchange content cannot be empty.")
+    timestamp = now()
+    conversation_id = conversation_id.strip()
+    secure = text_store()
+    with DB_LOCK, db() as connection:
+        if not conversation_id:
+            conversation_id = secrets.token_urlsafe(12)
+            title = clean_user[:54] + ("…" if len(clean_user) > 54 else "")
+            connection.execute(
+                "INSERT INTO conversations VALUES (?, ?, ?, ?)",
+                (conversation_id, secure.encrypt(title), timestamp, timestamp),
+            )
+        elif not connection.execute(
+            "SELECT 1 FROM conversations WHERE id=?", (conversation_id,)
+        ).fetchone():
+            raise ValueError("Conversation not found. Start a new conversation.")
+        connection.execute(
+            "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
+            "VALUES (?, 'user', ?, ?, ?)",
+            (conversation_id, secure.encrypt(clean_user), agent_id, timestamp),
+        )
+        connection.execute(
+            "INSERT INTO messages (conversation_id, role, content, agent_id, created_at) "
+            "VALUES (?, 'assistant', ?, ?, ?)",
+            (conversation_id, secure.encrypt(clean_assistant), agent_id, timestamp),
+        )
+        connection.execute(
+            "UPDATE conversations SET updated_at=? WHERE id=?",
+            (timestamp, conversation_id),
+        )
+    return conversation_id
+
+
 def is_loopback_host(host: str) -> bool:
     """Return whether a bind host is a loopback address or localhost."""
     if host.lower() == "localhost":
