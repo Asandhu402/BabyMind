@@ -56,5 +56,39 @@ Use `babymind integrations` to see which optional components are detected. This 
 - No third-party source repositories are copied into BabyMind.
 - No cloud browser, hosted LLM, or paid API fallback is enabled.
 - No unattended browser tasks or background computer control.
-- No persistent vector database or embeddings are added; existing encrypted memory remains the source of personal memory.
+- No vector database is added to the core memory system. Cognee is a separate, opt-in knowledge store and never replaces encrypted BabyMind memory.
 - No write-capable coding agent, workspace file broker, or project test execution is enabled.
+
+
+## Cognee local knowledge graph
+
+Cognee is an optional, explicit knowledge-graph store. Install it with:
+
+    py -m pip install -e ".[knowledge-graph]"
+
+Before starting BabyMind, set:
+
+    $env:BABYMIND_COGNEE_ENABLED = "true"
+
+BabyMind does not automatically copy encrypted memories or conversation history into Cognee. In Settings, paste a note and choose Review and index note. The confirmation dialog is required for each indexing action. Search is read-only. The adapter uses Cognee's GLiNER extraction mode and local embeddings rather than a hosted LLM. It refuses to run when common hosted LLM API-key variables are present. Review Cognee's own storage directory and backup/delete it separately: its graph/vector database is NOT encrypted by BabyMind's AES-GCM SQLite layer. Do not index passwords, tokens, financial identifiers, or other secrets.
+
+## Voicebox speech server
+
+Voicebox is a separate self-hosted HTTP service, not a second model identity. It provides local speech-to-text and text-to-speech using CPU-friendly Piper and faster-whisper defaults. See https://github.com/agjs/voicebox.
+
+Run its Docker image bound to loopback only:
+
+    docker run --rm -p 127.0.0.1:8790:8790 ghcr.io/agjs/voicebox:0.2.16
+
+BabyMind uses http://127.0.0.1:8790 by default. Optional environment variables are BABYMIND_VOICEBOX_URL (must remain loopback HTTP) and BABYMIND_VOICEBOX_API_KEY (only when Voicebox authentication is enabled). Settings provides local speech output and an alternative Voicebox transcription path. Voicebox is optional and does not replace the existing faster-whisper adapter. On an integrated-graphics laptop, start with CPU Piper and the small/distilled STT model; avoid running multiple large speech/model workloads concurrently. Docker Desktop and downloaded speech models consume additional disk and RAM.
+
+## Promptfoo local quality tests
+
+Promptfoo is a developer-only evaluation tool, not a runtime dependency. See quality/README.md. The checked-in provider calls only BabyMind's loopback chat API. The smoke suite uses simple local assertions and does not configure a hosted grader. Do not enable Promptfoo's default remote red-team generation in a privacy-sensitive run; configure a local attacker and grader explicitly before adding red-team workflows.
+
+## Data boundaries
+
+- Existing BabyMind memory remains the encrypted source of personal memory.
+- Cognee is a separate optional knowledge store; only individually approved notes are sent to it, and its local data is not encrypted by BabyMind.
+- Voicebox audio stays on the local Voicebox service; BabyMind accepts only loopback service URLs and does not call hosted speech APIs.
+- Promptfoo evaluation calls the local BabyMind server; the default test configuration has no cloud provider or model-based grader.

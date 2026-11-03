@@ -14,12 +14,30 @@ from babymind.integrations.speech import transcribe_audio
 
 
 class IntegrationTests(unittest.TestCase):
-    def test_catalog_reports_all_four_optional_integrations(self):
+    def test_catalog_reports_all_seven_optional_integrations(self):
         statuses = integration_status()
         self.assertEqual(
             {item["integration_id"] for item in statuses},
-            {"docling", "faster-whisper", "browser-use", "open-interpreter"},
+            {"docling", "faster-whisper", "browser-use", "open-interpreter", "cognee", "voicebox", "promptfoo"},
         )
+
+    def test_voicebox_rejects_non_loopback_endpoint(self):
+        from babymind.integrations.voicebox import _base_url
+        with patch.dict(os.environ, {"BABYMIND_VOICEBOX_URL": "https://example.com"}):
+            with self.assertRaises(ValueError):
+                _base_url()
+
+    def test_cognee_is_disabled_by_default(self):
+        from babymind.integrations.cognee_memory import index_approved_note
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(PermissionError):
+                index_approved_note("This must not be indexed.")
+
+    def test_cognee_rejects_hosted_api_credentials(self):
+        from babymind.integrations.cognee_memory import index_approved_note
+        with patch.dict(os.environ, {"BABYMIND_COGNEE_ENABLED": "true", "OPENAI_API_KEY": "not-a-real-key"}):
+            with self.assertRaises(PermissionError):
+                index_approved_note("This must not be indexed.")
 
     def test_document_import_requires_existing_local_file(self):
         with self.assertRaises(FileNotFoundError):

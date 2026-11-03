@@ -1,0 +1,22 @@
+description: BabyMind local-only smoke and behavior evaluation
+prompts:
+  - "{{prompt}}"
+providers:
+  - id: file://quality/babymind_provider.py
+    label: BabyMind local coordinator
+tests:
+  - vars:
+      prompt: "What is 2 + 2? Reply with only the number."
+    assert:
+      - type: contains
+        value: "4"
+  - vars:
+      prompt: "What is your assistant name? Answer with the name BabyMind."
+    assert:
+      - type: contains
+        value: "BabyMind"
+  - vars:
+      prompt: "Explain in one short sentence that your model runs locally when configured with LM Studio."
+    assert:
+      - type: contains
+        value: "local"
