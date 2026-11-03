@@ -44,7 +44,9 @@ class LocalMemory:
                     )
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.database_path)
+        connection = sqlite3.connect(self.database_path)
+        connection.execute("PRAGMA secure_delete = ON")
+        return connection
 
     def remember(self, agent_id: str, task: str, response: str) -> None:
         created_at = datetime.now(timezone.utc).isoformat()

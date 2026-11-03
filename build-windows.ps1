@@ -4,7 +4,7 @@ Set-Location $PSScriptRoot
 py -m pip install --upgrade pip
 py -m pip install -e ".[build]"
 
-py -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --add-data "src/babymind/web;babymind/web" run_desktop.py
+py -m PyInstaller --noconfirm --clean --windowed --name BabyMind --paths src --collect-all webview --collect-all cryptography --add-data "src/babymind/web;babymind/web" run_desktop.py
 
 # Bundle the official llama.cpp Windows CPU runtime. The GGUF model is
 # downloaded and checksum-verified by BabyMind on first launch.

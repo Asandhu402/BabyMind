@@ -32,6 +32,19 @@ def _dpapi(data: bytes, *, protect: bool) -> bytes:
 
     crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    blob_ptr = ctypes.POINTER(DATA_BLOB)
+    crypt32.CryptProtectData.argtypes = [
+        blob_ptr, wintypes.LPCWSTR, blob_ptr, ctypes.c_void_p, ctypes.c_void_p,
+        wintypes.DWORD, blob_ptr,
+    ]
+    crypt32.CryptProtectData.restype = wintypes.BOOL
+    crypt32.CryptUnprotectData.argtypes = [
+        blob_ptr, ctypes.POINTER(wintypes.LPWSTR), blob_ptr, ctypes.c_void_p,
+        ctypes.c_void_p, wintypes.DWORD, blob_ptr,
+    ]
+    crypt32.CryptUnprotectData.restype = wintypes.BOOL
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel32.LocalFree.restype = ctypes.c_void_p
 
     source_buffer = ctypes.create_string_buffer(data)
     source = DATA_BLOB(len(data), ctypes.cast(source_buffer, ctypes.POINTER(ctypes.c_byte)))
@@ -50,7 +63,7 @@ def _dpapi(data: bytes, *, protect: bool) -> bytes:
     try:
         return ctypes.string_at(target.pbData, target.cbData)
     finally:
-        kernel32.LocalFree(target.pbData)
+        kernel32.LocalFree(ctypes.cast(target.pbData, ctypes.c_void_p))
 
 
 class SecureTextStore:
