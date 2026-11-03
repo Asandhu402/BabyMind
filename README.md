@@ -184,7 +184,7 @@ Both endpoints remain subject to local/LAN authorization and origin checks.
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, browser automation, or public-internet remote access. Opt-in search-result discovery and bounded text-only page reading are available as described above. The packaged model is an aggressively uncensored community fine-tune, but no
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. Open Interpreter can be launched only in its read-only mode, but its own sandbox must enforce that restriction; BabyMind does not claim an independent OS-level sandbox. There is no unrestricted computer control, unattended background execution, or public-internet remote access. The packaged model is an aggressively uncensored community fine-tune, but no
 model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
@@ -208,9 +208,9 @@ model is reported as a warning so you can start LM Studio and run the command
 again. A missing memory key is a failure: do not delete or replace it.
 
 
-## Optional integrations
+## Core-connected optional integrations
 
-BabyMind can add local document ingestion (Docling), local speech-to-text (faster-whisper), supervised browser automation (Browser Use), and a read-only external coding-agent session (Open Interpreter). These are optional adapters, not separate AI identities or required cloud services.
+Open **Settings → Connected tools** in the BabyMind app. These integrations are connected to the existing coordinator and one selected local model; they do not create separate AI identities or duplicate memory systems. Document analysis (Docling) and audio transcription (faster-whisper) feed extracted text into the same coordinator. Browser Use runs only as a supervised local-browser task after explicit confirmation and the environment gate is enabled. Open Interpreter is an external process launched with its read-only sandbox flag; its native sandbox must enforce that mode.
 
 Install only the capabilities you want:
 
