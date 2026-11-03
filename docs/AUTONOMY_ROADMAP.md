@@ -34,41 +34,27 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Provide a local search field for saved memories.
 - Do not generate embeddings, call a second model, or send memory content to a cloud service.
 
-## Phase 2B — controlled task execution (in progress)
+## Phase 2B — controlled task execution (security-blocked)
 
-- Add a visible task queue with explicit user approval before external side effects.
-- Start with reversible, local actions (read files in a user-selected workspace, create draft files, run tests).
-- Require confirmation before overwriting/deleting files, installing software, sending messages, spending money, or changing accounts.
-- Provide pause, resume, cancel, and terminate controls; log each action and its result.
+- The task queue exists, but it does not currently authorize workspace file access or project-code execution.
+- Workspace listing, filename search, text preview, file creation, and text editing are disabled in the application and API.
+- Project test execution is disabled until a real OS-level sandbox is available.
+- The earlier path-based workspace implementation remains only as legacy helper regression coverage; it is not an enabled product capability.
+- Do not re-enable these features by changing a flag or adding more string/path checks.
 
-### Phase 2B.1 — approval-gated read-only listing (implemented foundation)
+### Required security work before re-enabling workspace file actions
 
-- Set `BABYMIND_WORKSPACE_ROOT` to an existing folder on the BabyMind computer.
-- Start a task, request a `list_directory` proposal for a relative subfolder, review its target and SHA-256 proposal fingerprint, then explicitly approve that exact fingerprint.
-- The server revalidates the path at execution time, rejects absolute paths and parent traversal, and lists at most 200 entry names/types. It never opens file contents or follows symlinks.
-- This is a narrow API foundation; it is not a general-purpose executor and does not yet provide a complete graphical proposal/approval experience.
-
-### Phase 2B.2 — approval-gated new text files (implemented foundation)
-
-- Create a new allowlisted UTF-8 text file up to 32 KB inside an existing workspace folder.
-- Keep proposed content encrypted in the local proposal store until approval.
-- Require approval of the exact SHA-256 proposal. Revalidate the target and use exclusive file creation so a file added after review is never overwritten.
-- No edits, deletes, shell commands, or arbitrary file types are supported.
-
-### Phase 2B.3 — approval-gated text edits (implemented foundation)
-
-- Edit only an existing allowlisted UTF-8 text file up to 32 KB.
-- Show the complete before/after contents and target path before approval.
-- Bind the proposal to the original file SHA-256 and exact proposed content.
-- At approval, verify the original file is unchanged and replace it atomically; stale proposals are refused.
-- This does not support binary files, arbitrary paths, or silent edits.
-
+- Implement platform-specific native handle/descriptor-relative file operations.
+- On Windows, reject reparse points and junctions using handle-based inspection; on POSIX, use directory descriptors and no-follow flags.
+- Ensure every operation remains anchored to the opened workspace root, without reopening untrusted path strings.
+- Add race-focused tests that swap path components and targets during each operation on Windows and Linux.
+- Keep the feature disabled until both platforms' security tests and CI pass.
 
 ## Phase 3 — reviewed code changes
 
 - Restrict code-editing to a user-selected project folder.
 - Generate diffs first; never silently replace files.
-- Run tests in a bounded subprocess with timeout and captured output.
+- Do not execute project tests until a real OS-level sandbox with filesystem, network, process, and resource restrictions is implemented and reviewed.
 - Require approval before applying changes and before any Git push or merge.
 - Keep secrets, model files, databases, and encryption keys outside generated patches.
 
@@ -81,4 +67,4 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - The Windows DPAPI key and database key files must be backed up together according to the existing recovery guidance.
 
 
-**Security gate:** Do not re-enable workspace file operations by flipping a Python flag or adding more path checks. Implement platform-specific handle-relative operations with no-follow/reparse-point protections, then add race-focused tests on Windows and Linux before enabling any API or UI path.
+**Security gate:** Do not re-enable workspace file operations by flipping a Python flag or adding more path checks. Implement platform-specific handle-relative operations with no-follow/reparse-point protections, then add race-focused tests on Windows and Linux before enabling any API or UI path. Project-code execution additionally requires a real OS-level sandbox.
