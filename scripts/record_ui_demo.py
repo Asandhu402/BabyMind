@@ -175,7 +175,7 @@ def main() -> None:
         "BABYMIND_CONTEXT_SIZE": "8192",
         "BABYMIND_TEMPERATURE": "0.35",
         "BABYMIND_TOP_P": "0.9",
-        "BABYMIND_MAX_TOKENS": "1024",
+        "BABYMIND_MAX_TOKENS": "512",
         "BABYMIND_HOME": str(Path(os.environ["RUNNER_TEMP"]) / "babymind-demo-data"),
         "PYTHONUNBUFFERED": "1",
     })
