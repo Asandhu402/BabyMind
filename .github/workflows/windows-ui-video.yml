@@ -64,7 +64,7 @@ jobs:
           "BABYMIND_DEMO_MODEL=$model" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_DEMO_LLAMA=$($server.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Start local model and BabyMind web UI
+      - name: Start and verify local llama.cpp model
         shell: pwsh
         run: |
           $llamaLog = Join-Path $env:RUNNER_TEMP "llama-demo.log"
@@ -81,19 +81,6 @@ jobs:
             } catch {}
           }
           if (-not $ready) { throw "Local model did not become ready within 15 minutes." }
-          $env:BABYMIND_ENGINE = "llama.cpp"
-          $env:BABYMIND_LLAMA_SERVER = $env:BABYMIND_DEMO_LLAMA
-          $env:BABYMIND_GGUF_MODEL = $env:BABYMIND_DEMO_MODEL
-          $env:BABYMIND_CONTEXT_SIZE = "2048"
-          $env:BABYMIND_HOME = (Join-Path $env:RUNNER_TEMP "babymind-demo-data")
-          $app = Start-Process -FilePath python -ArgumentList "-m babymind.server --host 127.0.0.1 --port 8765 --no-browser" -PassThru -NoNewWindow -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP "babymind-ui.log") -RedirectStandardError (Join-Path $env:RUNNER_TEMP "babymind-ui.err")
-          "BABYMIND_UI_PID=$($app.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          $up=$false
-          for ($i=0; $i -lt 60; $i++) {
-            Start-Sleep -Seconds 2
-            try { Invoke-WebRequest "http://127.0.0.1:8765" -UseBasicParsing -TimeoutSec 3 | Out-Null; $up=$true; break } catch {}
-          }
-          if (-not $up) { throw "BabyMind UI server did not start." }
 
       - name: Record actual BabyMind interface and model response
         shell: pwsh
