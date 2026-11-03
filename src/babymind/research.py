@@ -52,7 +52,7 @@ class _ResultsParser(HTMLParser):
 def _destination(raw: str) -> str:
     """Accept only ordinary HTTP(S) result destinations, never DDG redirect URLs."""
     parsed = urlparse(raw)
-    if parsed.scheme in {"http", "https"} and parsed.hostname:
+    if parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username and not parsed.password:
         return raw
     if parsed.netloc.lower() == "duckduckgo.com" and parsed.path == "/l/":
         target = parse_qs(parsed.query).get("uddg", [""])[0]
