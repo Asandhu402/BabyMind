@@ -9,7 +9,7 @@ BabyMind remains one assistant identity, one selected local model, and 50 specia
 | [Docling](https://github.com/docling-project/docling) | PDF, Office, image/OCR and structured document ingestion | MIT | Converts a user-selected local file to Markdown, then sends bounded text through the core coordinator to the selected local model |
 | [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Speech-to-text | MIT | Transcribes user-selected audio locally, then routes the transcript through the core coordinator; CPU INT8 is the default |
 | [Browser Use](https://github.com/browser-use/browser-use) | Browser automation | MIT | Optional supervised local-browser adapter using BabyMind's local OpenAI-compatible model endpoint |
-| [Open Interpreter](https://github.com/openinterpreter/openinterpreter) | Coding-agent / terminal workflow | Apache-2.0 | Optional external CLI launched in read-only mode only |
+| [Open Interpreter](https://github.com/openinterpreter/openinterpreter) | Coding-agent / terminal workflow | Apache-2.0 | External CLI launched with workspace-scoped write access and on-request approvals |
 
 Licences and upstream interfaces can change. Re-check upstream licence and release notes before updating dependency pins or redistributing a packaged build.
 
@@ -41,11 +41,11 @@ Browser Use can click, type, navigate and submit forms. BabyMind therefore requi
 
 The adapter uses Browser Use's local browser default and a local LM Studio-compatible endpoint. It does not select Browser Use Cloud. The user must approve each task in BabyMind's confirmation dialog. Keep the browser visible and supervised. Do not delegate purchases, payments, account changes, submissions, sending messages, or other consequential actions to this task-level automation. Never place credentials or session cookies in prompts. Web pages are untrusted and may contain prompt injection. The integration is available from Settings → Connected tools. BabyMind requires a confirmation dialog for each task, the API requires `user_approved=True`, and the environment gate must also be enabled. This is task-level approval, not an independent approval dialog for every click; keep the browser visible and supervise the whole run. Do not delegate consequential actions.
 
-## Open Interpreter safety
+## Open Interpreter project access
 
-BabyMind launches the upstream CLI with the documented local OSS provider flags (`--oss --local-provider lmstudio`), passes BabyMind's loopback model endpoint through `CODEX_OSS_BASE_URL`, selects the active local model ID, and overrides `sandbox_mode` to `read-only` and `approval_policy` to `untrusted` for that invocation. It uses a user-selected working directory and no shell interpolation. The caller must explicitly approve launch. Do not use `danger-full-access`, `--yolo`, approval-bypass options, or any write-capable mode through BabyMind.
+BabyMind launches the upstream CLI with the documented local OSS provider flags (`--oss --local-provider lmstudio`), passes BabyMind's loopback model endpoint through `CODEX_OSS_BASE_URL`, selects the active local model ID, and starts in the selected project directory with `--sandbox workspace-write` and `--ask-for-approval on-request`. The workspace-write sandbox allows the agent to read, create, edit, rename and delete project files and run project commands inside the selected workspace. Network access is explicitly disabled. The user must approve each launch; the agent asks before actions requiring broader permissions. The wrapper uses no shell interpolation and never selects `danger-full-access`, `--yolo`, or approval-bypass options.
 
-Open Interpreter's native sandbox enforcement varies by operating system and configuration. BabyMind does not claim that this wrapper provides an independent Windows security boundary. The local-provider selection is intentional: a hosted provider saved in the user's Open Interpreter settings must not silently become BabyMind's coding-agent model. Keep workspace write actions and project execution disabled until BabyMind's own Windows security gate is completed and independently reviewed.
+The sandbox is the technical boundary, not the confirmation dialog. Open Interpreter documents native Windows sandboxing when configured and says it fails closed when the requested policy cannot be enforced. BabyMind does not add an independent Windows kernel sandbox. Keep secrets out of the project folder, and review any request to access outside the workspace or enable network access. This is project-folder access, not full-PC access.
 
 ## Discovery
 
