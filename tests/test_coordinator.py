@@ -39,8 +39,11 @@ class CoordinatorTests(unittest.TestCase):
         second_prompt = self.provider.system_prompt
         self.assertEqual(first.response, "A tested response.")
         self.assertIn("Coordinator", first_prompt)
+        self.assertIn("QUALITY STANDARD", first_prompt)
+        self.assertIn("Verify arithmetic", first_prompt)
         self.assertEqual(second.agent_id, "BM-02")
         self.assertIn("Researcher", second_prompt)
+        self.assertIn("QUALITY STANDARD", second_prompt)
 
     def test_document_pipeline_routes_extracted_text_through_shared_coordinator(self) -> None:
         from unittest.mock import patch
