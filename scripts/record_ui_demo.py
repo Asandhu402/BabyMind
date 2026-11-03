@@ -90,10 +90,14 @@ def main() -> None:
                 page.locator("#messageInput").fill(
                     "For this interface demo, reply in two short sentences: introduce yourself as BabyMind and explain that you have specialist roles."
                 )
+                previous = page.locator("#messages .message .message-content").count()
                 page.locator("#sendButton").click()
-                page.locator("#typingIndicator").wait_for(state="visible", timeout=15000)
-                page.locator("#typingIndicator").wait_for(state="hidden", timeout=240000)
-                page.wait_for_timeout(800)
+                page.wait_for_function(
+                    "(count) => document.querySelectorAll('#messages .message .message-content').length > count",
+                    arg=previous,
+                    timeout=240000,
+                )
+                page.wait_for_timeout(1000)
                 page.screenshot(path=str(OUT / "03-live-model-chat.png"), full_page=True)
 
                 # Show memory and settings areas.
