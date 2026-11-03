@@ -389,7 +389,9 @@ class Handler(BaseHTTPRequestHandler):
                     "payload": proposal["payload"], "proposal_hash": proposal["proposal_hash"],
                     "status": "awaiting_approval",
                     "effects": (
-                        "Create one new UTF-8 text file up to 32 KB after approval. Existing files are never overwritten."
+                        "Replace the contents of this exact UTF-8 text file after approval, only if its SHA-256 still matches the reviewed version."
+                        if proposal["action"] == "edit_text_file"
+                        else "Create one new UTF-8 text file up to 32 KB after approval. Existing files are never overwritten."
                         if proposal["action"] == "create_text_file"
                         else "Read up to 32 KB of this UTF-8 text file after approval."
                         if proposal["action"] == "read_text_file"
@@ -433,7 +435,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({
                     "id": proposal_id, "status": "completed", "result": result,
                     "notice": (
-                        "Approved new text file created. No existing file was overwritten."
+                        "Approved text file edit completed after matching the reviewed original hash."
+                        if row["action"] == "edit_text_file"
+                        else "Approved new text file created. No existing file was overwritten."
                         if row["action"] == "create_text_file"
                         else "Approved text-file preview completed. No files were modified."
                         if row["action"] == "read_text_file"
