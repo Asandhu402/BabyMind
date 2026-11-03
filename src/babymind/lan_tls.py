@@ -5,7 +5,7 @@ import ipaddress
 import os
 import ssl
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from cryptography import x509
@@ -56,7 +56,7 @@ def _load_or_create_ca(cert_dir: Path) -> tuple[x509.Certificate, object]:
         except OSError:
             pass
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     subject = _subject("BabyMind Local LAN Root CA")
     certificate = (
         x509.CertificateBuilder()
