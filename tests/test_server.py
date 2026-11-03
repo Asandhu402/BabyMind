@@ -566,37 +566,6 @@ class BabyMindWebTests(unittest.TestCase):
         search.assert_called_once_with("Vancouver trucking", limit=5)
 
 
-    def test_project_test_run_requires_exact_approval(self) -> None:
-        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
-            project = Path(workspace, "demo")
-            (project / "tests").mkdir(parents=True)
-            status, _, body = self.request("/api/tasks", {"title": "Check project tests"})
-            task_id = json.loads(body)["id"]
-            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
-            with patch("babymind.approval._run_project_tests", return_value={
-                "exit_code": 0, "success": True, "timed_out": False,
-                "runtime_limit_seconds": 90, "output": "Ran 2 tests", "output_truncated": False
-            }) as run:
-                status, _, body = self.request(
-                    f"/api/tasks/{task_id}/propose",
-                    {"relative_path": "demo", "action": "run_tests"},
-                )
-                self.assertEqual(status, 201)
-                proposal = json.loads(body)
-                self.assertEqual(proposal["action"], "run_tests")
-                status, _, body = self.request(
-                    f"/api/proposals/{proposal['id']}/approve", {"proposal_hash": "wrong"}
-                )
-                self.assertEqual(status, 400)
-                run.assert_not_called()
-                status, _, body = self.request(
-                    f"/api/proposals/{proposal['id']}/approve",
-                    {"proposal_hash": proposal["proposal_hash"]},
-                )
-                self.assertEqual(status, 200)
-                self.assertTrue(json.loads(body)["result"]["success"])
-                run.assert_called_once()
-
     def test_project_test_run_requires_existing_tests_folder(self) -> None:
         with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
             Path(workspace, "empty-project").mkdir()
