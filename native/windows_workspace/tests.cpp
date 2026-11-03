@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cwchar>
 #include <iostream>
+#include <string>
 
 static bm_ws_status validate(const wchar_t* value, int allow_empty = 0) {
     return bm_ws_validate_relative_path(value, std::wcslen(value), allow_empty);
@@ -30,8 +31,8 @@ int main() {
     assert(validate(L"folder/name ") == BM_WS_INVALID_RELATIVE_PATH);
     assert(validate(L"folder/<bad>.txt") == BM_WS_INVALID_RELATIVE_PATH);
 
-    const wchar_t* too_long = L"";
-    (void)too_long;
+    const std::wstring too_long(501, L'a');
+    assert(bm_ws_validate_relative_path(too_long.c_str(), too_long.size(), 0) == BM_WS_INVALID_RELATIVE_PATH);
     assert(bm_ws_validate_relative_path(nullptr, 1, 0) == BM_WS_INVALID_ARGUMENT);
     assert(bm_ws_open_workspace_root(L"C:\\workspace") == BM_WS_NOT_IMPLEMENTED);
     assert(bm_ws_read_text(L"file.txt", 1024) == BM_WS_NOT_IMPLEMENTED);
