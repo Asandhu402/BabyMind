@@ -79,6 +79,12 @@ def main() -> None:
                     record_video_size={"width": 1440, "height": 960},
                 )
                 page = context.new_page()
+                research_events: list[tuple[str, int]] = []
+                page.on(
+                    "response",
+                    lambda response: research_events.append((response.url, response.status))
+                    if "/api/research" in response.url else None,
+                )
                 page.goto(BASE_URL, wait_until="domcontentloaded", timeout=30000)
                 page.wait_for_load_state("networkidle", timeout=30000)
                 page.screenshot(path=str(OUT / "01-chat-home.png"), full_page=True)
@@ -107,6 +113,11 @@ def main() -> None:
                     timeout=240000,
                 )
                 page.wait_for_timeout(1000)
+                if not any("/api/research" in url and status == 200 for url, status in research_events):
+                    raise RuntimeError("The demo did not complete a real public-web search.")
+                if not any("/api/research/page" in url and status == 200 for url, status in research_events):
+                    raise RuntimeError("The demo did not successfully read a public source page.")
+                print("Verified real web search and public source-page reading:", research_events)
                 page.screenshot(path=str(OUT / "03-live-model-chat.png"), full_page=True)
 
                 # Show memory and settings areas.
