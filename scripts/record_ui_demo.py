@@ -88,10 +88,16 @@ def main() -> None:
                 page.wait_for_timeout(700)
                 page.screenshot(path=str(OUT / "02-agent-directory.png"), full_page=True)
 
-                # Ask the running local model a real question through the UI.
+                # Demonstrate real public-web research and source-page reading,
+                # then have the fixed local model produce one prioritized code plan.
                 page.locator('[data-view="chat"]').click()
+                research_toggle = page.locator("#webResearchToggle")
+                if not research_toggle.is_checked():
+                    research_toggle.check()
+                page.locator("#webPageReadToggle").wait_for(state="attached")
+                page.locator("#webPageReadToggle").check()
                 page.locator("#messageInput").fill(
-                    "Give a practical three-step checklist for testing that BabyMind keeps chat data on the local PC and only exposes the iPhone companion on trusted Wi-Fi. Include one concrete verification for each step. Do not claim to have inspected settings or performed actions."
+                    "Research the public GitHub project Asandhu402/BabyMind. Inspect the repository README and source pages supplied by web research. Identify the single highest-impact core-code improvement BabyMind needs next. Ground the diagnosis in the sources you actually received, distinguish verified facts from inference, and give one prioritized implementation plan with concrete files, tests, and acceptance criteria. Do not give alternative options, do not claim to have changed code, and do not invent repository details."
                 )
                 previous = page.locator("#messages .message .message-content").count()
                 page.locator("#sendButton").click()
