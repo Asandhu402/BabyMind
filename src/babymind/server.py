@@ -781,7 +781,7 @@ class Handler(BaseHTTPRequestHandler):
     def handle_chat(self, payload: dict) -> None:
         task = str(payload.get("message", "")).strip()
         agent_id = str(payload.get("agent_id", "BM-01")).strip().upper()
-        conversation_id = str(payload.get("conversation_id", "")).strip()
+        conversation_id = str(payload.get("conversation_id") or "").strip()
         if not task:
             raise ValueError("Please enter a message.")
         if len(task) > 20000:
