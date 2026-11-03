@@ -635,9 +635,9 @@ class BabyMindWebTests(unittest.TestCase):
             raw_output = "x" * (MAX_TEST_OUTPUT_CHARS + 500)
             process = SimpleNamespace(returncode=0, stdout=io.StringIO(raw_output))
             process.wait = lambda timeout: None
-            with patch.object(sys, "frozen", False, create=True), \\
-                 patch("babymind.approval.subprocess.Popen", return_value=process):
-                result = _run_project_tests(project)
+            with patch.object(sys, "frozen", False, create=True):
+                with patch("babymind.approval.subprocess.Popen", return_value=process):
+                    result = _run_project_tests(project)
         self.assertEqual(len(result["output"]), MAX_TEST_OUTPUT_CHARS)
         self.assertEqual(result["output"], raw_output[-MAX_TEST_OUTPUT_CHARS:])
         self.assertTrue(result["output_truncated"])
