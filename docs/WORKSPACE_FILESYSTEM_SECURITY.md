@@ -10,6 +10,8 @@ A handle-relative API reduces path-resolution races, but it does not automatical
 
 ## Linux direction
 
+An isolated, Linux-only prototype now exists in `src/babymind/linux_workspace.py`, with focused tests in `tests/test_linux_workspace.py`. It is not integrated into the approval API and does not enable workspace actions. The prototype supports pinned-root admission, descriptor-relative directory listing and bounded regular-file reads, and exclusive new-file creation. It deliberately does not implement edits or cleanup by path. The prototype must pass Linux CI and receive security review before integration.
+
 Use Linux openat2(2) relative to a pinned workspace-root directory descriptor, with at least:
 
 - RESOLVE_BENEATH
