@@ -619,6 +619,7 @@ class BabyMindWebTests(unittest.TestCase):
             options = popen.call_args.kwargs
             self.assertEqual(command, [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"])
             self.assertNotIn("BABYMIND_API_KEY", options["env"])
+            self.assertIn(str(project / "src"), options["env"]["PYTHONPATH"])
             self.assertFalse(options.get("shell", False))
             self.assertTrue(result["success"])
             self.assertEqual(result["output"], "Ran 3 tests")
@@ -634,7 +635,7 @@ class BabyMindWebTests(unittest.TestCase):
                 subprocess.TimeoutExpired("fixed-test-command", 90), ("stopped", None)
             ])
             with patch("babymind.approval.os.name", "posix"), \
-                 patch("babymind.approval.os.killpg") as kill_group, \
+                 patch("babymind.approval.os.killpg", create=True) as kill_group, \
                  patch("babymind.approval.subprocess.Popen", return_value=process):
                 result = _run_project_tests(project)
             kill_group.assert_called_once()
