@@ -30,6 +30,23 @@ Voicebox runs as a self-hosted loopback service. Example:
 
 BabyMind accepts only loopback HTTP endpoints for Voicebox. Use CPU Piper and a small/distilled speech model first on integrated-graphics laptops. Docker and model downloads require additional disk/RAM. Voicebox audio does not go to a hosted speech API.
 
+## Encrypted backup and restore
+
+The core Settings screen can create and restore password-protected `.bmbak`
+archives. The archive encrypts the existing encrypted SQLite database and key
+files as a single authenticated payload using scrypt and AES-256-GCM. No
+plaintext conversation or memory export is created. The restore process
+checks the archive format, file allowlist, checksums, SQLite integrity and
+whether the supplied keys decrypt the stored text before replacing live files.
+It stages the replacement and rolls back changed files if a replacement fails.
+
+The backup password must be at least 12 characters. Losing it makes the
+archive unrecoverable. On Windows, the inner database keys are DPAPI-protected
+for the same Windows user on the same device. Consequently, the current
+backup format is for disaster recovery on that installation, not cross-device
+or cross-account migration. The archive must be saved outside BabyMind's live
+data directory. After a restore, close and reopen BabyMind.
+
 ## Shared coordinator and memory
 
 All speech transcription and knowledge-search answers pass through the same BabyMind coordinator and selected local model. Knowledge-search answers can also use the existing encrypted BabyMind memory when the user enables memory. Integration exchanges are stored in BabyMind's encrypted conversation history.
