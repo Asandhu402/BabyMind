@@ -113,11 +113,12 @@ access and at least 4.5 GB of free disk space.
 ### iPhone companion included in the portable package
 
 The portable ZIP also includes `BabyMind-iPhone.exe` and
-`Start-BabyMind-iPhone.bat`. You can start with either launcher: if the model
-is not already installed, the first launch downloads the same verified model
-(about 2.71 GB), so keep the PC online and allow at least 4.5 GB of free disk
-space. Running the desktop app first is optional; both launchers reuse the
-same model and local data folder.
+`Start-BabyMind-iPhone.bat`. Choose one launcher at a time: close
+`BabyMind.exe` before starting the iPhone companion, and close the companion
+before reopening the desktop app. Each launcher runs its own local model
+server, while both reuse the same verified model file and data folder. If the
+model is not already installed, the first launch downloads it (about 2.71 GB),
+so keep the PC online and allow at least 4.5 GB of free disk space.
 
 1. Extract the **entire** ZIP to a normal folder (not inside the ZIP).
 2. Connect the iPhone and Windows PC to the same trusted private Wi-Fi network.
