@@ -87,8 +87,10 @@ unless the selected runtime reports that it is actually using a compatible backe
 The bundled model is not silently replaced. You can test another GGUF by setting
 `BABYMIND_GGUF_MODEL` to its full path and `BABYMIND_ENGINE=llama.cpp`, or
 load a different model in LM Studio and use `BABYMIND_ENGINE=lm-studio`.
-Model quality varies; compare candidates with the same prompts rather than
-choosing by parameter count alone.
+A user-selected GGUF is not checked against the bundled model's checksum:
+download it only from a source you trust and verify the publisher's checksum
+yourself. Model quality varies; compare candidates with the same prompts rather
+than choosing by parameter count alone.
 
 Generation defaults are configurable for either local OpenAI-compatible backend:
 - `BABYMIND_TEMPERATURE` (default `0.4`)
