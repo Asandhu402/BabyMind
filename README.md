@@ -98,8 +98,7 @@ The terminal prints an HTTPS address, a one-time access token, and the public lo
 ### Portable Windows desktop package
 
 The GitHub Actions workflow builds a portable Windows package containing
-BabyMind, its Python runtime, a separate fixed-command project test runner,
-and the official llama.cpp Windows CPU runtime.
+BabyMind, its Python runtime, and the official llama.cpp Windows CPU runtime.
 Download the complete `BabyMind-Windows-Portable` artifact from the latest
 successful Windows build, extract it, and double-click `BabyMind.exe`.
 
@@ -182,18 +181,6 @@ length is capped at 500 characters. The optional page API is
 `POST /api/research/page` with JSON `{"url":"https://example.com/article"}`.
 Both endpoints remain subject to local/LAN authorization and origin checks.
 
-## Approval-gated workspace actions
-
-BabyMind can list folders, search filenames, preview text files, create new
-allowlisted text files, edit existing allowlisted text files after showing a
-before/after preview, and run a fixed Python unittest-discovery command in a
-selected project folder. Every action requires an active task and approval of
-the exact proposal fingerprint. File operations are limited to the configured
-workspace. Test runs are limited to 90 seconds and their output is capped at
-20,000 characters. **Project tests are not sandboxed**: they execute as the
-current Windows user and may access that user's files and network resources.
-Only approve test runs for projects whose code you trust. BabyMind does not
-accept arbitrary shell commands.
 
 ## Current capability boundaries
 
