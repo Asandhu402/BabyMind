@@ -90,7 +90,7 @@ On Windows, you can double-click `Start-BabyMind.bat` to install and launch the 
 
     babymind-web --lan
 
-The terminal prints a local network address and a one-time access token. Open that address in Safari on the iPhone and enter the token when prompted. Keep the token private and use this only on a trusted home network. The token protects API access; this is not intended for public internet exposure. LAN transport is currently HTTP, so use only a trusted private Wi-Fi network. HTTPS with a trusted local certificate is a separate hardening step and is not yet enabled.
+The terminal prints an HTTPS address, a one-time access token, and the public local CA certificate path. Before opening the address on your iPhone, transfer the `lan-ca.crt` certificate to the iPhone (for example with AirDrop), install the certificate profile, then enable full trust under **Settings > General > About > Certificate Trust Settings**. Open the printed HTTPS address in Safari and enter the token. The certificate's private key stays on the computer and is encrypted at rest. Use only on a trusted private Wi-Fi network; this is not intended for public internet exposure.
 
 
 ## Windows desktop application

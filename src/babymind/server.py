@@ -399,7 +399,7 @@ def main() -> None:
         print(f"One-time BabyMind access token: {auth_token}")
         print("WARNING: LAN mode uses HTTP. Use only on a trusted private Wi-Fi network; do not use on public Wi-Fi.")
         print("Keep this token private.")
-    if not args.no_browser:
+    if not args.no_browser and not args.lan:
         webbrowser.open(url)
     try:
         server.serve_forever()
