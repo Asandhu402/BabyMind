@@ -103,7 +103,7 @@ bool is_reparse_or_wrong_type(HANDLE handle, bool want_directory, bm_ws_status* 
 
 bool nt_open_relative(HANDLE parent, std::wstring_view component,
                       ACCESS_MASK access, ULONG disposition, ULONG options,
-                      UniqueHandle* output) {
+                      ULONG share_access, UniqueHandle* output) {
     if (component.empty() || component.size() > 255) return false;
     std::wstring name(component);
     UNICODE_STRING unicode_name{};
@@ -121,7 +121,7 @@ bool nt_open_relative(HANDLE parent, std::wstring_view component,
     HANDLE opened = INVALID_HANDLE_VALUE;
     const NTSTATUS status = NtCreateFile(
         &opened, access | SYNCHRONIZE, &attributes, &io_status, nullptr,
-        FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        FILE_ATTRIBUTE_NORMAL, share_access,
         disposition, options | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
         nullptr, 0);
     if (status < 0) return false;
@@ -157,7 +157,7 @@ bm_ws_status open_parent(void* root_value, const wchar_t* relative_path,
         UniqueHandle next;
         if (!nt_open_relative(current.get(), components[i],
                 FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES, FILE_OPEN,
-                FILE_DIRECTORY_FILE, &next)) return BM_WS_IO_ERROR;
+                FILE_DIRECTORY_FILE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &next)) return BM_WS_IO_ERROR;
         bm_ws_status status = BM_WS_OK;
         if (is_reparse_or_wrong_type(next.get(), true, &status)) return status;
         current = std::move(next);
@@ -172,7 +172,7 @@ bm_ws_status open_root_component(HANDLE parent, const std::wstring& component,
     if (!valid_component(component)) return BM_WS_INVALID_RELATIVE_PATH;
     if (!nt_open_relative(parent, component,
             FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES, FILE_OPEN,
-            FILE_DIRECTORY_FILE, child)) return BM_WS_IO_ERROR;
+            FILE_DIRECTORY_FILE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, child)) return BM_WS_IO_ERROR;
     bm_ws_status status = BM_WS_OK;
     if (is_reparse_or_wrong_type(child->get(), true, &status)) return status;
     return BM_WS_OK;
@@ -217,7 +217,7 @@ extern "C" BM_WS_API bm_ws_status bm_ws_open_workspace_root(
     std::wstring extended_root = L"\\\\?\\";
     extended_root += volume_root;
     UniqueHandle current(CreateFileW(extended_root.c_str(),
-        FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+        FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
     if (!current.valid()) return BM_WS_IO_ERROR;
@@ -261,13 +261,19 @@ extern "C" BM_WS_API bm_ws_status bm_ws_read_text(
 
     UniqueHandle file;
     if (!nt_open_relative(parent.get(), leaf, FILE_READ_DATA | FILE_READ_ATTRIBUTES,
-                          FILE_OPEN, FILE_NON_DIRECTORY_FILE, &file)) return BM_WS_IO_ERROR;
+                          FILE_OPEN, FILE_NON_DIRECTORY_FILE, FILE_SHARE_READ, &file)) return BM_WS_IO_ERROR;
     if (is_reparse_or_wrong_type(file.get(), false, &status)) return status;
 
-    DWORD received = 0;
-    if (!ReadFile(file.get(), output, static_cast<DWORD>(max_bytes + 1), &received, nullptr)) return BM_WS_IO_ERROR;
-    if (received > max_bytes) return BM_WS_TOO_LARGE;
-    *bytes_read = received;
+    size_t total = 0;
+    while (total < max_bytes + 1) {
+        DWORD received = 0;
+        const DWORD request = static_cast<DWORD>(max_bytes + 1 - total);
+        if (!ReadFile(file.get(), output + total, request, &received, nullptr)) return BM_WS_IO_ERROR;
+        if (received == 0) break;
+        total += received;
+    }
+    if (total > max_bytes) return BM_WS_TOO_LARGE;
+    *bytes_read = total;
     return BM_WS_OK;
 }
 
@@ -284,7 +290,7 @@ extern "C" BM_WS_API bm_ws_status bm_ws_create_new_text(
     UniqueHandle file;
     if (!nt_open_relative(parent.get(), leaf,
             FILE_WRITE_DATA | FILE_READ_ATTRIBUTES, FILE_CREATE,
-            FILE_NON_DIRECTORY_FILE, &file)) return BM_WS_IO_ERROR;
+            FILE_NON_DIRECTORY_FILE, FILE_SHARE_READ, &file)) return BM_WS_IO_ERROR;
     if (is_reparse_or_wrong_type(file.get(), false, &status)) return status;
 
     size_t offset = 0;
