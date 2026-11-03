@@ -78,6 +78,7 @@ class BabyMindWebTests(unittest.TestCase):
         status, _, body = self.request("/api/conversations", {"title": "Backup test"})
         self.assertEqual(status, 201)
         conversation_id = json.loads(body)["id"]
+        server.persist_integration_exchange(conversation_id, "hello backup", "saved response")
         destination = Path(self.temp.name) / "BabyMind.bmbak"
         status, _, body = self.request("/api/backup/export", {
             "path": str(destination), "password": "test-backup-password-2026",
@@ -98,11 +99,8 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(status, 200, body)
         status, _, body = self.request("/api/conversations/" + conversation_id)
         self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body)[0]["role"], "user")
-        self.assertIn("reopen BabyMind", json.loads(self.request("/api/backup/restore", {
-            "path": str(destination), "password": "test-backup-password-2026",
-            "confirmation": "invalid",
-        })[2]).get("error", "") if False else "reopen BabyMind")
+        self.assertEqual([item["role"] for item in json.loads(body)], ["user", "assistant"])
+        self.assertEqual(json.loads(body)[1]["content"], "saved response")
 
     def test_integrations_api_lists_optional_tools(self) -> None:
         status, _, body = self.request("/api/integrations")
