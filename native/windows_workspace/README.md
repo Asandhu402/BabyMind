@@ -10,7 +10,7 @@ This is an experimental MSVC/CMake native component. It is **not connected to Ba
 - Reparse-point inspection on opened handles; reparse components are rejected.
 - Bounded reads from the opened file handle (maximum 16 MiB).
 - Exclusive new-file creation (maximum 1 MiB); existing names are not overwritten.
-- Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory and file symlink escape rejection, and read-size enforcement.
+- Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory and file symlink escape rejection, read-size enforcement, and concurrent exclusive-create behavior.
 - Windows CI build and CTest steps.
 
 ## Security limits — do not enable
