@@ -620,7 +620,7 @@ class BabyMindWebTests(unittest.TestCase):
             options = popen.call_args.kwargs
             self.assertEqual(command, [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"])
             self.assertNotIn("BABYMIND_API_KEY", options["env"])
-            self.assertIn(str(project / "src"), options["env"]["PYTHONPATH"])
+            self.assertEqual(Path(options["env"]["PYTHONPATH"].split(os.pathsep)[0]).resolve(), (project / "src").resolve())
             self.assertFalse(options.get("shell", False))
             self.assertTrue(result["success"])
             self.assertEqual(result["output"], "Ran 3 tests")
@@ -635,11 +635,16 @@ class BabyMindWebTests(unittest.TestCase):
             process.communicate = unittest.mock.Mock(side_effect=[
                 subprocess.TimeoutExpired("fixed-test-command", 90), ("stopped", None)
             ])
-            with patch("babymind.approval.os.name", "posix"), \
-                 patch("babymind.approval.os.killpg", create=True) as kill_group, \
-                 patch("babymind.approval.subprocess.Popen", return_value=process):
-                result = _run_project_tests(project)
-            kill_group.assert_called_once()
+            if os.name == "nt":
+                with patch("babymind.approval.subprocess.run") as kill_tree, \
+                     patch("babymind.approval.subprocess.Popen", return_value=process):
+                    result = _run_project_tests(project)
+                kill_tree.assert_called_once()
+            else:
+                with patch("babymind.approval.os.killpg") as kill_group, \
+                     patch("babymind.approval.subprocess.Popen", return_value=process):
+                    result = _run_project_tests(project)
+                kill_group.assert_called_once()
             self.assertTrue(result["timed_out"])
             self.assertFalse(result["success"])
 
