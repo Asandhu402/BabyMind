@@ -389,9 +389,7 @@ class Handler(BaseHTTPRequestHandler):
                     "payload": proposal["payload"], "proposal_hash": proposal["proposal_hash"],
                     "status": "awaiting_approval",
                     "effects": (
-                        "Run the fixed Python unittest discovery workflow in this project for up to 90 seconds. Test code executes with the current user's permissions and is not sandboxed."
-                        if proposal["action"] == "run_tests"
-                        else "Replace the contents of this exact UTF-8 text file after approval, only if its SHA-256 still matches the reviewed version."
+                        "Replace the contents of this exact UTF-8 text file after approval, only if its SHA-256 still matches the reviewed version."
                         if proposal["action"] == "edit_text_file"
                         else "Create one new UTF-8 text file up to 32 KB after approval. Existing files are never overwritten."
                         if proposal["action"] == "create_text_file"
@@ -432,7 +430,7 @@ class Handler(BaseHTTPRequestHandler):
                         "WHERE id=? AND status='awaiting_approval'",
                         (now(), proposal_id)
                     )
-                # Never hold the database lock while a potentially long test run executes.
+                # Keep filesystem operations outside the database transaction.
                 try:
                     result = execute_readonly_proposal(proposal_payload, action=action)
                     final_status = "completed"
@@ -455,9 +453,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({
                     "id": proposal_id, "status": "completed", "result": result,
                     "notice": (
-                        "Approved Python test run finished. Review the exit code and output; project tests are not sandboxed."
-                        if action == "run_tests"
-                        else "Approved text file edit completed after matching the reviewed original hash."
+                        "Approved text file edit completed after matching the reviewed original hash."
                         if action == "edit_text_file"
                         else "Approved new text file created. No existing file was overwritten."
                         if action == "create_text_file"
