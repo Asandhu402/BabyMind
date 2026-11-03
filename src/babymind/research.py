@@ -160,7 +160,7 @@ class _PinnedHTTPSHandler(HTTPSHandler):
     def https_open(self, request):
         return self.do_open(
             _PinnedHTTPSConnection, request,
-            context=self._context, check_hostname=self._check_hostname
+            context=self._context
         )
 
 
