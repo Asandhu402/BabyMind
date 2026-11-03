@@ -482,5 +482,57 @@ class BabyMindWebTests(unittest.TestCase):
             self.assertEqual(target.read_text(encoding="utf-8"), "existing content")
 
 
+    def test_text_file_edit_requires_exact_approval_and_original_hash(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            target = Path(workspace, "draft.md")
+            target.write_text("# Draft\\nold text\\n", encoding="utf-8")
+            status, _, body = self.request("/api/tasks", {"title": "Revise draft"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": "draft.md", "action": "edit_text_file", "content": "# Draft\\nnew text\\n"},
+            )
+            self.assertEqual(status, 201)
+            proposal = json.loads(body)
+            self.assertEqual(proposal["action"], "edit_text_file")
+            self.assertIn("old text", proposal["payload"]["original_content"])
+            self.assertFalse(target.read_text(encoding="utf-8").endswith("new text\\n"))
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve", {"proposal_hash": "incorrect"}
+            )
+            self.assertEqual(status, 400)
+            self.assertIn("old text", target.read_text(encoding="utf-8"))
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve",
+                {"proposal_hash": proposal["proposal_hash"]},
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(target.read_text(encoding="utf-8"), "# Draft\\nnew text\\n")
+            self.assertTrue(json.loads(body)["result"]["updated"])
+
+    def test_text_file_edit_refuses_changed_file_after_review(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            target = Path(workspace, "draft.txt")
+            target.write_text("original", encoding="utf-8")
+            from babymind.approval import build_readonly_proposal, execute_readonly_proposal
+            proposal = build_readonly_proposal("draft.txt", action="edit_text_file", content="replacement")
+            target.write_text("changed by user", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "changed after review"):
+                execute_readonly_proposal(proposal["payload"], action="edit_text_file")
+            self.assertEqual(target.read_text(encoding="utf-8"), "changed by user")
+
+    def test_text_file_edit_rejects_unsupported_and_oversized_content(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            Path(workspace, "notes.txt").write_text("original", encoding="utf-8")
+            from babymind.approval import build_readonly_proposal
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("notes.txt", action="edit_text_file", content="\x00")
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("notes.txt", action="edit_text_file", content="x" * (32 * 1024 + 1))
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("missing.txt", action="edit_text_file", content="replacement")
+
+
 if __name__ == "__main__":
     unittest.main()

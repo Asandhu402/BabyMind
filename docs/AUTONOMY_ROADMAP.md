@@ -33,6 +33,14 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Require approval of the exact SHA-256 proposal. Revalidate the target and use exclusive file creation so a file added after review is never overwritten.
 - No edits, deletes, shell commands, or arbitrary file types are supported.
 
+### Phase 2B.3 — approval-gated text edits (implemented foundation)
+
+- Edit only an existing allowlisted UTF-8 text file up to 32 KB.
+- Show the complete before/after contents and target path before approval.
+- Bind the proposal to the original file SHA-256 and exact proposed content.
+- At approval, verify the original file is unchanged and replace it atomically; stale proposals are refused.
+- This does not support binary files, arbitrary paths, or silent edits.
+
 ## Phase 3 — reviewed code changes
 
 - Restrict code-editing to a user-selected project folder.
