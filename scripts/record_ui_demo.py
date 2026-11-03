@@ -167,9 +167,54 @@ def search_public_github_projects(limit: int = 3) -> tuple[list[dict[str, str]],
 
 
 
-def verify_llama_api() -> None:
+def start_llama_server(env: dict[str, str]) -> tuple[subprocess.Popen, object]:
+    """Start llama.cpp in this same workflow step and keep it alive through the UI test."""
+    executable = env["BABYMIND_LLAMA_SERVER"]
+    model = env["BABYMIND_GGUF_MODEL"]
+    port = env.get("BABYMIND_LLAMA_PORT", "1235")
+    log_path = Path(env["RUNNER_TEMP"]) / "llama-demo.log"
+    log = log_path.open("w", encoding="utf-8")
+    command = [
+        executable, "--model", model, "--host", "127.0.0.1",
+        "--port", port, "--ctx-size", "8192", "--threads", "4",
+        "--n-gpu-layers", "0",
+    ]
+    process = subprocess.Popen(
+        command, stdin=subprocess.DEVNULL, stdout=log,
+        stderr=subprocess.STDOUT,
+    )
+    base = f"http://127.0.0.1:{port}"
+    deadline = time.monotonic() + 900
+    last_error = "server has not answered yet"
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            log.flush()
+            detail = log_path.read_text(encoding="utf-8", errors="replace")
+            log.close()
+            raise RuntimeError(
+                f"llama.cpp exited with code {process.returncode}. Log:\\n{detail[-12000:]}"
+            )
+        try:
+            with urlopen(f"{base}/health", timeout=5) as response:
+                if response.status == 200:
+                    print(f"llama.cpp server ready at {base}.")
+                    return process, log
+        except (URLError, TimeoutError, OSError) as error:
+            last_error = str(error)
+        time.sleep(5)
+    process.terminate()
+    log.flush()
+    detail = log_path.read_text(encoding="utf-8", errors="replace")
+    log.close()
+    raise RuntimeError(
+        f"llama.cpp did not become ready within 15 minutes: {last_error}. "
+        f"Log:\\n{detail[-12000:]}"
+    )
+
+
+def verify_llama_api(port: str = "1235") -> None:
     """Prove the bundled llama.cpp endpoint can generate text before browser testing."""
-    base = "http://127.0.0.1:1235/v1"
+    base = f"http://127.0.0.1:{port}/v1"
     try:
         with urlopen(f"{base}/models", timeout=15) as response:
             models = json.loads(response.read().decode("utf-8")).get("data", [])
@@ -215,10 +260,12 @@ def main() -> None:
         "BABYMIND_HOME": str(Path(os.environ["RUNNER_TEMP"]) / "babymind-demo-data"),
         "PYTHONUNBUFFERED": "1",
     })
-    verify_llama_api()
-    log_path = Path(os.environ["RUNNER_TEMP"]) / "babymind-ui-server.log"
-    with log_path.open("w", encoding="utf-8") as log:
-        server = subprocess.Popen(
+    llama_process, llama_log = start_llama_server(env)
+    try:
+        verify_llama_api(env.get("BABYMIND_LLAMA_PORT", "1235"))
+        log_path = Path(os.environ["RUNNER_TEMP"]) / "babymind-ui-server.log"
+        with log_path.open("w", encoding="utf-8") as log:
+            server = subprocess.Popen(
             [sys.executable, "-m", "babymind.server", "--host", "127.0.0.1", "--port", "8765", "--no-browser"],
             cwd=ROOT,
             env=env,
@@ -362,13 +409,22 @@ def main() -> None:
             raise RuntimeError(
                 f"Browser UI timed out: {error}. BabyMind server log:\\n{detail[-10000:]}"
             ) from error
-        finally:
-            server.terminate()
+            finally:
+                server.terminate()
+                try:
+                    server.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    server.kill()
+                    server.wait(timeout=5)
+    finally:
+        if llama_process.poll() is None:
+            llama_process.terminate()
             try:
-                server.wait(timeout=10)
+                llama_process.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait(timeout=5)
+                llama_process.kill()
+                llama_process.wait(timeout=5)
+        llama_log.close()
 
 
 if __name__ == "__main__":
