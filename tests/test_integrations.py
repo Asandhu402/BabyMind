@@ -113,7 +113,7 @@ class IntegrationTests(unittest.TestCase):
             self.assertIn("--ask-for-approval", command)
             self.assertIn("on-request", command)
             self.assertIn("--cd", command)
-            self.assertIn(folder, command)
+            self.assertIn(str(Path(folder).resolve()), command)
             self.assertIn("sandbox_workspace_write.network_access=false", command)
             self.assertEqual(
                 popen.call_args.kwargs["env"]["CODEX_OSS_BASE_URL"],
