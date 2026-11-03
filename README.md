@@ -175,10 +175,11 @@ the computer; model inference and conversation storage remain local. Search
 snippets and page text are unverified third-party content. Review original
 sources before relying on claims.
 
-The local API endpoint is `POST /api/research` with JSON
+The search API is `POST /api/research` with JSON
 `{"query":"your research question","limit":5}`; the limit is 1–10 and query
-length is capped at 500 characters. Requests remain subject to the existing
-local/LAN authorization and origin checks.
+length is capped at 500 characters. The optional page API is
+`POST /api/research/page` with JSON `{"url":"https://example.com/article"}`.
+Both endpoints remain subject to local/LAN authorization and origin checks.
 
 ## Current capability boundaries
 
