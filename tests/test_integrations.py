@@ -52,6 +52,39 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             launch_read_only_session(".")
 
+    def test_open_interpreter_is_forced_to_local_provider_and_read_only_sandbox(self):
+        from unittest.mock import MagicMock
+        with tempfile.TemporaryDirectory() as folder:
+            process = MagicMock()
+            process.pid = 4321
+            with patch("shutil.which", return_value="interpreter"), patch(
+                "subprocess.Popen", return_value=process
+            ) as popen:
+                result = launch_read_only_session(
+                    folder, model="local-model", base_url="http://127.0.0.1:1234/v1",
+                    user_approved=True,
+                )
+            self.assertEqual(result.pid, 4321)
+            command = popen.call_args.args[0]
+            self.assertIn("--oss", command)
+            self.assertIn("--local-provider", command)
+            self.assertIn("lmstudio", command)
+            self.assertIn("local-model", command)
+            self.assertIn('sandbox_mode="read-only"', command)
+            self.assertEqual(
+                popen.call_args.kwargs["env"]["CODEX_OSS_BASE_URL"],
+                "http://127.0.0.1:1234/v1",
+            )
+            self.assertFalse(popen.call_args.kwargs["shell"])
+
+    def test_open_interpreter_rejects_nonlocal_model_endpoint(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(ValueError):
+                launch_read_only_session(
+                    folder, model="remote", base_url="https://api.example.com/v1",
+                    user_approved=True,
+                )
+
     def test_missing_optional_docling_is_reported_cleanly(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "note.txt"
