@@ -41,9 +41,9 @@ The adapter uses Browser Use's local browser default and a local LM Studio-compa
 
 ## Open Interpreter safety
 
-BabyMind launches only the upstream CLI with `--sandbox read-only`, a user-selected working directory, and no shell interpolation. The caller must explicitly approve launch. Do not use `danger-full-access`, `--yolo`, approval-bypass options, or any write-capable mode through BabyMind.
+BabyMind launches the upstream CLI with the documented local OSS provider flags (`--oss --local-provider lmstudio`), passes BabyMind's loopback model endpoint through `CODEX_OSS_BASE_URL`, selects the active local model ID, and overrides `sandbox_mode` to `read-only` for that invocation. It uses a user-selected working directory and no shell interpolation. The caller must explicitly approve launch. Do not use `danger-full-access`, `--yolo`, approval-bypass options, or any write-capable mode through BabyMind.
 
-Open Interpreter's native sandbox enforcement varies by operating system and configuration. BabyMind does not claim that this wrapper provides an independent Windows security boundary. Keep workspace write actions and project execution disabled until BabyMind's own Windows security gate is completed and independently reviewed.
+Open Interpreter's native sandbox enforcement varies by operating system and configuration. BabyMind does not claim that this wrapper provides an independent Windows security boundary. The local-provider selection is intentional: a hosted provider saved in the user's Open Interpreter settings must not silently become BabyMind's coding-agent model. Keep workspace write actions and project execution disabled until BabyMind's own Windows security gate is completed and independently reviewed.
 
 ## Discovery
 
