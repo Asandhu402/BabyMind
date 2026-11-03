@@ -28,8 +28,12 @@ class IntegrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "large.pdf"
             path.write_bytes(b"x")
-            with patch("pathlib.Path.stat") as stat:
-                stat.return_value.st_size = 101 * 1024 * 1024
+            with patch("pathlib.Path.stat") as stat_mock:
+                import os
+                import stat
+                stat_mock.return_value = os.stat_result(
+                    (stat.S_IFREG, 0, 0, 0, 0, 0, 101 * 1024 * 1024, 0, 0, 0)
+                )
                 with self.assertRaises(ValueError):
                     convert_document(path)
 
