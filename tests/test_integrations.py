@@ -9,7 +9,7 @@ from unittest.mock import patch
 from babymind.integrations.browser import run_browser_task
 from babymind.integrations.catalog import integration_status
 from babymind.integrations.documents import IntegrationUnavailable, convert_document
-from babymind.integrations.open_interpreter import launch_read_only_session
+from babymind.integrations.open_interpreter import launch_workspace_session
 from babymind.integrations.speech import transcribe_audio
 
 
@@ -88,9 +88,9 @@ class IntegrationTests(unittest.TestCase):
 
     def test_open_interpreter_requires_approval_before_launch(self):
         with self.assertRaises(PermissionError):
-            launch_read_only_session(".")
+            launch_workspace_session(".")
 
-    def test_open_interpreter_is_forced_to_local_provider_and_read_only_sandbox(self):
+    def test_open_interpreter_is_forced_to_local_provider_and_workspace_write_sandbox(self):
         from unittest.mock import MagicMock
         with tempfile.TemporaryDirectory() as folder:
             process = MagicMock()
@@ -108,8 +108,13 @@ class IntegrationTests(unittest.TestCase):
             self.assertIn("--local-provider", command)
             self.assertIn("lmstudio", command)
             self.assertIn("local-model", command)
-            self.assertIn('sandbox_mode="read-only"', command)
-            self.assertIn('approval_policy="untrusted"', command)
+            self.assertIn("--sandbox", command)
+            self.assertIn("workspace-write", command)
+            self.assertIn("--ask-for-approval", command)
+            self.assertIn("on-request", command)
+            self.assertIn("--cd", command)
+            self.assertIn(folder, command)
+            self.assertIn("sandbox_workspace_write.network_access=false", command)
             self.assertEqual(
                 popen.call_args.kwargs["env"]["CODEX_OSS_BASE_URL"],
                 "http://127.0.0.1:1234/v1",
