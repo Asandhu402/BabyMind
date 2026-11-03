@@ -24,6 +24,7 @@ from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
 from .providers import ProviderError
 from .secure_store import SecureTextStore
+from .lan_tls import create_lan_tls_context
 
 WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
@@ -380,25 +381,35 @@ def main() -> None:
     init_db()
     host = "0.0.0.0" if args.lan else args.host
     auth_token = secrets.token_urlsafe(24) if args.lan else None
-    server = ThreadingHTTPServer((host, args.port), Handler)
-    server.auth_token = auth_token
-    url = f"http://127.0.0.1:{args.port}"
-    print("BabyMind web app")
-    print(f"Open on this computer: {url}")
-    print("Data is stored locally in", DATA_HOME)
+    lan_ip = None
+    tls_context = None
+    ca_path = None
     if args.lan:
         probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             probe.connect(("192.0.2.1", 80))
             lan_ip = probe.getsockname()[0]
-        except OSError:
-            lan_ip = "YOUR-PC-IP"
+        except OSError as error:
+            raise RuntimeError("BabyMind could not determine this computer's LAN IP address.") from error
         finally:
             probe.close()
-        print(f"Open on a trusted Wi-Fi device: http://{lan_ip}:{args.port}")
+        tls_context, ca_path = create_lan_tls_context(DATA_HOME, lan_ip)
+
+    server = ThreadingHTTPServer((host, args.port), Handler)
+    if tls_context is not None:
+        server.socket = tls_context.wrap_socket(server.socket, server_side=True)
+    server.auth_token = auth_token
+    scheme = "https" if args.lan else "http"
+    url = f"{scheme}://127.0.0.1:{args.port}"
+    print("BabyMind web app")
+    print(f"Open on this computer: {url}")
+    print("Data is stored locally in", DATA_HOME)
+    if args.lan:
+        print(f"Open on a trusted Wi-Fi device: https://{lan_ip}:{args.port}")
         print(f"One-time BabyMind access token: {auth_token}")
-        print("WARNING: LAN mode uses HTTP. Use only on a trusted private Wi-Fi network; do not use on public Wi-Fi.")
-        print("Keep this token private.")
+        print(f"Install this public CA certificate on your iPhone: {ca_path}")
+        print("On iPhone, install the certificate profile, then enable full trust under Settings > General > About > Certificate Trust Settings.")
+        print("Use only on a trusted private Wi-Fi network. Keep the access token private.")
     if not args.no_browser and not args.lan:
         webbrowser.open(url)
     try:

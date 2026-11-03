@@ -1,6 +1,7 @@
 """Opt-in local SQLite memory for BabyMind, encrypted at rest."""
 import os
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -43,10 +44,24 @@ class LocalMemory:
                         (encrypted_task, encrypted_response, memory_id),
                     )
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self):
+        """Yield a SQLite connection and always close its file handle.
+
+        sqlite3.Connection's context manager commits/rolls back but does not
+        close the connection; explicit close is important on Windows where
+        open database handles prevent temporary-directory cleanup.
+        """
         connection = sqlite3.connect(self.database_path)
-        connection.execute("PRAGMA secure_delete = ON")
-        return connection
+        try:
+            connection.execute("PRAGMA secure_delete = ON")
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def remember(self, agent_id: str, task: str, response: str) -> None:
         created_at = datetime.now(timezone.utc).isoformat()

@@ -68,6 +68,14 @@ def _load_or_create_ca(cert_dir: Path) -> tuple[x509.Certificate, object]:
         .not_valid_after(now + timedelta(days=3650))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
         .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(private_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
             x509.KeyUsage(
                 digital_signature=True, content_commitment=False, key_encipherment=False,
                 data_encipherment=False, key_agreement=False, key_cert_sign=True,
@@ -89,7 +97,7 @@ def create_lan_tls_context(data_home: str | Path, lan_ip: str) -> tuple[ssl.SSLC
     ca_cert, ca_key = _load_or_create_ca(cert_dir)
 
     server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     server_cert = (
         x509.CertificateBuilder()
         .subject_name(_subject("BabyMind LAN Server"))
@@ -106,6 +114,10 @@ def create_lan_tls_context(data_home: str | Path, lan_ip: str) -> tuple[ssl.SSLC
             critical=False,
         )
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
         .add_extension(
             x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
         )
