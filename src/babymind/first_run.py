@@ -112,14 +112,17 @@ def _ensure_model(model_path: Path) -> None:
     from tkinter import Tk, messagebox, ttk
 
     marker = model_path.with_suffix(model_path.suffix + ".sha256")
-    if model_path.is_file() and marker.is_file():
-        if marker.read_text(encoding="ascii").strip() == MODEL_SHA256:
-            return
+    # Never trust a sidecar marker as proof of the model's contents. Re-hash
+    # the actual GGUF on every startup before allowing it to reach llama.cpp.
     if model_path.is_file():
-        if _sha256(model_path).lower() == MODEL_SHA256:
+        try:
+            actual_hash = _sha256(model_path).lower()
+        except OSError:
+            actual_hash = ""
+        if actual_hash == MODEL_SHA256:
             marker.write_text(MODEL_SHA256, encoding="ascii")
             return
-        model_path.unlink()
+        model_path.unlink(missing_ok=True)
         marker.unlink(missing_ok=True)
 
     root = Tk()
