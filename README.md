@@ -110,6 +110,80 @@ under `%USERPROFILE%\.babymind\models`. Later launches reuse that model
 locally; the download is not repeated. The first download requires internet
 access and at least 4.5 GB of free disk space.
 
+### iPhone companion included in the portable package
+
+The portable ZIP also includes `BabyMind-iPhone.exe` and
+`Start-BabyMind-iPhone.bat`. Choose one launcher at a time: close
+`BabyMind.exe` before starting the iPhone companion, and close the companion
+before reopening the desktop app. Each launcher runs its own local model
+server, while both reuse the same verified model file and data folder. If the
+model is not already installed, the first launch downloads it (about 2.71 GB),
+so keep the PC online and allow at least 4.5 GB of free disk space.
+
+1. Extract the **entire** ZIP to a normal folder (not inside the ZIP).
+2. Connect the iPhone and Windows PC to the same trusted private Wi-Fi network.
+   Avoid guest Wi-Fi or networks that isolate connected devices.
+3. Double-click `Start-BabyMind-iPhone.bat`. If Windows Firewall asks, allow
+   access on **Private networks only**; never enable Public network access.
+4. Keep the Windows console open and prevent the PC from sleeping. It prints
+   the HTTPS address, a fresh one-time access token, and the path to the public
+   `lan-ca.crt` certificate.
+5. Transfer **only** `lan-ca.crt` to the iPhone (for example with AirDrop).
+   Do not transfer any private-key file. Install the certificate profile, then
+   enable full trust under **Settings → General → About → Certificate Trust
+   Settings**.
+6. Open the exact HTTPS address printed by BabyMind in iPhone Safari. Enter the
+   one-time token when prompted. Keep the token private.
+
+The companion uses the same local model, encrypted data directory, and
+token-protected HTTPS server as BabyMind. In LAN mode it binds to the detected
+local network address rather than every network interface. It does not create
+a cloud account or intentionally expose the service to the public internet.
+Do not configure router port forwarding. The certificate authority is generated locally and
+its private key stays on the PC. The public CA certificate normally remains
+the same between starts on this Windows installation; the server certificate
+is renewed when the companion starts. A fresh access token is generated on
+every server start.
+
+**Recovery and common issues**
+
+- If Safari cannot connect, confirm both devices are on the same non-guest
+  Wi-Fi, the PC is awake, the console is still running, and Windows Firewall
+  permits BabyMind on Private networks.
+- If the saved token stops working after restarting the companion, reload the
+  page and enter the new token printed in the console.
+- If port 8765 is already in use, run
+  `BabyMind-iPhone.exe --port 8766` from PowerShell in the extracted folder,
+  then use the new address printed by the app.
+- If iOS reports an untrusted certificate, check that the installed
+  `lan-ca.crt` profile is enabled under Certificate Trust Settings. Only
+  install the certificate you transferred directly from your own PC.
+- To stop LAN access, close the companion console. No router rule or cloud
+  service should be left running.
+
+**Model and data recovery**
+
+- If the first model download is interrupted, close BabyMind and start either
+  launcher again. An incomplete download is discarded; setup can be retried.
+  BabyMind checks the model's SHA-256 on startup and will replace a damaged
+  model with a fresh download.
+- Conversations and the default encrypted memory stay in
+  `%USERPROFILE%\\.babymind` on the Windows PC. The iPhone is a browser
+  companion; the PC must remain on and awake while you use it.
+- To back up, open BabyMind **Settings → Backup**, choose a destination on the
+  PC outside the live `.babymind` folder, and use a strong password of at
+  least 12 characters. Store the backup and password separately.
+- Restore replaces the current BabyMind data, requires typing
+  `RESTORE BABYMIND`, and should only be done after making a backup of the
+  current data. Restart BabyMind after a restore.
+- Important Windows limitation: the backup is password-encrypted, but the
+  database encryption keys are also protected by Windows DPAPI. Restore is
+  supported only under the **same Windows user account on the same PC**; this
+  backup is not a migration method to a different computer or Windows account.
+
+This feature still needs a real iPhone/Windows device test before it can be
+described as fully verified.
+
 A permanent, versioned Windows release is published by the **BabyMind
 Windows release** workflow. Run it from GitHub Actions with a tag matching
 `pyproject.toml` (currently `v0.3.0`), or push that tag. The workflow repeats
