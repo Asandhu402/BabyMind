@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 import time
+
+from babymind.research import fetch_page, search_web
 from urllib.error import URLError
 from urllib.request import urlopen
 
