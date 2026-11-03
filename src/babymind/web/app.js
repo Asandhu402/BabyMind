@@ -233,7 +233,6 @@ async function runCoreTool(endpoint,payload,label){
       await loadConversations();
     }
     addMessage("assistant",result.response||result.result||result.notice||"The integration completed.", "BabyMind · "+label);
-    if(result.transcript?.text)addMessage("assistant","**Transcript**\n\n"+result.transcript.text,"BabyMind · Voice transcript");
     toast(label+" completed");
   }catch(error){toast(error.message);}
 }
