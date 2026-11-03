@@ -157,6 +157,7 @@ class LlamaCppProvider(LMStudioProvider):
             str(exe), "--model", str(model), "--host", "127.0.0.1",
             "--port", str(port), "--ctx-size",
             os.getenv("BABYMIND_CONTEXT_SIZE", "4096"),
+            "--reasoning-format", "none",
         ]
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
