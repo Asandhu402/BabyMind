@@ -611,8 +611,8 @@ class BabyMindWebTests(unittest.TestCase):
             (project / "tests").mkdir()
             process = SimpleNamespace(returncode=0)
             process.communicate = lambda timeout: ("Ran 3 tests", None)
-            with patch.object(sys, "frozen", False, create=True), \\
-                 patch("babymind.approval.subprocess.Popen", return_value=process) as popen, \\
+            with patch.object(sys, "frozen", False, create=True), \
+                 patch("babymind.approval.subprocess.Popen", return_value=process) as popen, \
                  patch.dict("os.environ", {"PATH": "C:/Windows/System32", "BABYMIND_API_KEY": "must-not-pass"}, clear=True):
                 result = _run_project_tests(project)
             command = popen.call_args.args[0]
@@ -633,8 +633,8 @@ class BabyMindWebTests(unittest.TestCase):
             process.communicate = unittest.mock.Mock(side_effect=[
                 subprocess.TimeoutExpired("fixed-test-command", 90), ("stopped", None)
             ])
-            with patch("babymind.approval.os.name", "posix"), \\
-                 patch("babymind.approval.os.killpg") as kill_group, \\
+            with patch("babymind.approval.os.name", "posix"), \
+                 patch("babymind.approval.os.killpg") as kill_group, \
                  patch("babymind.approval.subprocess.Popen", return_value=process):
                 result = _run_project_tests(project)
             kill_group.assert_called_once()
