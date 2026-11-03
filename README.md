@@ -160,6 +160,26 @@ every server start.
 - To stop LAN access, close the companion console. No router rule or cloud
   service should be left running.
 
+**Model and data recovery**
+
+- If the first model download is interrupted, close BabyMind and start either
+  launcher again. An incomplete download is discarded; setup can be retried.
+  BabyMind checks the model's SHA-256 on startup and will replace a damaged
+  model with a fresh download.
+- Conversations and the default encrypted memory stay in
+  `%USERPROFILE%\\.babymind` on the Windows PC. The iPhone is a browser
+  companion; the PC must remain on and awake while you use it.
+- To back up, open BabyMind **Settings → Backup**, choose a destination on the
+  PC outside the live `.babymind` folder, and use a strong password of at
+  least 12 characters. Store the backup and password separately.
+- Restore replaces the current BabyMind data, requires typing
+  `RESTORE BABYMIND`, and should only be done after making a backup of the
+  current data. Restart BabyMind after a restore.
+- Important Windows limitation: the backup is password-encrypted, but the
+  database encryption keys are also protected by Windows DPAPI. Restore is
+  supported only under the **same Windows user account on the same PC**; this
+  backup is not a migration method to a different computer or Windows account.
+
 This feature still needs a real iPhone/Windows device test before it can be
 described as fully verified.
 
