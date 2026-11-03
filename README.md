@@ -184,14 +184,14 @@ Both endpoints remain subject to local/LAN authorization and origin checks.
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. Open Interpreter can be launched only in its read-only mode, but its own sandbox must enforce that restriction; BabyMind does not claim an independent OS-level sandbox. There is no unrestricted computer control, unattended background execution, or public-internet remote access. The packaged model is an aggressively uncensored community fine-tune, but no
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. Open Interpreter can be launched in workspace-write mode for one explicitly selected project folder: it can edit project files and run project commands, while network access is disabled and requests beyond the workspace require approval. Its native Windows sandbox must enforce the boundary and fail closed if unavailable; this is not full-PC access. The packaged model is an aggressively uncensored community fine-tune, but no
 model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
 
 BabyMind validates that the canonical registry contains exactly 50 unique, sequential IDs from BM-01 through BM-50.
 
-**Security status:** Workspace file operations and project test execution are disabled in the current development branch until native, race-resistant filesystem protections and a real OS-level execution sandbox are implemented and tested.
+**Security status:** The coding assistant supports OS-sandboxed workspace-write sessions for a selected project, with on-request escalation approvals and network disabled. BabyMind's separate in-app workspace file broker remains disabled pending native race-resistant filesystem protections.
 
 
 ## Installation diagnostics
