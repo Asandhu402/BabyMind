@@ -129,5 +129,56 @@ class CoordinatorTests(unittest.TestCase):
             self.memory.relevant("valid query", limit=21)
 
 
+    def test_voicebox_audio_pipeline_uses_shared_coordinator_and_memory(self) -> None:
+        from unittest.mock import patch
+        transcript = {"text": "The meeting starts at ten.", "language": "en"}
+        with patch("babymind.integrations.voicebox.transcribe_with_voicebox", return_value=transcript):
+            result, metadata = self.coordinator.process_voicebox_audio(
+                "BM-01", "meeting.wav", "Extract action items", use_memory=True
+            )
+        self.assertEqual(result.response, "A tested response.")
+        self.assertEqual(metadata, transcript)
+        self.assertIn("The meeting starts at ten.", self.provider.user_prompt)
+        self.assertEqual(result.agent_id, "BM-01")
+
+    def test_knowledge_indexing_requires_explicit_user_approval(self) -> None:
+        from unittest.mock import patch
+        with patch("babymind.integrations.cognee_memory.index_approved_note") as index:
+            with self.assertRaises(PermissionError):
+                self.coordinator.index_knowledge_note("private note")
+            index.assert_not_called()
+            self.coordinator.index_knowledge_note("approved note", user_approved=True)
+            index.assert_called_once_with("approved note")
+
+    def test_knowledge_retrieval_is_answered_by_the_shared_babymind_model(self) -> None:
+        from unittest.mock import patch
+        snippets = ["A grounded local note."]
+        with patch("babymind.integrations.cognee_memory.search_approved_notes", return_value=snippets) as search:
+            result, retrieved = self.coordinator.ask_with_knowledge(
+                "BM-02", "What did the note say?", use_memory=True
+            )
+        search.assert_called_once_with("What did the note say?")
+        self.assertEqual(retrieved, snippets)
+        self.assertEqual(result.response, "A tested response.")
+        self.assertIn("A grounded local note.", self.provider.user_prompt)
+        self.assertIn("untrusted reference material", self.provider.user_prompt)
+        self.assertIn("Researcher", self.provider.system_prompt)
+
+    def test_knowledge_search_without_results_still_uses_shared_coordinator(self) -> None:
+        from unittest.mock import patch
+        with patch("babymind.integrations.cognee_memory.search_approved_notes", return_value=[]):
+            result, retrieved = self.coordinator.ask_with_knowledge("BM-01", "Search my notes")
+        self.assertEqual(retrieved, [])
+        self.assertEqual(result.response, "A tested response.")
+        self.assertEqual(self.provider.user_prompt, "Search my notes")
+
+    def test_speech_synthesis_is_exposed_through_core_coordinator(self) -> None:
+        from unittest.mock import patch
+        with patch("babymind.integrations.voicebox.synthesize_speech", return_value=b"RIFFaudio") as speak:
+            result = self.coordinator.synthesize_speech("Hello BabyMind")
+        self.assertEqual(result, b"RIFFaudio")
+        speak.assert_called_once_with("Hello BabyMind", voice=None, speed=1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

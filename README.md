@@ -208,22 +208,29 @@ model is reported as a warning so you can start LM Studio and run the command
 again. A missing memory key is a failure: do not delete or replace it.
 
 
-## Core-connected optional integrations
+## Integrated capabilities
 
-Open **Settings → Connected tools** in the BabyMind app. These integrations are connected to the existing coordinator and one selected local model; they do not create separate AI identities or duplicate memory systems. Document analysis (Docling) and audio transcription (faster-whisper) feed extracted text into the same coordinator. Browser Use runs as a supervised local-browser task after explicit confirmation; it is enabled by default and can be disabled with `BABYMIND_BROWSER_AUTOMATION_ENABLED=false`. Open Interpreter is an external process launched with `sandbox_mode=read-only` and `approval_policy=untrusted`; BabyMind does not expose unrestricted or write-capable coding-agent mode.
+Open **Settings → Connected tools** in BabyMind. These are product capabilities routed through the same BabyMind coordinator, identity, local model and encrypted conversation history; they are not separate assistants.
 
-Install only the capabilities you want:
+- **Document understanding:** Docling extracts local documents and sends their content to the shared coordinator.
+- **Speech:** faster-whisper and Voicebox transcription feed the same coordinator; Voicebox speech output uses the same BabyMind identity.
+- **Knowledge retrieval:** Cognee search is answered by the shared coordinator and can use BabyMind's encrypted memory. Only individually approved notes are indexed. Cognee's separate graph/vector store is not encrypted by BabyMind, so do not index secrets.
+- **Browser automation:** supervised local browser tasks require explicit approval before launch.
+- **Coding:** Open Interpreter runs against the local model with workspace-write access confined by the OS sandbox to the selected project folder. Network access is disabled and escalation requires approval. If the OS sandbox cannot be enforced, the session must fail closed. This is not full-PC access.
+- **Quality and security:** Promptfoo is part of the repository's developer/CI quality workflow and tests BabyMind through its loopback API; it is not another runtime assistant.
+
+Some capabilities need their local engine installed or running because large speech/document models and browser runtimes should not be forced into every lightweight install. They are still integrated BabyMind capabilities, not separate AI products. Install or start only the local engine needed by a capability:
 
     py -m pip install -e ".[documents]"
     py -m pip install -e ".[voice]"
     py -m pip install -e ".[browser]"
+    py -m pip install -e ".[knowledge-graph]"
 
-Browser Use requires Python 3.11 or newer. Open Interpreter is installed separately from its upstream project. See [Optional integrations](docs/OPTIONAL_INTEGRATIONS.md) for usage, local-only configuration, privacy details, and safety limits.
+Voicebox runs as a loopback-only local service. Cognee requires explicit per-note approval and a separate local storage review. See [capability setup and safety](docs/OPTIONAL_INTEGRATIONS.md) and [quality checks](quality/README.md).
 
-Check availability without starting any service:
+Check engine availability without starting models:
 
     babymind integrations
-
 
 ## Additional optional local integrations
 
