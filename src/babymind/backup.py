@@ -136,9 +136,11 @@ def _decrypt_backup(source: Path, password: str, work: Path) -> dict[str, bytes]
         names = archive.namelist()
         if len(names) > len(_ALLOWED) or set(names) - _ALLOWED or len(names) != len(set(names)):
             raise ValueError("Backup contains unexpected or duplicate file paths.")
+        total_size = 0
         for info in archive.infolist():
-            if info.is_dir() or info.file_size > _MAX_ARCHIVE:
-                raise ValueError("Backup contains an invalid file entry.")
+            total_size += info.file_size
+            if info.is_dir() or info.file_size > _MAX_ARCHIVE or total_size > _MAX_ARCHIVE:
+                raise ValueError("Backup contains an invalid or oversized file entry.")
             files[info.filename] = archive.read(info)
     manifest_raw = files.pop("manifest.json", None)
     if manifest_raw is None:
@@ -173,6 +175,45 @@ def _validate_database(path: Path) -> None:
         connection.close()
 
 
+def _validate_encrypted_data(work: Path, files: dict[str, bytes]) -> None:
+    """Confirm each included key can decrypt the encrypted fields in its DB."""
+    from .secure_store import SecureTextStore
+
+    checks = {
+        "app.sqlite3": {
+            "conversations": ("title",),
+            "messages": ("content",),
+            "tasks": ("title", "details"),
+            "execution_proposals": ("payload", "result"),
+        },
+        "memory.sqlite3": {"memories": ("task", "response")},
+    }
+    for database, tables in checks.items():
+        if database not in files:
+            continue
+        key_name = "app.key" if database == "app.sqlite3" else "memory.key"
+        key_path = work / key_name
+        key_path.write_bytes(files[key_name])
+        store = SecureTextStore(key_path)
+        connection = sqlite3.connect(str(work / database))
+        try:
+            available = {row[0] for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )}
+            for table, columns in tables.items():
+                if table not in available:
+                    continue
+                existing = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+                for column in columns:
+                    if column not in existing:
+                        continue
+                    for (value,) in connection.execute(f"SELECT {column} FROM {table} WHERE {column} IS NOT NULL"):
+                        if isinstance(value, str) and value.startswith("bmenc:v1:"):
+                            store.decrypt(value)
+        finally:
+            connection.close()
+
+
 def restore_backup(
     home: str | Path,
     source: str | Path,
@@ -187,6 +228,7 @@ def restore_backup(
     backup = Path(source).expanduser().resolve()
     if backup == root or root in backup.parents:
         raise ValueError("Restore source must be outside BabyMind's live data directory.")
+    root.parent.mkdir(parents=True, exist_ok=True)
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="babymind-restore-", dir=root.parent) as temporary:
         work = Path(temporary)
@@ -196,6 +238,7 @@ def restore_backup(
             staged.write_bytes(data)
             if name.endswith(".sqlite3"):
                 _validate_database(staged)
+        _validate_encrypted_data(work, files)
         # Keep a rollback copy until all replacements have completed.
         rollback = work / "rollback"
         rollback.mkdir()
