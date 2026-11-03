@@ -370,6 +370,7 @@ class Handler(BaseHTTPRequestHandler):
                     str(payload.get("relative_path", "")),
                     action=proposal_action,
                     name_contains=str(payload.get("name_contains", "")),
+                    content=payload.get("content", ""),
                 )
                 proposal_id = secrets.token_urlsafe(12)
                 timestamp = now()
@@ -388,7 +389,9 @@ class Handler(BaseHTTPRequestHandler):
                     "payload": proposal["payload"], "proposal_hash": proposal["proposal_hash"],
                     "status": "awaiting_approval",
                     "effects": (
-                        "Read up to 32 KB of this UTF-8 text file after approval."
+                        "Create one new UTF-8 text file up to 32 KB after approval. Existing files are never overwritten."
+                        if proposal["action"] == "create_text_file"
+                        else "Read up to 32 KB of this UTF-8 text file after approval."
                         if proposal["action"] == "read_text_file"
                         else "Search eligible filenames only; file contents are not opened."
                         if proposal["action"] == "find_files"
@@ -430,7 +433,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({
                     "id": proposal_id, "status": "completed", "result": result,
                     "notice": (
-                        "Approved text-file preview completed. No files were modified."
+                        "Approved new text file created. No existing file was overwritten."
+                        if row["action"] == "create_text_file"
+                        else "Approved text-file preview completed. No files were modified."
                         if row["action"] == "read_text_file"
                         else "Filename search completed. No file contents were opened."
                         if row["action"] == "find_files"
