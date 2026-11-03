@@ -13,6 +13,28 @@ from babymind.providers import (
 
 
 class ProviderSelectionTests(unittest.TestCase):
+    def test_generation_settings_are_sent_to_local_chat_api(self) -> None:
+        provider = LMStudioProvider(base_url="http://127.0.0.1:1234/v1", model="local")
+        with patch.dict(os.environ, {
+            "BABYMIND_TEMPERATURE": "0.35",
+            "BABYMIND_TOP_P": "0.92",
+            "BABYMIND_MAX_TOKENS": "1536",
+        }, clear=True), patch.object(provider, "_request_json", return_value={
+            "choices": [{"message": {"content": "A complete answer."}}]
+        }) as request:
+            result = provider.complete("system", "question")
+        self.assertEqual(result, "A complete answer.")
+        payload = request.call_args.args[1]
+        self.assertEqual(payload["temperature"], 0.35)
+        self.assertEqual(payload["top_p"], 0.92)
+        self.assertEqual(payload["max_tokens"], 1536)
+
+    def test_invalid_generation_settings_fail_clearly(self) -> None:
+        provider = LMStudioProvider(base_url="http://127.0.0.1:1234/v1", model="local")
+        with patch.dict(os.environ, {"BABYMIND_MAX_TOKENS": "not-a-number"}, clear=True):
+            with self.assertRaisesRegex(ProviderError, "valid numeric values"):
+                provider.complete("system", "question")
+
     def test_lm_studio_is_default_backend(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
             self.assertIsInstance(create_provider(), LMStudioProvider)
