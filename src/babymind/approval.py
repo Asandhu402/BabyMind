@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 
 MAX_TEXT_FILE_BYTES = 32 * 1024
@@ -123,6 +124,25 @@ def build_readonly_proposal(
         root, target = _safe_text_file(relative_path.strip())
         relative = target.relative_to(root).as_posix()
         payload = {"relative_path": relative}
+    elif action == "edit_text_file":
+        root, target = _safe_text_file(relative_path.strip())
+        with target.open("rb") as handle:
+            original = handle.read(MAX_TEXT_FILE_BYTES + 1)
+        if len(original) > MAX_TEXT_FILE_BYTES or b"\\x00" in original:
+            raise ValueError("Only UTF-8 text files up to 32 KB can be edited.")
+        try:
+            original_text = original.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("Only valid UTF-8 text files can be edited.") from error
+        if not isinstance(content, str) or "\\x00" in content or len(content.encode("utf-8")) > MAX_TEXT_FILE_BYTES:
+            raise ValueError("Edited text must be plain UTF-8 and no larger than 32 KB.")
+        relative = target.relative_to(root).as_posix()
+        payload = {
+            "relative_path": relative,
+            "expected_sha256": hashlib.sha256(original).hexdigest(),
+            "original_content": original_text,
+            "content": content,
+        }
     elif action == "find_files":
         root, target = _safe_directory(relative_path.strip())
         query = name_contains.strip()
@@ -139,11 +159,60 @@ def build_readonly_proposal(
         "payload": payload,
         "proposal_hash": digest,
         "display_target": relative,
-        "max_bytes": MAX_TEXT_FILE_BYTES if action in {"read_text_file", "create_text_file"} else None,
+        "max_bytes": MAX_TEXT_FILE_BYTES if action in {"read_text_file", "create_text_file", "edit_text_file"} else None,
     }
 
 
 def execute_readonly_proposal(payload: dict, action: str = "list_directory") -> dict:
+    if action == "edit_text_file":
+        required = {"relative_path", "expected_sha256", "original_content", "content"}
+        if not isinstance(payload, dict) or set(payload) != required or any(not isinstance(payload[key], str) for key in required):
+            raise ValueError("Unsupported or malformed approved action.")
+        root, target = _safe_text_file(payload["relative_path"])
+        try:
+            new_content = payload["content"].encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise ValueError("Edited text must be valid UTF-8.") from error
+        if len(new_content) > MAX_TEXT_FILE_BYTES or b"\\x00" in new_content:
+            raise ValueError("Edited text must be plain UTF-8 and no larger than 32 KB.")
+        with target.open("rb") as handle:
+            current = handle.read(MAX_TEXT_FILE_BYTES + 1)
+        if hashlib.sha256(current).hexdigest() != payload["expected_sha256"]:
+            raise ValueError("The file changed after review. No changes were applied; create a new proposal.")
+        try:
+            current_text = current.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("The current file is no longer valid UTF-8. No changes were applied.") from error
+        if current_text != payload["original_content"]:
+            raise ValueError("The file content no longer matches the reviewed version. No changes were applied.")
+        descriptor = -1
+        temporary_path = None
+        try:
+            descriptor, temporary_path = tempfile.mkstemp(prefix=".babymind-edit-", suffix=".tmp", dir=target.parent)
+            with os.fdopen(descriptor, "wb") as handle:
+                descriptor = -1
+                handle.write(new_content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            # Recheck immediately before atomic replacement to avoid applying a stale proposal.
+            with target.open("rb") as handle:
+                latest = handle.read(MAX_TEXT_FILE_BYTES + 1)
+            if hashlib.sha256(latest).hexdigest() != payload["expected_sha256"]:
+                raise ValueError("The file changed during approval. No changes were applied.")
+            os.replace(temporary_path, target)
+            temporary_path = None
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            if temporary_path:
+                try:
+                    os.unlink(temporary_path)
+                except FileNotFoundError:
+                    pass
+        return {"relative_path": target.relative_to(root).as_posix(), "updated": True,
+                "old_sha256": payload["expected_sha256"],
+                "new_sha256": hashlib.sha256(new_content).hexdigest(),
+                "bytes": len(new_content)}
     if action == "create_text_file":
         if (not isinstance(payload, dict) or set(payload) != {"relative_path", "content"}
                 or not isinstance(payload["relative_path"], str)
