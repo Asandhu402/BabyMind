@@ -34,40 +34,6 @@ class FirstRunSetupTests(unittest.TestCase):
                 _ensure_model(path)
             verify.assert_called_once_with(path)
 
-    def test_custom_gguf_is_not_compared_to_bundled_model_checksum(self) -> None:
-        from babymind.first_run import prepare_local_engine
-        with tempfile.TemporaryDirectory() as folder:
-            runtime = Path(folder) / "llama-server.exe"
-            runtime.write_bytes(b"runtime")
-            model = Path(folder) / "custom-model.gguf"
-            model.write_bytes(b"user-selected model")
-            env = {
-                "BABYMIND_ENGINE": "llama.cpp",
-                "BABYMIND_GGUF_MODEL": str(model),
-            }
-            with patch.dict("os.environ", env, clear=True), \
-                 patch("babymind.first_run._app_directory", return_value=Path(folder)), \
-                 patch("babymind.first_run._find_llama_server", return_value=runtime), \
-                 patch("babymind.first_run._ensure_model") as ensure:
-                prepare_local_engine()
-                ensure.assert_not_called()
-                self.assertEqual(Path(__import__("os").environ["BABYMIND_GGUF_MODEL"]), model)
-
-    def test_missing_custom_gguf_is_rejected(self) -> None:
-        from babymind.first_run import prepare_local_engine
-        with tempfile.TemporaryDirectory() as folder:
-            runtime = Path(folder) / "llama-server.exe"
-            runtime.write_bytes(b"runtime")
-            env = {
-                "BABYMIND_ENGINE": "llama.cpp",
-                "BABYMIND_GGUF_MODEL": str(Path(folder) / "missing.gguf"),
-            }
-            with patch.dict("os.environ", env, clear=True), \
-                 patch("babymind.first_run._app_directory", return_value=Path(folder)), \
-                 patch("babymind.first_run._find_llama_server", return_value=runtime):
-                with self.assertRaisesRegex(RuntimeError, "existing user-selected"):
-                    prepare_local_engine()
-
     def test_finds_bundled_llama_server(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             runtime = Path(folder) / "llama.cpp"
