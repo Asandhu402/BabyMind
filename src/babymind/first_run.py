@@ -229,7 +229,15 @@ def prepare_local_engine() -> None:
         if configured_model
         else _data_home() / "models" / MODEL_FILENAME
     )
-    _ensure_model(model_path)
+    if configured_model:
+        # A user-selected alternative model is not the bundled, pinned file.
+        # Never delete or overwrite it based on the bundled model's checksum.
+        if not model_path.is_file() or model_path.suffix.lower() != ".gguf":
+            raise RuntimeError(
+                "BABYMIND_GGUF_MODEL must point to an existing user-selected .gguf file."
+            )
+    else:
+        _ensure_model(model_path)
 
     os.environ["BABYMIND_ENGINE"] = "llama.cpp"
     os.environ["BABYMIND_LLAMA_SERVER"] = str(server)
