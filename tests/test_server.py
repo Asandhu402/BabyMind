@@ -421,5 +421,46 @@ class BabyMindWebTests(unittest.TestCase):
                 build_readonly_proposal(".", action="find_files", name_contains="  ")
 
 
+    def test_new_text_file_requires_exact_approval_and_never_overwrites(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            status, _, body = self.request("/api/tasks", {"title": "Create a draft"})
+            task_id = json.loads(body)["id"]
+            self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+            Path(workspace, "drafts").mkdir()
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/propose",
+                {"relative_path": "drafts/hello.txt", "action": "create_text_file", "content": "Hello BabyMind"},
+            )
+            self.assertEqual(status, 201)
+            proposal = json.loads(body)
+            self.assertEqual(proposal["action"], "create_text_file")
+            self.assertFalse(Path(workspace, "drafts", "hello.txt").exists())
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve", {"proposal_hash": "wrong"}
+            )
+            self.assertEqual(status, 400)
+            self.assertFalse(Path(workspace, "drafts", "hello.txt").exists())
+            status, _, body = self.request(
+                f"/api/proposals/{proposal['id']}/approve",
+                {"proposal_hash": proposal["proposal_hash"]},
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(Path(workspace, "drafts", "hello.txt").read_text(encoding="utf-8"), "Hello BabyMind")
+            self.assertTrue(json.loads(body)["result"]["created"])
+
+    def test_new_text_file_rejects_existing_target_and_unsafe_input(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            from babymind.approval import build_readonly_proposal
+            Path(workspace, "exists.txt").write_text("keep me", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "never overwrite"):
+                build_readonly_proposal("exists.txt", action="create_text_file", content="replace")
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("../escape.txt", action="create_text_file", content="no")
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("bad.exe", action="create_text_file", content="no")
+            with self.assertRaises(ValueError):
+                build_readonly_proposal("new.txt", action="create_text_file", content="\x00")
+
+
 if __name__ == "__main__":
     unittest.main()
