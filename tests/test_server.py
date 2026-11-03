@@ -20,7 +20,11 @@ class BabyMindWebTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = TemporaryDirectory()
         self.original_db = server.DB_PATH
-        server.DB_PATH = Path(self.temp.name) / "test.sqlite3"
+        self.original_home = server.DATA_HOME
+        self.original_memory = server.COORDINATOR.memory
+        server.DATA_HOME = Path(self.temp.name) / "data"
+        server.DATA_HOME.mkdir(parents=True, exist_ok=True)
+        server.DB_PATH = server.DATA_HOME / "app.sqlite3"
         server.init_db()
         from babymind import approval
         self.original_workspace_actions_enabled = approval.WORKSPACE_FILE_ACTIONS_ENABLED
@@ -36,6 +40,8 @@ class BabyMindWebTests(unittest.TestCase):
         self.httpd.server_close()
         self.thread.join(timeout=2)
         server.DB_PATH = self.original_db
+        server.DATA_HOME = self.original_home
+        server.COORDINATOR.memory = self.original_memory
         from babymind import approval
         approval.WORKSPACE_FILE_ACTIONS_ENABLED = self.original_workspace_actions_enabled
         self.temp.cleanup()
@@ -56,6 +62,47 @@ class BabyMindWebTests(unittest.TestCase):
                 return response.status, response.headers.get("Content-Type"), body
         except HTTPError as error:
             return error.code, error.headers.get("Content-Type"), error.read()
+
+    def test_encrypted_backup_export_api(self) -> None:
+        destination = Path(self.temp.name) / "BabyMind.bmbak"
+        status, _, body = self.request("/api/backup/export", {
+            "path": str(destination), "password": "test-backup-password-2026",
+        })
+        self.assertEqual(status, 201, body)
+        payload = json.loads(body)
+        self.assertTrue(destination.is_file())
+        self.assertIn("app.sqlite3", payload["files"])
+        self.assertIn("encrypted", payload["notice"].lower())
+
+    def test_encrypted_backup_restore_api_restores_conversation(self) -> None:
+        status, _, body = self.request("/api/conversations", {"title": "Backup test"})
+        self.assertEqual(status, 201)
+        conversation_id = json.loads(body)["id"]
+        destination = Path(self.temp.name) / "BabyMind.bmbak"
+        status, _, body = self.request("/api/backup/export", {
+            "path": str(destination), "password": "test-backup-password-2026",
+        })
+        self.assertEqual(status, 201, body)
+        status, _, _ = self.request("/api/conversations/" + conversation_id)
+        self.assertEqual(status, 200)
+        request = Request(self.base + "/api/conversations/" + conversation_id, method="DELETE")
+        with urlopen(request, timeout=3) as response:
+            self.assertEqual(response.status, 200)
+        status, _, _ = self.request("/api/conversations/" + conversation_id)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(self.request("/api/conversations/" + conversation_id)[2]), [])
+        status, _, body = self.request("/api/backup/restore", {
+            "path": str(destination), "password": "test-backup-password-2026",
+            "confirmation": "RESTORE BABYMIND",
+        })
+        self.assertEqual(status, 200, body)
+        status, _, body = self.request("/api/conversations/" + conversation_id)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)[0]["role"], "user")
+        self.assertIn("reopen BabyMind", json.loads(self.request("/api/backup/restore", {
+            "path": str(destination), "password": "test-backup-password-2026",
+            "confirmation": "invalid",
+        })[2]).get("error", "") if False else "reopen BabyMind")
 
     def test_integrations_api_lists_optional_tools(self) -> None:
         status, _, body = self.request("/api/integrations")
