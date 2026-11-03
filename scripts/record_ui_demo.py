@@ -405,8 +405,14 @@ def main() -> None:
                     print(f"Recorded actual BabyMind UI video ({Path(video_path).stat().st_size} bytes).")
             except PlaywrightTimeoutError as error:
                 detail = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+                llama_detail = (
+                    Path(os.environ["RUNNER_TEMP"], "llama-demo.log").read_text(
+                        encoding="utf-8", errors="replace"
+                    ) if Path(os.environ["RUNNER_TEMP"], "llama-demo.log").exists() else ""
+                )
                 raise RuntimeError(
-                    f"Browser UI timed out: {error}. BabyMind server log:\\n{detail[-10000:]}"
+                    f"Browser UI timed out: {error}. BabyMind server log:\\n{detail[-10000:]}\\n"
+                    f"llama.cpp server log:\\n{llama_detail[-10000:]}"
                 ) from error
             finally:
                 if server is not None and server.poll() is None:
