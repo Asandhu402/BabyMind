@@ -145,18 +145,18 @@ bm_ws_status open_parent(void* root_value, const wchar_t* relative_path,
     }
     if (components.empty()) return BM_WS_INVALID_RELATIVE_PATH;
 
-    UniqueHandle current(reinterpret_cast<HANDLE>(root_value));
-    // The caller retains ownership of root_value. Duplicate the handle before
-    // walking so closing intermediate handles never closes the caller's root.
+    // Duplicate the caller's root handle; never transfer or close caller ownership.
+    UniqueHandle current;
     HANDLE duplicate = INVALID_HANDLE_VALUE;
-    if (!DuplicateHandle(GetCurrentProcess(), current.get(), GetCurrentProcess(),
-                         &duplicate, 0, FALSE, DUPLICATE_SAME_ACCESS)) return BM_WS_IO_ERROR;
+    if (!DuplicateHandle(GetCurrentProcess(), reinterpret_cast<HANDLE>(root_value),
+                         GetCurrentProcess(), &duplicate, 0, FALSE,
+                         DUPLICATE_SAME_ACCESS)) return BM_WS_IO_ERROR;
     current.reset(duplicate);
 
     for (size_t i = 0; i + 1 < components.size(); ++i) {
         UniqueHandle next;
         if (!nt_open_relative(current.get(), components[i],
-                FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, FILE_OPEN,
+                FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES, FILE_OPEN,
                 FILE_DIRECTORY_FILE, &next)) return BM_WS_IO_ERROR;
         bm_ws_status status = BM_WS_OK;
         if (is_reparse_or_wrong_type(next.get(), true, &status)) return status;
@@ -251,7 +251,8 @@ extern "C" BM_WS_API bm_ws_status bm_ws_read_text(
     uint8_t* output, size_t output_capacity, size_t* bytes_read) {
     if (bytes_read == nullptr || output == nullptr) return BM_WS_INVALID_ARGUMENT;
     *bytes_read = 0;
-    if (max_bytes == 0 || max_bytes > kMaxReadBytes || output_capacity < max_bytes + 1) return BM_WS_TOO_LARGE;
+    if (max_bytes == 0 || max_bytes > kMaxReadBytes) return BM_WS_TOO_LARGE;
+    if (output_capacity < max_bytes + 1) return BM_WS_BUFFER_TOO_SMALL;
     UniqueHandle parent;
     std::wstring leaf;
     bm_ws_status status = open_parent(root, relative_path, &parent, &leaf);
