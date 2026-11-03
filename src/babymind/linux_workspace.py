@@ -11,7 +11,6 @@ import errno
 import os
 import platform
 import stat
-from pathlib import PurePosixPath
 
 # openat2 is syscall 437 on x86_64 and 56 on arm64/aarch64.
 _MACHINE_SYSCALL = {"x86_64": 437, "amd64": 437, "aarch64": 56, "arm64": 56}
@@ -158,9 +157,16 @@ class LinuxWorkspace:
         directory_fd = self._directory_fd(parts)
         try:
             entries = []
-            for name in sorted(os.listdir(directory_fd), key=str.casefold):
-                if name.startswith("."):
-                    continue
+            # Bound enumeration work; the UI can request another view later.
+            with os.scandir(directory_fd) as iterator:
+                names = []
+                for entry in iterator:
+                    if entry.name.startswith("."):
+                        continue
+                    names.append(entry.name)
+                    if len(names) >= 201:
+                        break
+            for name in sorted(names[:200], key=str.casefold):
                 try:
                     info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
                 except FileNotFoundError:
@@ -175,11 +181,13 @@ class LinuxWorkspace:
                 else:
                     kind = "other"
                 entries.append({"name": name[:255], "type": kind})
-            return entries[:200]
+            return entries
         finally:
             os.close(directory_fd)
 
     def read_file(self, relative_path: str, max_bytes: int = 32768) -> bytes:
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
+            raise WorkspaceSecurityError("Read limit must be a non-negative integer.")
         parts = _parts(relative_path)
         parent_fd = self._directory_fd(parts[:-1])
         try:
