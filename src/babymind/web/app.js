@@ -289,13 +289,9 @@ async function init() {
       $("#cogneeStatus").textContent=result.notice;toast("Approved note indexed in Cognee");
     }catch(error){$("#cogneeStatus").textContent=error.message;toast(error.message);}
   });
-  $("#searchCognee").addEventListener("click",async()=>{
-    const query=$("#cogneeQuery").value.trim();if(!query){toast("Enter a knowledge graph question.");return;}
-    try{
-      const result=await api("/api/integrations/cognee/search",{method:"POST",body:JSON.stringify({query})});
-      setView("chat");addMessage("assistant",result.results.join("\n\n")||"No matching Cognee chunks were found.","BabyMind · Cognee knowledge search");
-      toast("Cognee search completed");
-    }catch(error){$("#cogneeStatus").textContent=error.message;toast(error.message);}
+  $("#searchCognee").addEventListener("click",()=>{
+    const query=$("#cogneeQuery").value.trim();if(!query){toast("Enter a knowledge question.");return;}
+    runCoreTool("/api/integrations/cognee/search",{query,agent_id:$("#agentSelect").value,use_memory:$("#memoryToggle").checked,remember:$("#rememberToggle").checked},"Knowledge search");
   });
   $("#processVoiceboxAudio").addEventListener("click",()=>{
     const path=$("#audioPath").value.trim();if(!path){toast("Enter a local audio path.");return;}
