@@ -64,12 +64,16 @@ jobs:
           if (-not $server) { throw "llama-server.exe was not found in verified archive." }
           "BABYMIND_DEMO_MODEL=$model" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_DEMO_LLAMA=$($server.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_CONTEXT_SIZE=8192" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_TEMPERATURE=0.35" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_TOP_P=0.9" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_MAX_TOKENS=1024" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Start and verify local llama.cpp model
         shell: pwsh
         run: |
           $llamaLog = Join-Path $env:RUNNER_TEMP "llama-demo.log"
-          $serverArgs = @("--model", "`"$env:BABYMIND_DEMO_MODEL`"", "--host", "127.0.0.1", "--port", "1235", "--ctx-size", "2048", "--threads", "4", "--n-gpu-layers", "0") -join " "
+          $serverArgs = @("--model", "`"$env:BABYMIND_DEMO_MODEL`"", "--host", "127.0.0.1", "--port", "1235", "--ctx-size", "8192", "--threads", "4", "--n-gpu-layers", "0") -join " "
           $llama = Start-Process -FilePath $env:BABYMIND_DEMO_LLAMA -ArgumentList $serverArgs -PassThru -NoNewWindow -RedirectStandardOutput $llamaLog -RedirectStandardError (Join-Path $env:RUNNER_TEMP "llama-demo.err")
           "BABYMIND_LLAMA_PID=$($llama.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
           $ready = $false
