@@ -223,3 +223,14 @@ Browser Use requires Python 3.11 or newer. Open Interpreter is installed separat
 Check availability without starting any service:
 
     babymind integrations
+
+
+## Additional optional local integrations
+
+BabyMind can connect to three additional open-source projects without creating new assistant identities:
+
+- **Cognee** adds an opt-in local knowledge graph. Only individually approved notes are indexed; BabyMind never copies all encrypted conversation history. Cognee's separate local graph/vector files are not encrypted by BabyMind. Install with `py -m pip install -e ".[knowledge-graph]"` and set `BABYMIND_COGNEE_ENABLED=true` after reviewing the privacy warning.
+- **Voicebox** adds local speech output and an alternative speech-to-text server. Run its Docker service on 127.0.0.1:8790; CPU Piper is the recommended starting point for integrated-graphics laptops.
+- **Promptfoo** adds developer-only local evaluation in quality/. It targets BabyMind's loopback API and uses no hosted grader in the included smoke suite.
+
+See Optional integrations (docs/OPTIONAL_INTEGRATIONS.md) and Quality checks (quality/README.md) for setup and privacy boundaries.
