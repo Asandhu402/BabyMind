@@ -223,10 +223,13 @@ def prepare_local_engine() -> None:
             "BabyMind Windows package again; do not move only BabyMind.exe."
         )
 
-    configured_model = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
+    # BabyMind always uses the single bundled, SHA-256-pinned model.
+    # The environment variable may relocate that exact file for packaging/tests,
+    # but _ensure_model verifies its contents and replaces mismatches safely.
+    configured_path = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
     model_path = (
-        Path(configured_model).expanduser()
-        if configured_model
+        Path(configured_path).expanduser()
+        if configured_path
         else _data_home() / "models" / MODEL_FILENAME
     )
     _ensure_model(model_path)

@@ -802,15 +802,26 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Conversation not found. Start a new conversation.")
                 history = connection.execute(
                     "SELECT role, content FROM messages WHERE conversation_id=? "
-                    "ORDER BY id DESC LIMIT 12", (conversation_id,)
+                    "ORDER BY id DESC LIMIT 10", (conversation_id,)
                 ).fetchall()
                 history = list(reversed(history))
             else:
                 history = []
-        context = "\n".join(
-            f"{'User' if item['role'] == 'user' else 'BabyMind'}: {text_store().decrypt(item['content'])}"
-            for item in history
-        )
+        # Bound dialogue context so long chats do not crowd out the current
+        # request when using a compact local model/context window.
+        context_parts: list[str] = []
+        remaining_chars = 10_000
+        for item in reversed(history):
+            if remaining_chars <= 0:
+                break
+            content = text_store().decrypt(item["content"])
+            content = content[-min(3_000, remaining_chars):]
+            line = f"{'User' if item['role'] == 'user' else 'BabyMind'}: {content}"
+            if len(line) > remaining_chars:
+                line = line[-remaining_chars:]
+            context_parts.append(line)
+            remaining_chars -= len(line) + 1
+        context = "\n".join(reversed(context_parts))
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
         if payload.get("collaborate"):
             first = COORDINATOR.ask(agent_id, prompt, use_memory=bool(payload.get("use_memory")))

@@ -74,13 +74,31 @@ class LMStudioProvider:
         return str(models[0]["id"])
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
+        # Configurable conservative defaults for local inference.
+        try:
+            temperature = float(os.getenv("BABYMIND_TEMPERATURE", "0.4"))
+            top_p = float(os.getenv("BABYMIND_TOP_P", "0.9"))
+            max_tokens = int(os.getenv("BABYMIND_MAX_TOKENS", "2048"))
+        except ValueError as error:
+            raise ProviderError(
+                "BABYMIND_TEMPERATURE, BABYMIND_TOP_P, and BABYMIND_MAX_TOKENS "
+                "must be valid numeric values."
+            ) from error
+        if not 0.0 <= temperature <= 2.0:
+            raise ProviderError("BABYMIND_TEMPERATURE must be between 0 and 2.")
+        if not 0.0 < top_p <= 1.0:
+            raise ProviderError("BABYMIND_TOP_P must be greater than 0 and at most 1.")
+        if not 1 <= max_tokens <= 32768:
+            raise ProviderError("BABYMIND_MAX_TOKENS must be between 1 and 32768.")
         payload = {
             "model": self._resolve_model(),
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": 0.7,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": max_tokens,
         }
         response = self._request_json(
             f"{self.base_url}/chat/completions", payload

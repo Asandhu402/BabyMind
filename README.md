@@ -73,6 +73,28 @@ server process it started when BabyMind exits. The default context size is
 the CPU build by default; acceleration depends on the llama.cpp build you
 download and its compatible runtime libraries.
 
+### Fixed local model and answer quality
+
+BabyMind uses one bundled, SHA-256-pinned local model. Its model identity is
+fixed: configuration, updates, and specialist roles must never silently switch
+to another model. A relocated copy is accepted only when its contents match the
+pinned SHA-256. All 50 specialist roles share this same model; adding roles does
+not create separate models or increase its underlying reasoning capability.
+
+Answer quality is improved in BabyMind's core orchestration, bounded context,
+retrieval, safety checks, and evaluation—not by changing the model. The model
+runs locally through the bundled llama.cpp CPU runtime.
+
+Generation defaults are configurable for either local OpenAI-compatible backend:
+- `BABYMIND_TEMPERATURE` (default `0.4`)
+- `BABYMIND_TOP_P` (default `0.9`)
+- `BABYMIND_MAX_TOKENS` (default `2048`)
+
+Conversation history is limited to the most recent 10 messages and approximately
+10,000 characters so older dialogue does not consume the entire context window.
+For llama.cpp, set `BABYMIND_CONTEXT_SIZE` to a value supported by the model and
+available memory (for example, `8192`); a larger context also consumes more RAM.
+
 ### Switch back to LM Studio
 
 For source/developer launches, set `BABYMIND_ENGINE=lm-studio` to use LM Studio.
@@ -361,3 +383,18 @@ BabyMind can connect to three additional open-source projects without creating n
 - **Promptfoo** adds developer-only local evaluation in quality/. It targets BabyMind's loopback API and uses no hosted grader in the included smoke suite.
 
 See Optional integrations (docs/OPTIONAL_INTEGRATIONS.md) and Quality checks (quality/README.md) for setup and privacy boundaries.
+
+
+## Local self-inspection and public GitHub research demo
+
+The Windows UI demo reads a strict allowlist of BabyMind source files from the
+same local checkout used to launch the app. It separately searches public
+GitHub for unrelated projects, excludes BabyMind's own private repository, and
+reads a small number of public project pages. BabyMind's fixed local model
+compares those public capabilities against its actual local source and produces
+one prioritized core-code improvement with exact files, tests, and measurable
+acceptance criteria. Only the public search query and requests for public pages
+leave the device; the local BabyMind source snapshot is sent only to the local
+model. The local snapshot excludes environment files, credentials, user
+databases, memory stores, certificates, model weights, and arbitrary workspace
+files. Public page text is treated as untrusted input.
