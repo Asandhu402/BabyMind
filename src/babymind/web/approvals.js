@@ -175,9 +175,8 @@
     try {
       await api(`/api/proposals/${encodeURIComponent(id)}/approve`, {method:"POST", body:JSON.stringify({proposal_hash:item.proposal_hash})});
       toast(isTestRun ? "Approved. Test run finished; review its result." : isFileEdit ? "Approved. Text file updated." : isFileCreate ? "Approved. New file created." : isFileRead ? "Approved. Text preview complete." : isFileSearch ? "Approved. Filename search complete." : "Approved. The read-only listing is complete.");
-      await load();
-    } catch (error) { toast(error.message); await load(); }
-    finally { state.busy = false; }
+    } catch (error) { toast(error.message); }
+    finally { state.busy = false; await load(); }
   }
   document.addEventListener("click", event => {
     const nav = event.target.closest('[data-view="approvals"]');
