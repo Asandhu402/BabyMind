@@ -37,9 +37,9 @@ Open Settings → Connected tools, enter a local audio path and an instruction, 
 
 Browser Use can click, type, navigate and submit forms. BabyMind therefore requires both:
 - explicit `user_approved=True` for each invocation; and
-- `BABYMIND_BROWSER_AUTOMATION_ENABLED=true` after the user has reviewed this policy.
+- browser automation is enabled by default; set `BABYMIND_BROWSER_AUTOMATION_ENABLED=false` to disable it.
 
-The adapter uses Browser Use's local browser default and a local LM Studio-compatible endpoint. It does not select Browser Use Cloud. Keep the browser visible and supervised. Do not delegate purchases, payments, account changes, submissions, sending messages, or other consequential actions to this task-level automation. Never place credentials or session cookies in prompts. Web pages are untrusted and may contain prompt injection. The integration is available from Settings → Connected tools. BabyMind requires a confirmation dialog for each task, the API requires `user_approved=True`, and the environment gate must also be enabled. This is task-level approval, not an independent approval dialog for every click; keep the browser visible and supervise the whole run. Do not delegate consequential actions.
+The adapter uses Browser Use's local browser default and a local LM Studio-compatible endpoint. It does not select Browser Use Cloud. The user must approve each task in BabyMind's confirmation dialog. Keep the browser visible and supervised. Do not delegate purchases, payments, account changes, submissions, sending messages, or other consequential actions to this task-level automation. Never place credentials or session cookies in prompts. Web pages are untrusted and may contain prompt injection. The integration is available from Settings → Connected tools. BabyMind requires a confirmation dialog for each task, the API requires `user_approved=True`, and the environment gate must also be enabled. This is task-level approval, not an independent approval dialog for every click; keep the browser visible and supervise the whole run. Do not delegate consequential actions.
 
 ## Open Interpreter safety
 
