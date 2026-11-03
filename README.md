@@ -190,3 +190,5 @@ model can guarantee unrestricted behaviour on every prompt. iPhone use is suppor
 ## Fixed invariant
 
 BabyMind validates that the canonical registry contains exactly 50 unique, sequential IDs from BM-01 through BM-50.
+
+**Security status:** Workspace file operations and project test execution are disabled in the current development branch until native, race-resistant filesystem protections and a real OS-level execution sandbox are implemented and tested.
