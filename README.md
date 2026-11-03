@@ -180,6 +180,11 @@ every server start.
   database encryption keys are also protected by Windows DPAPI. Restore is
   supported only under the **same Windows user account on the same PC**; this
   backup is not a migration method to a different computer or Windows account.
+- The backup contains BabyMind's encrypted databases and their key files; it
+  does not include the downloaded AI model or the LAN certificate. After a
+  fresh install, the model can be downloaded again. If the `.babymind/certs`
+  folder is lost or recreated, transfer the new `lan-ca.crt` to the iPhone
+  and repeat the iOS certificate-trust step.
 
 This feature still needs a real iPhone/Windows device test before it can be
 described as fully verified.
