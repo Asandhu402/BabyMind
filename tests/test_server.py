@@ -609,6 +609,7 @@ class BabyMindWebTests(unittest.TestCase):
         with TemporaryDirectory() as workspace:
             project = Path(workspace)
             (project / "tests").mkdir()
+            (project / "src").mkdir()
             process = SimpleNamespace(returncode=0)
             process.communicate = lambda timeout: ("Ran 3 tests", None)
             with patch.object(sys, "frozen", False, create=True), \
