@@ -121,6 +121,7 @@ MAX_TEST_OUTPUT_CHARS = 20_000
 
 def _run_project_tests(project_root: Path) -> dict:
     """Run only unittest discovery; project tests are user code, not sandboxed."""
+    project_root = Path(project_root).resolve(strict=True)
     tests_dir = project_root / "tests"
     if tests_dir.is_symlink() or not tests_dir.is_dir():
         raise ValueError("The selected project must contain an existing, non-symlink tests folder.")
