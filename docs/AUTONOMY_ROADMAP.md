@@ -43,14 +43,14 @@ This roadmap targets **Windows 10/11 only**. The product goal remains one BabyMi
 
 ### Required Windows security work before re-enabling workspace file actions
 
-See [the Windows filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.md) and the [native Windows workspace security design](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md). The native design has a staged C++ prototype for lexical path validation and CI compilation only; no filesystem broker operation is implemented. The Windows handle-relative/no-reparse contract, secure root admission, and same-user concurrent-writer guarantees require implementation and independent review. Do not implement against an assumed Windows guarantee.
+See [the Windows filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.md) and the [native Windows workspace security design](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md). The native design has experimental C++ primitives for fixed-local-NTFS root admission, handle-relative bounded reads, and exclusive new-file creation; they are not connected to Python or approved for enablement. The Windows handle-relative/no-reparse contract, secure root admission, and same-user concurrent-writer guarantees require implementation and independent review. Do not implement against an assumed Windows guarantee.
 
-- Extend the C++ prototype in [WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md) into a reviewed native broker behind a narrow versioned ABI; Python must not fall back to path-based operations.
+- Complete and independently review the C++ prototype in [WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md), then expose it behind a narrow versioned ABI; Python must not fall back to path-based operations.
 - Start with directory listing, bounded text reads, and exclusive creation only. Editing, deletion, recursive search, and execution are out of scope for the first release.
-- Implement native Windows handle-relative file operations.
-- Reject reparse points and junctions using handle-based inspection at every component.
-- Ensure every operation remains anchored to the opened workspace root, without reopening untrusted path strings.
-- Add race-focused tests that swap path components and targets during each operation on Windows.
+- Add directory enumeration through pinned directory handles.
+- Complete deterministic race-focused tests that swap path components and targets during each operation on Windows.
+- Add approval-token binding and define the supported concurrent-writer threat model.
+- Add a restricted broker identity/ACL boundary before claiming protection against hostile same-user processes.
 - Keep the feature disabled until security review and Windows CI pass.
 
 ## Phase 3 — reviewed code changes
