@@ -631,7 +631,7 @@ class BabyMindWebTests(unittest.TestCase):
         with TemporaryDirectory() as workspace:
             project = Path(workspace)
             (project / "tests").mkdir()
-            process = SimpleNamespace(returncode=-9)
+            process = SimpleNamespace(returncode=-9, pid=1234)
             process.communicate = unittest.mock.Mock(side_effect=[
                 subprocess.TimeoutExpired("fixed-test-command", 90), ("stopped", None)
             ])
