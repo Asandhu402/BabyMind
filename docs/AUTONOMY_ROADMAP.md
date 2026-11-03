@@ -11,7 +11,15 @@ This roadmap adds capabilities incrementally while preserving the core invariant
 - Treat search results and snippets as untrusted content. They are evidence to evaluate, never instructions to follow.
 - Show source links to the user; do not claim a fact is verified merely because it appeared in a search result.
 
-## Phase 2 — controlled task execution
+## Phase 2A — visible task queue (implemented foundation)
+
+- Persist up to 100 user-created tasks in the local encrypted SQLite database.
+- Provide queued, active, paused, completed, cancelled, and terminated states.
+- Enforce valid state transitions on the server; the browser cannot set arbitrary statuses.
+- Provide Start, Pause, Resume, Complete, Cancel, and Terminate controls.
+- This phase is a task tracker only. It does not execute commands, read or write files, browse pages, or perform external side effects.
+
+## Phase 2B — controlled task execution (not yet implemented)
 
 - Add a visible task queue with explicit user approval before external side effects.
 - Start with reversible, local actions (read files in a user-selected workspace, create draft files, run tests).

@@ -67,6 +67,12 @@ def init_db() -> None:
             )
         """)
         connection.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id TEXT PRIMARY KEY, title TEXT NOT NULL, details TEXT NOT NULL,
+                status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )
+        """)
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -202,6 +208,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json([{**dict(row), "content": text_store().decrypt(row["content"])} for row in rows])
         elif path == "/api/memory":
             self.send_json(COORDINATOR.memory.recent(limit=100))
+        elif path == "/api/tasks":
+            with db() as connection:
+                rows = connection.execute(
+                    "SELECT id, title, details, status, created_at, updated_at "
+                    "FROM tasks ORDER BY created_at DESC LIMIT 100"
+                ).fetchall()
+            secure = text_store()
+            self.send_json([{
+                **dict(row), "title": secure.decrypt(row["title"]),
+                "details": secure.decrypt(row["details"])
+            } for row in rows])
         elif path == "/":
             self.serve_file("index.html")
         elif path.startswith("/assets/"):
@@ -255,6 +272,67 @@ class Handler(BaseHTTPRequestHandler):
                     self.handle_chat(payload)
                 finally:
                     INFERENCE_SEMAPHORE.release()
+            elif path == "/api/tasks":
+                title = str(payload.get("title", "")).strip()
+                details = str(payload.get("details", "")).strip()
+                if not title:
+                    raise ValueError("Give the task a title.")
+                if len(title) > 120 or len(details) > 5000:
+                    raise ValueError("Task title must be 120 characters or fewer and details 5,000 or fewer.")
+                task_id = secrets.token_urlsafe(12)
+                timestamp = now()
+                with DB_LOCK, db() as connection:
+                    count = connection.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+                    if count >= 100:
+                        raise ValueError("The task queue is full (100 tasks). Complete or cancel older tasks first.")
+                    secure = text_store()
+                    connection.execute(
+                        "INSERT INTO tasks VALUES (?, ?, ?, 'queued', ?, ?)",
+                        (task_id, secure.encrypt(title), secure.encrypt(details), timestamp, timestamp)
+                    )
+                self.send_json({
+                    "id": task_id, "title": title, "details": details,
+                    "status": "queued", "created_at": timestamp, "updated_at": timestamp
+                }, 201)
+            elif path.startswith("/api/tasks/") and path.endswith("/action"):
+                parts = path.strip("/").split("/")
+                if len(parts) != 4:
+                    raise ValueError("Invalid task action path.")
+                task_id, action = parts[2], str(payload.get("action", "")).strip().lower()
+                transitions = {
+                    "start": {"queued": "active"},
+                    "pause": {"active": "paused"},
+                    "resume": {"paused": "active"},
+                    "cancel": {"queued": "cancelled", "active": "cancelled", "paused": "cancelled"},
+                    "terminate": {"queued": "terminated", "active": "terminated", "paused": "terminated"},
+                    "complete": {"active": "completed"}
+                }
+                if action not in transitions:
+                    raise ValueError("Unknown task action.")
+                with DB_LOCK, db() as connection:
+                    row = connection.execute(
+                        "SELECT status FROM tasks WHERE id=?", (task_id,)
+                    ).fetchone()
+                    if not row:
+                        self.send_json({"error": "Task not found."}, 404)
+                        return
+                    next_status = transitions[action].get(row["status"])
+                    if not next_status:
+                        raise ValueError(f"Cannot {action} a task while it is {row['status']}.")
+                    timestamp = now()
+                    connection.execute(
+                        "UPDATE tasks SET status=?, updated_at=? WHERE id=?",
+                        (next_status, timestamp, task_id)
+                    )
+                    updated = connection.execute(
+                        "SELECT id, title, details, status, created_at, updated_at "
+                        "FROM tasks WHERE id=?", (task_id,)
+                    ).fetchone()
+                secure = text_store()
+                self.send_json({
+                    **dict(updated), "title": secure.decrypt(updated["title"]),
+                    "details": secure.decrypt(updated["details"])
+                })
             elif path == "/api/research":
                 query = str(payload.get("query", "")).strip()
                 limit = int(payload.get("limit", 5))
