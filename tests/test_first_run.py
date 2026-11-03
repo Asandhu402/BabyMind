@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from babymind.first_run import (
     MODEL_SHA256,
+    _ensure_model,
     _find_llama_server,
     _sha256,
 )
@@ -22,6 +23,16 @@ class FirstRunSetupTests(unittest.TestCase):
             path = Path(folder) / "sample.bin"
             path.write_bytes(b"BabyMind local model test")
             self.assertEqual(_sha256(path), hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_existing_model_is_rehashed_even_when_marker_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "model.gguf"
+            path.write_bytes(b"model bytes")
+            marker = path.with_suffix(path.suffix + ".sha256")
+            marker.write_text(MODEL_SHA256, encoding="ascii")
+            with patch("babymind.first_run._sha256", return_value=MODEL_SHA256) as verify:
+                _ensure_model(path)
+            verify.assert_called_once_with(path)
 
     def test_finds_bundled_llama_server(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
