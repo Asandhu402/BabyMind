@@ -90,6 +90,11 @@ jobs:
           if (-not $server) { throw "llama-server.exe was not found in verified archive." }
           "BABYMIND_DEMO_MODEL=$model" | Out-File -FilePath $env:GITHUB_ENV -Append
           "BABYMIND_DEMO_LLAMA=$($server.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_CONTEXT_SIZE=8192" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_TEMPERATURE=0.35" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_TOP_P=0.9" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BABYMIND_MAX_TOKENS=1024" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Save verified pinned model cache
         if: success() && steps.model-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -103,10 +108,6 @@ jobs:
         with:
           path: ${{ runner.temp }}/llama-cpu.zip
           key: babymind-llama-b11960-73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287
-          "BABYMIND_CONTEXT_SIZE=8192" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "BABYMIND_TEMPERATURE=0.35" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "BABYMIND_TOP_P=0.9" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "BABYMIND_MAX_TOKENS=1024" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Start and verify local llama.cpp model
         shell: pwsh
