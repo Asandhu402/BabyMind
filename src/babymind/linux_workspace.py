@@ -12,8 +12,8 @@ import os
 import platform
 import stat
 
-# openat2 is syscall 437 on x86_64 and 56 on arm64/aarch64.
-_MACHINE_SYSCALL = {"x86_64": 437, "amd64": 437, "aarch64": 56, "arm64": 56}
+# openat2 is syscall 437 on x86_64 and the generic arm64/aarch64 ABI.
+_MACHINE_SYSCALL = {"x86_64": 437, "amd64": 437, "aarch64": 437, "arm64": 437}
 _RESOLVE_NO_MAGICLINKS = 0x02
 _RESOLVE_NO_SYMLINKS = 0x04
 _RESOLVE_BENEATH = 0x08
