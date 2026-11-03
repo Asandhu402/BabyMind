@@ -177,7 +177,7 @@ def start_llama_server(env: dict[str, str]) -> tuple[subprocess.Popen, object]:
     command = [
         executable, "--model", model, "--host", "127.0.0.1",
         "--port", port, "--ctx-size", "8192", "--threads", "4",
-        "--n-gpu-layers", "0",
+        "--n-gpu-layers", "0", "--reasoning-format", "none",
     ]
     process = subprocess.Popen(
         command, stdin=subprocess.DEVNULL, stdout=log,
@@ -227,7 +227,8 @@ def verify_llama_api(port: str = "1235") -> None:
                 {"role": "user", "content": "Reply with exactly: BABYMIND_LOCAL_INFERENCE_OK"},
             ],
             "temperature": 0,
-            "max_tokens": 32,
+            "max_tokens": 128,
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         request = Request(
             f"{base}/chat/completions",
@@ -236,9 +237,19 @@ def verify_llama_api(port: str = "1235") -> None:
         )
         with urlopen(request, timeout=600) as response:
             result = json.loads(response.read().decode("utf-8"))
-        content = result["choices"][0]["message"]["content"]
+        message = result["choices"][0]["message"]
+        content = message.get("content")
         if not isinstance(content, str) or not content.strip():
-            raise RuntimeError("llama.cpp chat completion returned empty assistant content.")
+            detail = json.dumps({
+                "finish_reason": result["choices"][0].get("finish_reason"),
+                "message_keys": sorted(message.keys()),
+                "reasoning_content_length": len(str(message.get("reasoning_content") or "")),
+                "usage": result.get("usage"),
+            })
+            raise RuntimeError(
+                "llama.cpp chat completion returned empty assistant content; "
+                f"response diagnostics: {detail}"
+            )
         print(f"llama.cpp API preflight passed; generated {len(content.strip())} characters.")
     except Exception as error:
         raise RuntimeError(
