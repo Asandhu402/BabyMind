@@ -11,8 +11,8 @@ from pathlib import Path
 def launch_read_only_session(
     workspace: str | Path,
     *,
-    model: str,
-    base_url: str,
+    model: str = "",
+    base_url: str = "",
     user_approved: bool = False,
 ) -> subprocess.Popen:
     """Launch Open Interpreter against a local OpenAI-compatible model in read-only mode.
