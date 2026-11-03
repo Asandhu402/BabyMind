@@ -210,7 +210,7 @@ again. A missing memory key is a failure: do not delete or replace it.
 
 ## Core-connected optional integrations
 
-Open **Settings → Connected tools** in the BabyMind app. These integrations are connected to the existing coordinator and one selected local model; they do not create separate AI identities or duplicate memory systems. Document analysis (Docling) and audio transcription (faster-whisper) feed extracted text into the same coordinator. Browser Use runs only as a supervised local-browser task after explicit confirmation and the environment gate is enabled. Open Interpreter is an external process launched with its read-only sandbox flag; its native sandbox must enforce that mode.
+Open **Settings → Connected tools** in the BabyMind app. These integrations are connected to the existing coordinator and one selected local model; they do not create separate AI identities or duplicate memory systems. Document analysis (Docling) and audio transcription (faster-whisper) feed extracted text into the same coordinator. Browser Use runs as a supervised local-browser task after explicit confirmation; it is enabled by default and can be disabled with `BABYMIND_BROWSER_AUTOMATION_ENABLED=false`. Open Interpreter is an external process launched with `sandbox_mode=read-only` and `approval_policy=untrusted`; BabyMind does not expose unrestricted or write-capable coding-agent mode.
 
 Install only the capabilities you want:
 
