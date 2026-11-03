@@ -43,8 +43,10 @@ This roadmap targets **Windows 10/11 only**. The product goal remains one BabyMi
 
 ### Required Windows security work before re-enabling workspace file actions
 
-See [the Windows filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.md). The Windows handle-relative/no-reparse contract, secure root admission, and same-user concurrent-writer guarantees require resolution and independent review. Do not implement against an assumed Windows guarantee.
+See [the Windows filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.md) and the [native Windows workspace security design](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md). The native design is a proposal only; no native broker is implemented. The Windows handle-relative/no-reparse contract, secure root admission, and same-user concurrent-writer guarantees require implementation and independent review. Do not implement against an assumed Windows guarantee.
 
+- Implement the reviewed native C++ broker described in [WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md), behind a narrow versioned ABI; Python must not fall back to path-based operations.
+- Start with directory listing, bounded text reads, and exclusive creation only. Editing, deletion, recursive search, and execution are out of scope for the first release.
 - Implement native Windows handle-relative file operations.
 - Reject reparse points and junctions using handle-based inspection at every component.
 - Ensure every operation remains anchored to the opened workspace root, without reopening untrusted path strings.
