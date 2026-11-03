@@ -85,6 +85,11 @@ iPhone companion (trusted private Wi-Fi only):
 8. Open the exact HTTPS URL printed by BabyMind in Safari and enter the token.
    Keep the token private.
 
+The BabyMind certificate profile adds trust for this local certificate authority.
+Install it only if you intend to connect your iPhone to this PC. When you no longer
+need iPhone access, remove the profile under Settings > General > VPN & Device
+Management. Reinstall it and enable full trust again if you reconnect later.
+
 Do not use guest/public Wi-Fi, enable Public firewall access, or configure
 router port forwarding. The iPhone is a browser companion; this PC runs the
 model and stores BabyMind data. Real iPhone pairing still requires a device test.

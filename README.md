@@ -140,6 +140,13 @@ so keep the PC online and allow at least 4.5 GB of free disk space.
 7. Open the exact HTTPS address printed by BabyMind in iPhone Safari. Enter the
    one-time token when prompted. Keep the token private.
 
+A note about certificate trust: installing this profile makes your iPhone trust
+certificates issued by this BabyMind CA. Install it only when you intentionally
+want to use your own PC's iPhone companion. When you no longer need iPhone access,
+remove the BabyMind profile under **Settings → General → VPN & Device Management**;
+this removes that trust. You will need to reinstall the profile and enable full
+trust again before connecting from the iPhone later.
+
 The companion uses the same local model, encrypted data directory, and
 token-protected HTTPS server as BabyMind. In LAN mode it binds to the detected
 local network address rather than every network interface. It does not create
@@ -166,6 +173,10 @@ every server start.
   file you transferred from your own PC using your own account.
 - To stop LAN access, close the companion console. No router rule or cloud
   service should be left running.
+- When you no longer need iPhone access, remove the BabyMind certificate profile
+  under **Settings → General → VPN & Device Management**. This removes the
+  additional CA trust from the iPhone; reinstall and re-enable full trust if you
+  want to connect again later.
 
 **Model and data recovery**
 
