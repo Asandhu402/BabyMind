@@ -171,7 +171,7 @@ bm_ws_status open_root_component(HANDLE parent, const std::wstring& component,
                                  UniqueHandle* child) {
     if (!valid_component(component)) return BM_WS_INVALID_RELATIVE_PATH;
     if (!nt_open_relative(parent, component,
-            FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, FILE_OPEN,
+            FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES, FILE_OPEN,
             FILE_DIRECTORY_FILE, child)) return BM_WS_IO_ERROR;
     bm_ws_status status = BM_WS_OK;
     if (is_reparse_or_wrong_type(child->get(), true, &status)) return status;
@@ -199,7 +199,8 @@ extern "C" BM_WS_API bm_ws_status bm_ws_open_workspace_root(
     const wchar_t* absolute_path, void** out_root) {
     if (absolute_path == nullptr || out_root == nullptr) return BM_WS_INVALID_ARGUMENT;
     *out_root = nullptr;
-    const size_t length = wcslen(absolute_path);
+    const std::wstring absolute(absolute_path);
+    const size_t length = absolute.size();
     if (length < 4 || length > kMaxPathChars || absolute_path[1] != L':' ||
         absolute_path[2] != L'\\' || !((absolute_path[0] >= L'A' && absolute_path[0] <= L'Z') ||
         (absolute_path[0] >= L'a' && absolute_path[0] <= L'z'))) return BM_WS_INVALID_ARGUMENT;
@@ -226,7 +227,7 @@ extern "C" BM_WS_API bm_ws_status bm_ws_open_workspace_root(
     size_t start = 3;
     if (start == length) return BM_WS_INVALID_ARGUMENT; // Never grant a volume root as a workspace.
     while (start < length) {
-        size_t end = absolute_path.find(L'\\', start);
+        size_t end = absolute.find(L'\\', start);
         if (end == std::wstring::npos) end = length;
         if (end == start) return BM_WS_INVALID_ARGUMENT;
         std::wstring component(absolute_path + start, end - start);
