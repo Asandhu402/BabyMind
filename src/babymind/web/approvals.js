@@ -41,6 +41,11 @@
     }
   }
   function render() {
+    const disabledForm = $("#createProposalForm");
+    if (disabledForm) disabledForm.remove();
+    $("#approvalCount").textContent = "0";
+    $("#approvalList").innerHTML = '<div class="approval-empty"><strong>Workspace file actions are temporarily disabled.</strong><p>BabyMind will not list, search, preview, create, or edit workspace files until native, race-resistant filesystem protections are implemented and tested. Existing proposals cannot be approved.</p></div>';
+    return;
     const activeTasks = state.tasks.filter(task => task.status === "active");
     const pending = state.proposals.filter(item => item.status === "awaiting_approval");
     const finished = state.proposals.filter(item => item.status !== "awaiting_approval");
