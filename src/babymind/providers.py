@@ -120,7 +120,7 @@ class LlamaCppProvider(LMStudioProvider):
     under the user's control and inference runs on this computer.
     """
 
-    def __init__(self, timeout: int = 180) -> None:
+    def __init__(self, timeout: int = 600) -> None:
         import atexit
         import subprocess
         import time
