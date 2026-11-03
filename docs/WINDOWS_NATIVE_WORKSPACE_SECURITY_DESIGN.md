@@ -1,6 +1,6 @@
 # Windows Native Workspace Security Design
 
-**Status: staged prototype only — lexical validation and Windows CI scaffolding exist; filesystem operations are not implemented or approved for enablement.**
+**Status: experimental native primitives implemented — root admission, handle-relative bounded reads, and exclusive new-file creation exist; not independently reviewed or approved for enablement.**
 
 This document defines a conservative Windows-only design for BabyMind's future workspace file broker. The existing Python workspace implementation is not a security boundary. Keep `WORKSPACE_FILE_ACTIONS_ENABLED = False` and keep project test execution disabled until the implementation and adversarial tests have been independently reviewed.
 
@@ -151,11 +151,14 @@ Project code execution remains a separate project. It requires an OS-level sandb
 
 ## 9. Current status
 
-A Windows-only C++ prototype now exists under `native/windows_workspace/`. It provides:
+A Windows-only C++ prototype now exists under native/windows_workspace/. It provides:
 - An MSVC/CMake static-library target and native unit-test executable.
 - Strict lexical validation for relative Windows path components.
+- Fixed-local-NTFS root admission by walking from the volume root through pinned directory handles.
+- Handle-relative child opens using NtCreateFile and OBJECT_ATTRIBUTES.RootDirectory.
+- Handle-based reparse-point/type checks.
+- Bounded reads (16 MiB cap) and exclusive new-file creation (1 MiB cap).
+- Tests for ordinary traversal, create/read, duplicate creation, and directory-symlink escape rejection.
 - CI build and CTest steps in both Windows workflows.
 
-The prototype deliberately returns `BM_WS_NOT_IMPLEMENTED` for root admission, reads, and file creation. Lexical validation is input hygiene only; it does not establish filesystem containment or resist reparse-point/race attacks. It is not connected to Python or the application.
-
-The current Python helper remains a legacy implementation and must be considered unsafe to enable. The global feature flag remains false. No native filesystem protection currently exists.
+These are experimental primitives, not a reviewed security boundary. Directory listing, approval-token binding, Python FFI, deterministic concurrent rename tests, a restricted broker identity, and independent security review are not implemented. The code is not connected to Python or the application. The existing Python helper remains unsafe to enable; the global feature flag remains false.
