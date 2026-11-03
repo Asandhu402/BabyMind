@@ -21,7 +21,7 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q src tests
       - name: Check browser JavaScript syntax
-        run: node --check src/babymind/web/app.js
+        run: node --check src/babymind/web/app.js && node --check src/babymind/web/approvals.js
       - name: Audit installed Python dependencies
         run: python -m pip install pip-audit && python -m pip_audit
       - name: Run unit tests
