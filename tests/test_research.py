@@ -3,6 +3,7 @@ from io import BytesIO
 from unittest.mock import patch
 
 from babymind.research import (
+    _PinnedHTTPSHandler,
     _SafeRedirectHandler,
     _destination,
     _validate_public_url,
@@ -53,6 +54,13 @@ class ResearchTests(unittest.TestCase):
         getaddrinfo.return_value = [(None, None, None, None, ("10.0.0.5", 443))]
         with self.assertRaisesRegex(ValueError, "private"):
             _validate_public_url("https://example.test/")
+
+    def test_pinned_https_handler_uses_supported_python_tls_arguments(self):
+        handler = _PinnedHTTPSHandler()
+        with patch.object(handler, "do_open", return_value="ok") as do_open:
+            self.assertEqual(handler.https_open(object()), "ok")
+        self.assertIn("context", do_open.call_args.kwargs)
+        self.assertNotIn("check_hostname", do_open.call_args.kwargs)
 
     def test_redirect_handler_rejects_private_redirect_target(self):
         handler = _SafeRedirectHandler()
