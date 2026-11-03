@@ -98,7 +98,7 @@ class IntegrationTests(unittest.TestCase):
             with patch("shutil.which", return_value="interpreter"), patch(
                 "subprocess.Popen", return_value=process
             ) as popen:
-                result = launch_read_only_session(
+                result = launch_workspace_session(
                     folder, model="local-model", base_url="http://127.0.0.1:1234/v1",
                     user_approved=True,
                 )
@@ -129,7 +129,7 @@ class IntegrationTests(unittest.TestCase):
     def test_open_interpreter_rejects_nonlocal_model_endpoint(self):
         with tempfile.TemporaryDirectory() as folder:
             with self.assertRaises(ValueError):
-                launch_read_only_session(
+                launch_workspace_session(
                     folder, model="remote", base_url="https://api.example.com/v1",
                     user_approved=True,
                 )
