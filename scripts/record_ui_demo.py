@@ -274,7 +274,7 @@ def main() -> None:
                 )
                 page.wait_for_function(
                     "() => !document.querySelector('#typingIndicator')",
-                    timeout=240000,
+                    timeout=600000,
                 )
                 assistant_messages = page.locator("#messages .message.assistant .message-content")
                 if assistant_messages.count() < 1:
