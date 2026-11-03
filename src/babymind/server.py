@@ -365,7 +365,10 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 if task_row["status"] != "active":
                     raise ValueError("Start the task before requesting an execution proposal.")
-                proposal = build_readonly_proposal(str(payload.get("relative_path", "")))
+                proposal_action = str(payload.get("action", "list_directory")).strip()
+                proposal = build_readonly_proposal(
+                    str(payload.get("relative_path", "")), action=proposal_action
+                )
                 proposal_id = secrets.token_urlsafe(12)
                 timestamp = now()
                 secure = text_store()
@@ -381,7 +384,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({
                     "id": proposal_id, "task_id": task_id, "action": proposal["action"],
                     "payload": proposal["payload"], "proposal_hash": proposal["proposal_hash"],
-                    "status": "awaiting_approval", "effects": "Read directory names only; no files are opened or changed.",
+                    "status": "awaiting_approval",
+                    "effects": (
+                        "Read up to 32 KB of this UTF-8 text file after approval."
+                        if proposal["action"] == "read_text_file"
+                        else "Read directory names and basic item types only; no file contents are opened."
+                    ),
                     "created_at": timestamp
                 }, 201)
             elif path.startswith("/api/proposals/") and path.endswith("/approve"):
@@ -407,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("The task must remain active to approve this proposal.")
                     secure = text_store()
                     proposal_payload = json.loads(secure.decrypt(row["payload"]))
-                    result = execute_readonly_proposal(proposal_payload)
+                    result = execute_readonly_proposal(proposal_payload, action=row["action"])
                     encoded_result = secure.encrypt(json.dumps(result, ensure_ascii=False))
                     timestamp = now()
                     connection.execute(
@@ -417,7 +425,11 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 self.send_json({
                     "id": proposal_id, "status": "completed", "result": result,
-                    "notice": "Read-only directory listing completed. No files were opened or modified."
+                    "notice": (
+                        "Approved text-file preview completed. No files were modified."
+                        if row["action"] == "read_text_file"
+                        else "Read-only directory listing completed. No file contents were opened or modified."
+                    )
                 })
             elif path == "/api/research":
                 query = str(payload.get("query", "")).strip()
