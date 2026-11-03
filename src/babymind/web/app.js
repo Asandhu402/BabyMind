@@ -1,5 +1,5 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { agents: [], conversations: [], conversationId: null, busy: false, filter: "all", view: "chat", attachment: null };
+const state = { agents: [], conversations: [], tasks: [], conversationId: null, busy: false, filter: "all", view: "chat", attachment: null };
 const domainLabels = {core:"Core",research:"Research",knowledge:"Knowledge",memory:"Memory",safety:"Safety",development:"Development",language:"Language",content:"Content",education:"Education",analysis:"Analysis",productivity:"Productivity",lifestyle:"Lifestyle",career:"Career",finance:"Finance",creative:"Creative",automation:"Automation",quality:"Quality"};
 const symbols = {core:"✳",research:"⌕",knowledge:"▤",memory:"⌁",safety:"◈",development:"⌘",language:"文",content:"✎",education:"⌂",analysis:"∑",productivity:"◷",lifestyle:"◇",career:"↗",finance:"＄",creative:"✧",automation:"⟳",quality:"✓"};
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
@@ -32,9 +32,10 @@ function setView(name) {
   document.querySelectorAll(".view").forEach(view=>view.classList.remove("active"));
   const target=$("#"+name+"View") || $("#chatView"); target.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(item=>item.classList.toggle("active",item.dataset.view===name));
-  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",settings:"Settings"})[name]||"Chat";
+  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",settings:"Settings"})[name]||"Chat";
   $("#sidebar").classList.remove("open");
   if(name==="memory") loadMemory();
+  if(name==="tasks") loadTasks();
 }
 function renderAgentSelect() {
   $("#agentSelect").innerHTML=state.agents.map(agent=>`<option value="${agent.id}">${agent.id} · ${escapeHTML(agent.name)}</option>`).join("");
@@ -121,6 +122,36 @@ async function sendMessage(message) {
     toast(error.message);
   } finally {state.busy=false;$("#sendButton").disabled=false;$("#messageInput").focus();}
 }
+
+const taskLabels={queued:"Queued",active:"Active · manual",paused:"Paused",completed:"Completed",cancelled:"Cancelled",terminated:"Terminated"};
+function taskButtons(task){
+  const actions=[];
+  if(task.status==="queued") actions.push(["start","Start"]);
+  if(task.status==="active") actions.push(["pause","Pause"],["complete","Complete"]);
+  if(task.status==="paused") actions.push(["resume","Resume"],["complete","Complete"]);
+  if(["queued","active","paused"].includes(task.status)) actions.push(["cancel","Cancel"],["terminate","Terminate"]);
+  return actions.map(([action,label])=>`<button class="task-action ${action}" data-task-action="${action}" data-task-id="${escapeHTML(task.id)}">${label}</button>`).join("");
+}
+function renderTasks(){
+  $("#taskCount").textContent=state.tasks.filter(t=>!["completed","cancelled","terminated"].includes(t.status)).length;
+  const active=state.tasks.filter(t=>!["completed","cancelled","terminated"].includes(t.status)).length;
+  $("#taskSummary").textContent=`${state.tasks.length} total · ${active} open`;
+  $("#taskList").innerHTML=state.tasks.map(task=>`<article class="task-card">
+    <div class="task-card-heading"><div><span class="task-status ${task.status}">${taskLabels[task.status]||task.status}</span><h3>${escapeHTML(task.title)}</h3></div><time>${new Date(task.updated_at).toLocaleString()}</time></div>
+    ${task.details?`<p>${escapeHTML(task.details).replace(/\n/g,"<br>")}</p>`:""}
+    <div class="task-card-footer"><small>Created ${new Date(task.created_at).toLocaleDateString()}</small><div class="task-actions">${taskButtons(task)}</div></div>
+  </article>`).join("")||'<div class="empty-state">No tasks yet. Add your first task above.</div>';
+  $("#taskList").querySelectorAll("[data-task-action]").forEach(button=>button.addEventListener("click",()=>changeTask(button.dataset.taskId,button.dataset.taskAction)));
+}
+async function loadTasks(){
+  try{state.tasks=await api("/api/tasks");renderTasks();}
+  catch(error){$("#taskList").innerHTML=`<div class="empty-state">${escapeHTML(error.message)}</div>`;toast(error.message);}
+}
+async function changeTask(id,action){
+  try{await api(`/api/tasks/${encodeURIComponent(id)}/action`,{method:"POST",body:JSON.stringify({action})});await loadTasks();toast("Task status updated");}
+  catch(error){toast(error.message);}
+}
+
 async function loadMemory() {
   try {
     const memories=await api("/api/memory");
@@ -173,6 +204,8 @@ async function init() {
   document.querySelectorAll("[data-prompt]").forEach(button=>button.addEventListener("click",()=>{setView("chat");sendMessage(button.dataset.prompt);}));
   document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>setView(button.dataset.view)));
   $("#newChat").addEventListener("click",newConversation);
+  $("#taskForm").addEventListener("submit",async event=>{event.preventDefault();const title=$("#taskTitle").value.trim();if(!title)return;try{await api("/api/tasks",{method:"POST",body:JSON.stringify({title,details:$("#taskDetails").value.trim()})});$("#taskForm").reset();await loadTasks();toast("Task added to queue");}catch(error){toast(error.message);}});
+  $("#refreshTasks").addEventListener("click",loadTasks);
   $("#agentSearch").addEventListener("input",renderAgents);
   $("#fileInput").addEventListener("change",async event=>{
     const file=event.target.files[0];if(!file)return;
