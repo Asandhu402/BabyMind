@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 
 
-_REASONING_BLOCK = re.compile(r"<think\\b[^>]*>.*?(?:</think\\s*>|$)", re.IGNORECASE | re.DOTALL)
-_REASONING_TAG = re.compile(r"</?think\\b[^>]*>", re.IGNORECASE)
+_REASONING_BLOCK = re.compile(r"<think\b[^>]*>.*?(?:</think\s*>|$)", re.IGNORECASE | re.DOTALL)
+_REASONING_TAG = re.compile(r"</?think\b[^>]*>", re.IGNORECASE)
 
 
 def strip_internal_reasoning(response: str) -> str:
@@ -35,7 +35,7 @@ def validate_code_review_report(report: str, source: str) -> None:
         raise ValueError("Self-inspection report exceeds the 450-word limit.")
     lines = source.splitlines()
     evidence = re.findall(
-        r"\\bline\\s+(\\d+)\\s*[:—-]\\s*`([^`]+)`",
+        r"\bline\s+(\d+)\s*[:—-]\s*\`([^\`]+)\`",
         report,
         flags=re.IGNORECASE,
     )
@@ -48,7 +48,7 @@ def validate_code_review_report(report: str, source: str) -> None:
     if not verified:
         raise ValueError(
             "Self-inspection report must quote one exact source line as "
-            "'Evidence (line N): `exact source line`' and the line must match."
+            "'Evidence (line N): exact source line' and the line must match."
         )
     if len(report.strip()) < 180:
         raise ValueError("Self-inspection report is too short to contain a useful recommendation.")
