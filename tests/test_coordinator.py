@@ -58,10 +58,13 @@ class CoordinatorTests(unittest.TestCase):
     def test_memory_database_stores_ciphertext_and_migrates_plaintext(self) -> None:
         self.memory.remember("BM-01", "Private task", "Private response")
         import sqlite3
-        with sqlite3.connect(self.memory.database_path) as connection:
+        connection = sqlite3.connect(self.memory.database_path)
+        try:
             task, response = connection.execute(
                 "SELECT task, response FROM memories"
             ).fetchone()
+        finally:
+            connection.close()
         self.assertNotIn("Private task", task)
         self.assertNotIn("Private response", response)
         self.assertTrue(task.startswith("bmenc:v1:"))
