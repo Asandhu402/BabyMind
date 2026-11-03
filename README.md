@@ -113,25 +113,54 @@ access and at least 4.5 GB of free disk space.
 ### iPhone companion included in the portable package
 
 The portable ZIP also includes `BabyMind-iPhone.exe` and
-`Start-BabyMind-iPhone.bat`. After the model has been downloaded on the PC:
+`Start-BabyMind-iPhone.bat`. You can start with either launcher: if the model
+is not already installed, the first launch downloads the same verified model
+(about 2.71 GB), so keep the PC online and allow at least 4.5 GB of free disk
+space. Running the desktop app first is optional; both launchers reuse the
+same model and local data folder.
 
-1. Connect the iPhone and Windows PC to the same trusted private Wi-Fi.
-2. Double-click `Start-BabyMind-iPhone.bat` in the extracted BabyMind folder.
-3. Keep the Windows console open. It prints the HTTPS address, one-time access
-   token, and path to the public `lan-ca.crt` certificate.
-4. Transfer only `lan-ca.crt` to the iPhone (for example, with AirDrop). Install
-   the downloaded certificate profile, then enable full trust under
-   **Settings → General → About → Certificate Trust Settings**.
-5. Open the printed HTTPS address in iPhone Safari and enter the one-time token
-   when prompted. Keep the token private.
+1. Extract the **entire** ZIP to a normal folder (not inside the ZIP).
+2. Connect the iPhone and Windows PC to the same trusted private Wi-Fi network.
+   Avoid guest Wi-Fi or networks that isolate connected devices.
+3. Double-click `Start-BabyMind-iPhone.bat`. If Windows Firewall asks, allow
+   access on **Private networks only**; never enable Public network access.
+4. Keep the Windows console open and prevent the PC from sleeping. It prints
+   the HTTPS address, a fresh one-time access token, and the path to the public
+   `lan-ca.crt` certificate.
+5. Transfer **only** `lan-ca.crt` to the iPhone (for example with AirDrop).
+   Do not transfer any private-key file. Install the certificate profile, then
+   enable full trust under **Settings → General → About → Certificate Trust
+   Settings**.
+6. Open the exact HTTPS address printed by BabyMind in iPhone Safari. Enter the
+   one-time token when prompted. Keep the token private.
 
 The companion uses the same local model, encrypted data directory, and
 token-protected HTTPS server as BabyMind. It does not create a cloud account
-or expose the service intentionally to the public internet. Use it only on a
-trusted private Wi-Fi network; stop the server by closing its console window.
-The certificate is a locally generated private CA, so iOS requires the
-one-time manual trust step. This feature still needs a real iPhone/Windows
-device test before it can be described as fully verified.
+or intentionally expose the service to the public internet. Do not configure
+router port forwarding. The certificate authority is generated locally and
+its private key stays on the PC. The public CA certificate normally remains
+the same between starts on this Windows installation; the server certificate
+is renewed when the companion starts. A fresh access token is generated on
+every server start.
+
+**Recovery and common issues**
+
+- If Safari cannot connect, confirm both devices are on the same non-guest
+  Wi-Fi, the PC is awake, the console is still running, and Windows Firewall
+  permits BabyMind on Private networks.
+- If the saved token stops working after restarting the companion, reload the
+  page and enter the new token printed in the console.
+- If port 8765 is already in use, run
+  `BabyMind-iPhone.exe --port 8766` from PowerShell in the extracted folder,
+  then use the new address printed by the app.
+- If iOS reports an untrusted certificate, check that the installed
+  `lan-ca.crt` profile is enabled under Certificate Trust Settings. Only
+  install the certificate you transferred directly from your own PC.
+- To stop LAN access, close the companion console. No router rule or cloud
+  service should be left running.
+
+This feature still needs a real iPhone/Windows device test before it can be
+described as fully verified.
 
 A permanent, versioned Windows release is published by the **BabyMind
 Windows release** workflow. Run it from GitHub Actions with a tag matching
