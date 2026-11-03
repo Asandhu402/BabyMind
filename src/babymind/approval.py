@@ -1,4 +1,4 @@
-"""Approval-gated local workspace actions with bounded file and test operations."""
+"""Approval-gated local workspace file actions."""
 from __future__ import annotations
 
 import hashlib
