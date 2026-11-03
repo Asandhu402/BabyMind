@@ -181,6 +181,19 @@ length is capped at 500 characters. The optional page API is
 `POST /api/research/page` with JSON `{"url":"https://example.com/article"}`.
 Both endpoints remain subject to local/LAN authorization and origin checks.
 
+## Approval-gated workspace actions
+
+BabyMind can list folders, search filenames, preview text files, create new
+allowlisted text files, edit existing allowlisted text files after showing a
+before/after preview, and run a fixed Python unittest-discovery command in a
+selected project folder. Every action requires an active task and approval of
+the exact proposal fingerprint. File operations are limited to the configured
+workspace. Test runs are limited to 90 seconds and their output is capped at
+20,000 characters. **Project tests are not sandboxed**: they execute as the
+current Windows user and may access that user's files and network resources.
+Only approve test runs for projects whose code you trust. BabyMind does not
+accept arbitrary shell commands.
+
 ## Current capability boundaries
 
 The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. This release does not include unrestricted computer control, autonomous background execution, browser automation, or public-internet remote access. Opt-in search-result discovery and bounded text-only page reading are available as described above. The packaged model is an aggressively uncensored community fine-tune, but no
