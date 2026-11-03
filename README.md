@@ -90,7 +90,7 @@ On Windows, you can double-click `Start-BabyMind.bat` to install and launch the 
 
     babymind-web --lan
 
-The terminal prints an HTTPS address, a one-time access token, and the public local CA certificate path. Before opening the address on your iPhone, transfer the `lan-ca.crt` certificate to the iPhone (for example with AirDrop), install the certificate profile, then enable full trust under **Settings > General > About > Certificate Trust Settings**. Open the printed HTTPS address in Safari and enter the token. The certificate's private key stays on the computer and is encrypted at rest. Use only on a trusted private Wi-Fi network; this is not intended for public internet exposure.
+The terminal prints an HTTPS address, a one-time access token, and the public local CA certificate path. Before opening the address on your iPhone, transfer the public `lan-ca.crt` file from Windows to your own iCloud Drive or OneDrive (or email it to yourself as an attachment), then open it on the iPhone. On iPhone, go to **Settings > General > VPN & Device Management**, select the downloaded BabyMind certificate profile, and install it. Next enable full trust under **Settings > General > About > Certificate Trust Settings**. Open the printed HTTPS address in Safari and enter the token. Since Windows cannot use AirDrop, use a transfer method tied to your own account and do not use a public file-sharing link. The certificate's private key stays on the computer and is encrypted at rest. Use only on a trusted private Wi-Fi network; this is not intended for public internet exposure.
 
 
 ## Windows desktop application
@@ -128,11 +128,16 @@ so keep the PC online and allow at least 4.5 GB of free disk space.
 4. Keep the Windows console open and prevent the PC from sleeping. It prints
    the HTTPS address, a fresh one-time access token, and the path to the public
    `lan-ca.crt` certificate.
-5. Transfer **only** `lan-ca.crt` to the iPhone (for example with AirDrop).
-   Do not transfer any private-key file. Install the certificate profile, then
-   enable full trust under **Settings → General → About → Certificate Trust
-   Settings**.
-6. Open the exact HTTPS address printed by BabyMind in iPhone Safari. Enter the
+5. Transfer **only** the public `lan-ca.crt` file from Windows to your own
+   iCloud Drive or OneDrive (or email it to yourself as an attachment). On the
+   iPhone, open the file. Windows cannot use AirDrop, so do not follow AirDrop
+   instructions. Never transfer a private-key file or use a public file-sharing
+   link for the certificate.
+6. On iPhone, open **Settings → General → VPN & Device Management**, select
+   the downloaded BabyMind certificate profile, and install it. Then go to
+   **Settings → General → About → Certificate Trust Settings** and enable
+   full trust for the BabyMind certificate.
+7. Open the exact HTTPS address printed by BabyMind in iPhone Safari. Enter the
    one-time token when prompted. Keep the token private.
 
 The companion uses the same local model, encrypted data directory, and
@@ -155,9 +160,10 @@ every server start.
 - If port 8765 is already in use, run
   `BabyMind-iPhone.exe --port 8766` from PowerShell in the extracted folder,
   then use the new address printed by the app.
-- If iOS reports an untrusted certificate, check that the installed
-  `lan-ca.crt` profile is enabled under Certificate Trust Settings. Only
-  install the certificate you transferred directly from your own PC.
+- If iOS reports an untrusted certificate, check both that the profile was
+  installed under **VPN & Device Management** and that full trust is enabled
+  under **Certificate Trust Settings**. Only install the public certificate
+  file you transferred from your own PC using your own account.
 - To stop LAN access, close the companion console. No router rule or cloud
   service should be left running.
 
