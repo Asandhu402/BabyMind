@@ -109,24 +109,6 @@ jobs:
           path: ${{ runner.temp }}/llama-cpu.zip
           key: babymind-llama-b11960-73f962f82850d244db47eaacb9d913637027b82399124324298576d58c5f4287
 
-      - name: Start and verify local llama.cpp model
-        shell: pwsh
-        run: |
-          $llamaLog = Join-Path $env:RUNNER_TEMP "llama-demo.log"
-          $serverArgs = @("--model", "`"$env:BABYMIND_DEMO_MODEL`"", "--host", "127.0.0.1", "--port", "1235", "--ctx-size", "8192", "--threads", "4", "--n-gpu-layers", "0") -join " "
-          $llama = Start-Process -FilePath $env:BABYMIND_DEMO_LLAMA -ArgumentList $serverArgs -PassThru -NoNewWindow -RedirectStandardOutput $llamaLog -RedirectStandardError (Join-Path $env:RUNNER_TEMP "llama-demo.err")
-          "BABYMIND_LLAMA_PID=$($llama.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          $ready = $false
-          for ($i=0; $i -lt 180; $i++) {
-            Start-Sleep -Seconds 5
-            if ($llama.HasExited) { throw "Local model process exited. $llamaLog" }
-            try {
-              $h = Invoke-RestMethod "http://127.0.0.1:1235/health" -TimeoutSec 5
-              if ($h.status -eq "ok") { $ready=$true; break }
-            } catch {}
-          }
-          if (-not $ready) { throw "Local model did not become ready within 15 minutes." }
-
       - name: Record actual BabyMind interface and model response
         shell: pwsh
         env:
@@ -135,15 +117,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           python scripts/record_ui_demo.py
           if ($LASTEXITCODE -ne 0) { throw "Browser recording failed." }
-
-      - name: Stop local processes
-        if: always()
-        shell: pwsh
-        run: |
-          foreach ($name in @("BABYMIND_UI_PID","BABYMIND_LLAMA_PID")) {
-            $value = [Environment]::GetEnvironmentVariable($name)
-            if ($value) { Stop-Process -Id ([int]$value) -Force -ErrorAction SilentlyContinue }
-          }
 
       - name: Upload UI video and screenshots
         if: always()
