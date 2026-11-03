@@ -24,17 +24,26 @@ Reference: https://man7.org/linux/man-pages/man2/openat2.2.html
 
 ## Windows direction and unresolved contract
 
-Windows needs directory handles and child opens relative to those handles, while refusing reparse points at every component. NtCreateFile documents a RootDirectory handle for relative names and documents FILE_OPEN_REPARSE_POINT behavior. However, the published user-mode contract for the exact combination of relative opens, no-reparse enforcement, ancestor admission, and concurrent namespace changes is not sufficiently clear to claim the required security guarantee.
+Windows needs directory handles and child opens relative to those handles, while refusing reparse points at every component. `NtCreateFile` documents a `RootDirectory` handle for relative names and `FILE_OPEN_REPARSE_POINT` behavior. `OBJ_DONT_REPARSE` is the relevant fail-on-reparse object attribute in the general `OBJECT_ATTRIBUTES` documentation; it is distinct from `FILE_OPEN_REPARSE_POINT`, which opens the reparse point itself rather than refusing traversal.
 
-A recent Microsoft Q&A response explicitly notes that the cited references do not settle the exact support contract or guarantee behavior during concurrent renames/reparse-point changes. This is not a suitable basis for enabling a security-sensitive implementation.
+### New evidence (November 3, 2026)
+
+A Microsoft Q&A thread reports a successful test on Windows 11 build 26200, local NTFS, using a directory handle as `RootDirectory`, a single relative component, and `OBJ_DONT_REPARSE | OBJ_CASE_INSENSITIVE`. The test reports `STATUS_REPARSE_POINT_ENCOUNTERED` for a junction. This is useful experimental evidence and suggests a viable implementation direction.
+
+However, the Q&A explicitly distinguishes that measured behavior from the published contract: the user-mode `NtCreateFile` page narrows its `Attributes` description to zero or `OBJ_CASE_INSENSITIVE`, while the general `OBJECT_ATTRIBUTES` page defines `OBJ_DONT_REPARSE`. The cited docs do not unambiguously resolve acceptance of this exact combination across supported Windows versions and filesystems.
+
+A separate Microsoft Q&A response also states that neither `OBJ_DONT_REPARSE` nor a directory-relative open promises a namespace snapshot or an 'original object or refusal' guarantee during concurrent rename, replacement, or reparse-point changes. The initial acquisition of the trusted root handle is a separate unresolved problem: a descendant open cannot retroactively prove that the absolute root path and its ancestors were admitted without following an untrusted reparse point.
+
+Therefore, this is not enough to enable workspace operations. Any Windows prototype must explicitly validate the tested combination on a declared Windows/filesystem matrix, securely establish the root handle, verify the opened object through its handle, and separately define/mitigate concurrent namespace changes. Do not claim race-free behavior from the flag alone.
 
 References:
 - https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile
 - https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntcreatefile
+- https://learn.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-_object_attributes
 - https://learn.microsoft.com/en-us/answers/questions/6052628/documented-user-mode-ntcreatefile-contract-for-fil
+- https://learn.microsoft.com/en-us/answers/questions/6059091/is-ntcreatefile-with-rootdirectory-race-safe-again
 
-Do not treat a successful test on one Windows build as proof of a supported contract. Obtain a documented, supported approach or an independently reviewed native implementation with an explicit Windows/filesystem support matrix. Until then, Windows workspace actions remain disabled.
-
+Keep Windows workspace actions disabled until the contract, root admission, and concurrent-change model are independently reviewed and tested.
 ## Required operations and invariants
 
 Before any action can be enabled, the backend must provide and test:
