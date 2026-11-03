@@ -72,8 +72,8 @@ def collect_local_code_context() -> str:
     ]
     sections: list[str] = []
     total_chars = 0
-    per_file_limit = 2_000
-    total_limit = 12_000
+    per_file_limit = 900
+    total_limit = 4_500
     for relative in source_paths:
         path = ROOT / relative
         if not path.is_file():
@@ -212,7 +212,7 @@ def main() -> None:
                 # GitHub projects. Never search for or fetch BabyMind's private repo.
                 page.locator('[data-view="chat"]').click()
                 local_code = collect_local_code_context()
-                candidates, search_warnings = search_public_github_projects(limit=3)
+                candidates, search_warnings = search_public_github_projects(limit=2)
                 public_sources = []
                 for item in candidates:
                     try:
@@ -270,7 +270,7 @@ def main() -> None:
                 page.wait_for_function(
                     "(count) => document.querySelectorAll('#messages .message .message-content').length > count",
                     arg=previous,
-                    timeout=240000,
+                    timeout=600000,
                 )
                 page.wait_for_function(
                     "() => !document.querySelector('#typingIndicator')",
@@ -321,7 +321,10 @@ def main() -> None:
                 shutil.copy2(video_path, OUT / "BabyMind-UI-Demo.webm")
                 print(f"Recorded actual BabyMind UI video ({Path(video_path).stat().st_size} bytes).")
         except PlaywrightTimeoutError as error:
-            raise RuntimeError(f"Browser UI timed out: {error}") from error
+            detail = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+            raise RuntimeError(
+                f"Browser UI timed out: {error}. BabyMind server log:\\n{detail[-10000:]}"
+            ) from error
         finally:
             server.terminate()
             try:
