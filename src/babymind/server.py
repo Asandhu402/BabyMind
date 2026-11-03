@@ -25,6 +25,7 @@ from .coordinator import BabyMindCoordinator
 from .providers import ProviderError
 from .secure_store import SecureTextStore
 from .lan_tls import create_lan_tls_context
+from .research import search_web
 
 WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
@@ -254,6 +255,17 @@ class Handler(BaseHTTPRequestHandler):
                     self.handle_chat(payload)
                 finally:
                     INFERENCE_SEMAPHORE.release()
+            elif path == "/api/research":
+                query = str(payload.get("query", "")).strip()
+                limit = int(payload.get("limit", 5))
+                results = search_web(query, limit=limit)
+                self.send_json({
+                    "query": query,
+                    "provider": "DuckDuckGo HTML",
+                    "results": results,
+                    "count": len(results),
+                    "notice": "Search snippets are unverified third-party content. Review sources before relying on them."
+                })
             elif path == "/api/memory/clear":
                 deleted = COORDINATOR.memory.clear()
                 self.send_json({"deleted": deleted})
