@@ -83,6 +83,37 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn(b"Cannot resume", body)
 
+    def test_approval_gated_readonly_directory_listing(self) -> None:
+        with TemporaryDirectory() as workspace:
+            Path(workspace, "note.txt").write_text("private contents", encoding="utf-8")
+            with patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+                status, _, body = self.request("/api/tasks", {"title": "Inspect workspace"})
+                task_id = json.loads(body)["id"]
+                self.request(f"/api/tasks/{task_id}/action", {"action": "start"})
+                status, _, body = self.request(f"/api/tasks/{task_id}/propose", {"relative_path": "."})
+                self.assertEqual(status, 201)
+                proposal = json.loads(body)
+                self.assertEqual(proposal["status"], "awaiting_approval")
+                self.assertEqual(proposal["action"], "list_directory")
+                status, _, body = self.request(f"/api/proposals/{proposal['id']}/approve", {
+                    "proposal_hash": "wrong"
+                })
+                self.assertEqual(status, 400)
+                status, _, body = self.request(f"/api/proposals/{proposal['id']}/approve", {
+                    "proposal_hash": proposal["proposal_hash"]
+                })
+                self.assertEqual(status, 200)
+                result = json.loads(body)["result"]
+                self.assertEqual(result["entries"], [{"name": "note.txt", "type": "file"}])
+                self.assertNotIn("private contents", body.decode("utf-8"))
+                self.assertEqual(Path(workspace, "note.txt").read_text(encoding="utf-8"), "private contents")
+
+    def test_approval_rejects_parent_traversal(self) -> None:
+        with TemporaryDirectory() as workspace, patch.dict("os.environ", {"BABYMIND_WORKSPACE_ROOT": workspace}):
+            with self.assertRaises(ValueError):
+                from babymind.approval import build_readonly_proposal
+                build_readonly_proposal("../")
+
     def test_task_queue_stores_text_encrypted(self) -> None:
         self.request("/api/tasks", {"title": "Secret title", "details": "Secret details"})
         with server.db() as connection:
