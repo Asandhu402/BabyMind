@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(babymind_workspace STATIC workspace_broker.cpp)
 target_include_directories(babymind_workspace PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(babymind_workspace PUBLIC ntdll)
 target_compile_definitions(babymind_workspace PRIVATE BABYMIND_WORKSPACE_BUILD)
 if(MSVC)
     target_compile_options(babymind_workspace PRIVATE /W4 /WX /permissive- /sdl)
