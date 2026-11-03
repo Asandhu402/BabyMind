@@ -6,6 +6,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from typing import Protocol
 
+from .response_quality import strip_internal_reasoning
+
 
 class ChatProvider(Protocol):
     """Common interface for model backends."""
@@ -111,7 +113,10 @@ class LMStudioProvider:
             ) from error
         if not isinstance(content, str) or not content.strip():
             raise ProviderError("Local model server returned an empty response.")
-        return content.strip()
+        try:
+            return strip_internal_reasoning(content)
+        except ValueError as error:
+            raise ProviderError(str(error)) from error
 
 class LlamaCppProvider(LMStudioProvider):
     """Launch and use a local llama.cpp server with a user-supplied GGUF model.
