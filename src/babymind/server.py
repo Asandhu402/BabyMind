@@ -326,7 +326,6 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self.send_json({"audio_base64": base64.b64encode(audio).decode("ascii"), "mime_type": "audio/wav"})
             elif path == "/api/integrations/voicebox/transcribe":
-                from .integrations.voicebox import transcribe_with_voicebox
                 source = str(payload.get("path", "")).strip()
                 if not source or len(source) > 2048:
                     raise ValueError("Enter a local audio file path.")
