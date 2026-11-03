@@ -29,7 +29,7 @@ class ResponseQualityTests(unittest.TestCase):
         source = "def answer():\n    return 'ok'\n"
         report = """Finding
 The function returns a fixed value.
-Evidence (line 2): \`return 'ok'\`
+Evidence (line 2): `return 'ok'`
 Recommended fix
 Return the validated result instead.
 Tests
@@ -42,7 +42,7 @@ Both tests pass and invalid input is rejected."""
         source = "def answer():\n    return 'ok'\n"
         report = """Finding
 The function returns a fixed value.
-Evidence (line 99): \`return 'fake'\`
+Evidence (line 99): `return 'fake'`
 Recommended fix
 Validate the result.
 Tests
