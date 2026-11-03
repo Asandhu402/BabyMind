@@ -56,7 +56,7 @@ Use `babymind integrations` to see which optional components are detected. This 
 - No third-party source repositories are copied into BabyMind.
 - No cloud browser, hosted LLM, or paid API fallback is enabled.
 - No unattended browser tasks or background computer control.
-- No persistent vector database or embeddings are added; existing encrypted memory remains the source of personal memory.
+- No vector database is added to the core memory system. Cognee is a separate, opt-in knowledge store and never replaces encrypted BabyMind memory.
 - No write-capable coding agent, workspace file broker, or project test execution is enabled.
 
 
