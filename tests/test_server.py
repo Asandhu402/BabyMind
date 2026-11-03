@@ -51,6 +51,45 @@ class BabyMindWebTests(unittest.TestCase):
         except HTTPError as error:
             return error.code, error.headers.get("Content-Type"), error.read()
 
+    def test_task_queue_create_and_lifecycle(self) -> None:
+        status, _, body = self.request("/api/tasks", {
+            "title": "Prepare project plan", "details": "Draft steps only"
+        })
+        self.assertEqual(status, 201)
+        task = json.loads(body)
+        self.assertEqual(task["status"], "queued")
+        task_id = task["id"]
+        for action, expected in [
+            ("start", "active"), ("pause", "paused"),
+            ("resume", "active"), ("complete", "completed")
+        ]:
+            status, _, body = self.request(
+                f"/api/tasks/{task_id}/action", {"action": action}
+            )
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body)["status"], expected)
+        status, _, body = self.request("/api/tasks")
+        self.assertEqual(status, 200)
+        tasks = json.loads(body)
+        self.assertEqual(tasks[0]["title"], "Prepare project plan")
+        self.assertEqual(tasks[0]["details"], "Draft steps only")
+
+    def test_task_queue_rejects_invalid_state_transition(self) -> None:
+        status, _, body = self.request("/api/tasks", {"title": "Task"})
+        task_id = json.loads(body)["id"]
+        status, _, body = self.request(
+            f"/api/tasks/{task_id}/action", {"action": "resume"}
+        )
+        self.assertEqual(status, 400)
+        self.assertIn(b"Cannot resume", body)
+
+    def test_task_queue_stores_text_encrypted(self) -> None:
+        self.request("/api/tasks", {"title": "Secret title", "details": "Secret details"})
+        with server.db() as connection:
+            row = connection.execute("SELECT title, details FROM tasks").fetchone()
+        self.assertTrue(row["title"].startswith("bmenc:v1:"))
+        self.assertTrue(row["details"].startswith("bmenc:v1:"))
+
     def test_agent_api_returns_exactly_fifty_roles(self) -> None:
         status, _, body = self.request("/api/agents")
         self.assertEqual(status, 200)
