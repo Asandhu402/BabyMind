@@ -19,12 +19,19 @@ add_executable(workspace_broker_tests tests.cpp broker_protocol.cpp)
 # but intentionally dispatches no filesystem operations.
 add_executable(babymind_workspace_broker broker_main.cpp broker_protocol.cpp)
 target_link_libraries(babymind_workspace_broker PRIVATE babymind_workspace)
+
+add_executable(babymind_workspace_isolation_smoke broker_isolation_smoke.cpp)
+target_link_libraries(babymind_workspace_isolation_smoke PRIVATE userenv)
 target_link_libraries(workspace_broker_tests PRIVATE babymind_workspace)
 if(MSVC)
  target_compile_options(workspace_broker_tests PRIVATE /W4 /WX /permissive- /sdl)
+ target_compile_options(babymind_workspace_broker PRIVATE /W4 /WX /permissive- /sdl)
+ target_compile_options(babymind_workspace_isolation_smoke PRIVATE /W4 /WX /permissive- /sdl)
 endif()
 enable_testing()
 add_test(NAME workspace_broker_tests COMMAND workspace_broker_tests)
+add_test(NAME broker_appcontainer_isolation_smoke
+    COMMAND babymind_workspace_isolation_smoke)
 add_test(NAME broker_rejects_unrestricted_token
     COMMAND ${CMAKE_COMMAND}
         -DBROKER_EXE=$<TARGET_FILE:babymind_workspace_broker>
