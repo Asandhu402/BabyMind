@@ -413,3 +413,16 @@ not a guarantee against false claims. The next opt-in test was configured with
 a 4,200-second mission budget and shorter responses, but it has not yet run.
 The actual desktop default remains bounded and may also defer roles. All-role
 competence and packaged self-upgrade remain unverified or unavailable.
+
+## Follow-up acceptance-harness safeguards
+
+A local harness audit found that a sandbox-probe exception previously stopped
+all remaining role checks, and that an exception during the coding test could
+leave generated fixture files in place for the later self-edit test. The harness
+now treats probe exceptions as a failed sandbox check, does not execute generated
+code without a verified sandbox, continues the read-only role checks, and
+removes the coding fixture in a `finally` block. It also checks that the results
+cover all distinct registered role IDs, not merely a count of 50. Mocked
+regression tests cover these cases; they do not constitute a production-model
+or Ubuntu Desktop test. The expanded 4,200-second hosted real-model test remains
+unrun as of this update.

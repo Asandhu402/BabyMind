@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 
 from babymind import runner, sandbox
+from babymind.agents import AGENTS
 from babymind.coordinator import BabyMindCoordinator
 from babymind.first_run import MODEL_FILENAME, MODEL_SHA256, _sha256
 from babymind.integrations.coding import assist_with_code
@@ -26,7 +27,9 @@ from babymind.providers import LlamaCppProvider
 
 
 def annotate(label: str, text: str) -> None:
-    print(f"{label}: {text}", flush=True)
+    # Model output is untrusted: keep newlines/control characters escaped so
+    # it cannot issue GitHub workflow commands by starting a new log line.
+    print(f"{label}: {json.dumps(text, ensure_ascii=True)}", flush=True)
     if os.getenv("GITHUB_ACTIONS") == "true":
         safe = text[:5000].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
         print(f"::notice title={label}::{safe}", flush=True)
@@ -84,7 +87,12 @@ def run(args) -> dict:
         with tempfile.TemporaryDirectory(prefix="babymind-acceptance-", dir=args.workdir) as temp:
             root = Path(temp) / "project"
             test_project(root)
-            evidence = sandbox.self_test(root)
+            try:
+                evidence = sandbox.self_test(root)
+            except Exception as error:
+                # A broken probe must fail closed, without suppressing the
+                # remaining read-only model/role checks.
+                evidence = {"verified": False, "reason": f"Sandbox probe failed: {error}"}
             report["sandbox"] = evidence
             if not evidence.get("verified"):
                 report["failures"].append("OS sandbox probes did not pass; generated coding and self-edit code was not executed.")
@@ -94,17 +102,21 @@ def run(args) -> dict:
                 report["coding_response"] = response
                 annotate("Coding response", response)
                 if evidence.get("verified"):
-                    (root / "src" / "solution.py").write_text(extract_code(response), encoding="utf-8")
-                    (root / "tests" / "test_solution.py").write_text(
-                        "import unittest\nfrom solution import add\nclass Coding(unittest.TestCase):\n"
-                        " def test_numbers(self):\n  self.assertEqual(add(2, 3), 5)\n  self.assertEqual(add(-1, 4), 3)\n")
-                    result = runner.run_unit_tests(root, timeout=120, sandbox="require")
-                    report["coding_test"] = result["summary"]
-                    annotate("Sandboxed coding test", json.dumps(result["summary"]))
-                    if not result["sandboxed"] or not result["summary"]["passed"]:
-                        report["failures"].append("Model-generated coding answer failed its sandboxed tests.")
-                    (root / "src" / "solution.py").unlink(missing_ok=True)
-                    (root / "tests" / "test_solution.py").unlink(missing_ok=True)
+                    solution = root / "src" / "solution.py"
+                    coding_test = root / "tests" / "test_solution.py"
+                    try:
+                        solution.write_text(extract_code(response), encoding="utf-8")
+                        coding_test.write_text(
+                            "import unittest\nfrom solution import add\nclass Coding(unittest.TestCase):\n"
+                            " def test_numbers(self):\n  self.assertEqual(add(2, 3), 5)\n  self.assertEqual(add(-1, 4), 3)\n")
+                        result = runner.run_unit_tests(root, timeout=120, sandbox="require")
+                        report["coding_test"] = result["summary"]
+                        annotate("Sandboxed coding test", json.dumps(result["summary"]))
+                        if not result["sandboxed"] or not result["summary"]["passed"]:
+                            report["failures"].append("Model-generated coding answer failed its sandboxed tests.")
+                    finally:
+                        solution.unlink(missing_ok=True)
+                        coding_test.unlink(missing_ok=True)
             except Exception as error:
                 report["failures"].append(f"Coding test error: {error}")
 
@@ -138,17 +150,27 @@ def run(args) -> dict:
             # Bounded responses make a full 50-role pass practical on a CPU VM.
             os.environ["BABYMIND_MAX_TOKENS"] = "72"
             def update(_id, role):
-                print(f"ROLE {role.agent_id} {role.status} {role.seconds:.1f}s: {(role.output or role.error)[:160]}", flush=True)
+                excerpt = json.dumps((role.output or role.error)[:160], ensure_ascii=True)
+                print(f"ROLE {role.agent_id} {role.status} {role.seconds:.1f}s: {excerpt}", flush=True)
             worker = Orchestrator(provider, MissionStore(Path(temp) / "mission-records"),
                                   max_seconds=4200, on_update=update)
             mission = worker.run_now("Review a small Python function that adds two numbers. Give specific advice and tests.")
             report["mission"] = {key: mission[key] for key in ("status", "counts", "agents_recorded", "runs", "summary")}
             annotate("50-role mission", mission["summary"])
-            if mission["agents_recorded"] != 50 or mission["counts"].get("contributed", 0) != 50:
-                report["failures"].append("Not all 50 role calls returned text.")
+            expected_ids = {agent.agent_id for agent in AGENTS}
+            role_ids = [item["agent_id"] for item in mission["runs"]]
+            if (mission["agents_recorded"] != len(expected_ids)
+                    or mission["counts"].get("contributed", 0) != len(expected_ids)
+                    or len(role_ids) != len(expected_ids) or set(role_ids) != expected_ids):
+                report["failures"].append("Not every distinct registered role returned text.")
             report["warnings"].append("Role status checks only nonempty text; competence and correctness need independent review.")
-            group = mission["runs"][:3]
-            annotate("Role output sample", "\n".join(f"{r['agent_id']}: {(r['output'] or r['error'])[:180]}" for r in group))
+            # Keep bounded samples for every role in check annotations as well
+            # as the full artifact, which may not be downloadable on all hosts.
+            for start in range(0, len(mission["runs"]), 10):
+                group = mission["runs"][start:start + 10]
+                annotate(f"Role outputs {start + 1}-{start + len(group)}", "\n".join(
+                    f"{r['agent_id']} ({r.get('status', 'unknown')}): "
+                    f"{(r['output'] or r['error'])[:300]}" for r in group))
     finally:
         provider.stop()
     return report
