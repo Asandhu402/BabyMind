@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import babymind
 import json
 import shutil
 import subprocess
@@ -51,6 +52,28 @@ def wait_for_server(process: subprocess.Popen, log_path: Path) -> None:
     )
 
 
+def resolve_core_source(relative: str) -> Path:
+    """Resolve core source from either the checkout or the installed package.
+
+    GitHub Actions installs BabyMind editable before running this recorder. The
+    package location is therefore the authoritative fallback if the checkout
+    layout differs from the expected src/ tree.
+    """
+    candidates = (
+        ROOT / relative,
+        Path(babymind.__file__).resolve().parent / Path(relative).name,
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    locations = "; ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(
+        f"BabyMind core source file {relative!r} was not found. "
+        f"Checked: {locations}. Checkout root: {ROOT}; "
+        f"package location: {Path(babymind.__file__).resolve().parent}"
+    )
+
+
 def collect_local_code_context() -> str:
     """Read complete, bounded core files; never silently present partial files as complete."""
     # One complete high-impact core file keeps CPU inference bounded.
@@ -62,11 +85,8 @@ def collect_local_code_context() -> str:
     total_chars = 0
     omitted: list[str] = []
     for relative in source_paths:
-        path = ROOT / relative
-        if not path.is_file():
-            omitted.append(f"{relative} (not present in checkout)")
-            continue
         try:
+            path = resolve_core_source(relative)
             content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as error:
             omitted.append(f"{relative} (could not read: {error})")
@@ -344,7 +364,7 @@ def main() -> None:
                             "BabyMind UI did not produce a successful substantive answer. "
                             f"Rendered assistant text: {assistant_response[:2000]}"
                         )
-                    source_file = (ROOT / "src/babymind/providers.py").read_text(encoding="utf-8")
+                    source_file = resolve_core_source("src/babymind/providers.py").read_text(encoding="utf-8")
                     try:
                         validate_code_review_report(assistant_response, source_file)
                     except ValueError as error:
