@@ -27,11 +27,11 @@ class SandboxDetectionTests(unittest.TestCase):
             self.assertTrue(report["detail"])
             self.assertIn("not enforced", report["mechanisms"]["network"])
 
-    def test_windows_is_reported_as_unimplemented(self) -> None:
-        with patch("babymind.sandbox.sys.platform", "win32"):
+    def test_non_linux_platform_is_reported_as_unavailable(self) -> None:
+        with patch("babymind.sandbox.sys.platform", "unsupported"):
             record = sandbox.backend()
         self.assertFalse(record.available)
-        self.assertIn("AppContainer", record.detail)
+        self.assertIn("Linux only", record.detail)
 
 
 @unittest.skipUnless(AVAILABLE, SKIP_REASON)
