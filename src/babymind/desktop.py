@@ -1,4 +1,4 @@
-"""Native-window launcher for BabyMind on Windows.
+"""Native-window launcher for BabyMind on Linux.
 
 The local HTTP server stays bound to loopback. The bundled llama.cpp engine
 and first-run model setup are prepared before importing the application server.
