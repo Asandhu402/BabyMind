@@ -1,5 +1,8 @@
 # BabyMind
 
+> **Platform direction update: Linux only.** Windows is no longer a supported target; macOS is not a target either. The Linux port and Linux-only release gates are tracked in [docs/PLATFORM_MISSION.md](docs/PLATFORM_MISSION.md). Existing Windows instructions and artifacts elsewhere in this README are legacy material and must not be treated as current support guidance until migrated.
+
+
 BabyMind is a local-first AI development platform with exactly **50 specialist roles**, one consistent assistant identity, a browser-based interface, optional shared memory, and one integrated local inference runtime: llama.cpp.
 
 The 50 roles are the development team defined in [docs/AUTONOMY.md](docs/AUTONOMY.md): architect, language specialists, testers, security reviewers, recovery, research, and release acceptance. They replaced the earlier general-purpose role set. They are configurations over one underlying model — not 50 separately trained or separately running models — and a "50-agent mission" is 50 role-guided passes over the same weights.
@@ -21,9 +24,13 @@ The 50 roles are the development team defined in [docs/AUTONOMY.md](docs/AUTONOM
 - **CLI:** health, list, ask, route, and memory commands.
 - **Lightweight runtime:** core server, storage, and HTTP client use the Python standard library; the desktop window uses pywebview.
 
+## Platform support and migration
+
+BabyMind's product target is now **Linux only**. Windows and macOS are unsupported. The existing Windows-specific build, launcher, DPAPI, and desktop instructions below are retained temporarily as migration history and are not supported installation instructions. Do not use them to infer Linux readiness. Follow [docs/PLATFORM_MISSION.md](docs/PLATFORM_MISSION.md) for the Linux port and release acceptance requirements.
+
 ## Requirements
 
-For running from source: Windows 10/11 and Python 3.10 or newer, plus the llama.cpp runtime and a compatible local GGUF model. The portable Windows desktop package bundles Python and the llama.cpp CPU runtime; it downloads and verifies its default GGUF model on first launch. A current Microsoft Edge WebView2 Runtime is required for the desktop window.
+The Linux support matrix, runtime dependencies, desktop requirements, and installation procedure must be established and verified as part of the Linux migration. Until that work is complete, this repository must not claim a production-ready Linux release.
 
 ## Install
 
