@@ -107,7 +107,7 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(
             {item["integration_id"] for item in json.loads(body)},
-            {"docling", "faster-whisper", "browser-use", "open-interpreter", "cognee", "voicebox", "promptfoo"},
+            {"docling", "faster-whisper", "browser-use", "coding-assistant", "cognee", "voicebox", "promptfoo"},
         )
 
     def test_document_integration_uses_core_coordinator(self) -> None:
@@ -188,18 +188,23 @@ class BabyMindWebTests(unittest.TestCase):
             "BM-02", "What does my note say?", use_memory=True, remember=False,
         )
 
-    def test_browser_and_coding_integrations_fail_closed_without_explicit_approval(self) -> None:
-        for endpoint, payload in [
-            ("/api/integrations/browser", {"task": "Open a website"}),
-            ("/api/integrations/coding", {"workspace": "C:/Projects"}),
-        ]:
-            status, _, body = self.request(endpoint, payload)
-            self.assertEqual(status, 400)
-            if endpoint.endswith("/coding"):
-                self.assertIn(b"disabled", body.lower())
-                self.assertIn(b"llama.cpp-native", body.lower())
-            else:
-                self.assertIn(b"explicitly", body.lower())
+    def test_coding_assistant_requires_explicit_approval(self) -> None:
+        status, _, body = self.request("/api/integrations/coding", {"task": "Explain this function"})
+        self.assertEqual(status, 400)
+        self.assertIn(b"Confirm the coding request", body)
+
+    def test_coding_assistant_uses_shared_local_coordinator_and_persists_result(self) -> None:
+        with patch.object(server.COORDINATOR, "coding_assist", return_value="Here is a safe patch plan.") as assist:
+            status, _, body = self.request("/api/integrations/coding", {
+                "task": "Fix this Python bug", "context": "def f(): return None",
+                "user_approved": True,
+            })
+        self.assertEqual(status, 200, body)
+        payload = json.loads(body)
+        self.assertEqual(payload["response"], "Here is a safe patch plan.")
+        self.assertIn("No files or commands were accessed", payload["notice"])
+        self.assertTrue(payload["conversation_id"])
+        assist.assert_called_once_with("Fix this Python bug", context="def f(): return None")
 
     def test_integration_exchanges_are_saved_in_encrypted_conversation_history(self) -> None:
         conversation_id = server.persist_integration_exchange(

@@ -5,6 +5,8 @@
 #include <winternl.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstring>
 #include <cwctype>
 #include <string>
 #include <string_view>
@@ -28,6 +30,8 @@
 #ifndef FILE_CREATE
 #define FILE_CREATE 0x00000002
 #endif
+
+extern "C" BM_WS_API uint32_t bm_ws_abi_version(void) { return 1; }
 
 namespace {
 constexpr size_t kMaxPathChars = 500;
@@ -197,6 +201,42 @@ bm_ws_status open_root_component(HANDLE parent, const std::wstring& component,
     if (is_reparse_or_wrong_type(child->get(), true, &status)) return status;
     return BM_WS_OK;
 }
+
+bm_ws_status open_directory_handle(void* root_value, const wchar_t* relative_path,
+                                   UniqueHandle* directory) {
+    if (root_value == nullptr || relative_path == nullptr || directory == nullptr)
+        return BM_WS_INVALID_ARGUMENT;
+    const size_t length = wcslen(relative_path);
+    if (bm_ws_validate_relative_path(relative_path, length, 1) != BM_WS_OK)
+        return BM_WS_INVALID_RELATIVE_PATH;
+    HANDLE duplicate = INVALID_HANDLE_VALUE;
+    if (!DuplicateHandle(GetCurrentProcess(), reinterpret_cast<HANDLE>(root_value),
+                         GetCurrentProcess(), &duplicate, 0, FALSE,
+                         DUPLICATE_SAME_ACCESS)) return BM_WS_IO_ERROR;
+    UniqueHandle current(duplicate);
+    if (length == 0) {
+        *directory = std::move(current);
+        return BM_WS_OK;
+    }
+    size_t start = 0;
+    for (size_t i = 0; i <= length; ++i) {
+        if (i != length && relative_path[i] != L'/') continue;
+        std::wstring component(relative_path + start, i - start);
+        if (!valid_component(component)) return BM_WS_INVALID_RELATIVE_PATH;
+        UniqueHandle next;
+        if (!nt_open_relative(current.get(), component,
+                FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES, FILE_OPEN,
+                FILE_DIRECTORY_FILE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &next))
+            return BM_WS_IO_ERROR;
+        bm_ws_status status = BM_WS_OK;
+        if (is_reparse_or_wrong_type(next.get(), true, &status)) return status;
+        current = std::move(next);
+        start = i + 1;
+    }
+    *directory = std::move(current);
+    return BM_WS_OK;
+}
+
 } // namespace
 
 extern "C" BM_WS_API bm_ws_status bm_ws_validate_relative_path(
@@ -265,6 +305,68 @@ extern "C" BM_WS_API bm_ws_status bm_ws_open_workspace_root(
 
 extern "C" BM_WS_API void bm_ws_close_workspace_root(void* root) {
     if (root != nullptr) CloseHandle(reinterpret_cast<HANDLE>(root));
+}
+
+
+extern "C" BM_WS_API bm_ws_status bm_ws_list_directory(
+    void* root, const wchar_t* relative_path, bm_ws_directory_entry* entries,
+    size_t capacity, size_t* entries_written, int* truncated) {
+    if (entries_written == nullptr || truncated == nullptr ||
+        (entries == nullptr && capacity != 0)) return BM_WS_INVALID_ARGUMENT;
+    *entries_written = 0;
+    *truncated = 0;
+    if (capacity == 0 || capacity > 200) return BM_WS_INVALID_ARGUMENT;
+
+    UniqueHandle directory;
+    bm_ws_status status = open_directory_handle(root, relative_path, &directory);
+    if (status != BM_WS_OK) return status;
+
+    alignas(FILE_ID_BOTH_DIR_INFO) BYTE buffer[64 * 1024]{};
+    FILE_INFO_BY_HANDLE_CLASS info_class = FileIdBothDirectoryRestartInfo;
+    for (;;) {
+        if (!GetFileInformationByHandleEx(directory.get(), info_class,
+                                           buffer, static_cast<DWORD>(sizeof(buffer)))) {
+            const DWORD error = GetLastError();
+            if (error == ERROR_NO_MORE_FILES) break;
+            return BM_WS_IO_ERROR;
+        }
+        info_class = FileIdBothDirectoryInfo;
+        size_t offset = 0;
+        for (;;) {
+            if (offset > sizeof(buffer) - sizeof(FILE_ID_BOTH_DIR_INFO))
+                return BM_WS_IO_ERROR;
+            const auto* item = reinterpret_cast<const FILE_ID_BOTH_DIR_INFO*>(buffer + offset);
+            const size_t header_bytes = offsetof(FILE_ID_BOTH_DIR_INFO, FileName);
+            if ((item->FileNameLength % sizeof(wchar_t)) != 0 ||
+                item->FileNameLength > 255 * sizeof(wchar_t) ||
+                header_bytes + item->FileNameLength > sizeof(buffer) - offset)
+                return BM_WS_IO_ERROR;
+            const size_t chars = item->FileNameLength / sizeof(wchar_t);
+            const std::wstring_view name(item->FileName, chars);
+            if (name != L"." && name != L"..") {
+                if (*entries_written == capacity) {
+                    *truncated = 1;
+                    return BM_WS_OK;
+                }
+                bm_ws_directory_entry& output = entries[*entries_written];
+                std::memset(&output, 0, sizeof(output));
+                if (chars != 0) std::memcpy(output.name, item->FileName, item->FileNameLength);
+                if ((item->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                    output.type = 2;
+                else if ((item->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                    output.type = 1;
+                else
+                    output.type = 0;
+                ++(*entries_written);
+            }
+            if (item->NextEntryOffset == 0) break;
+            if (item->NextEntryOffset < header_bytes + item->FileNameLength ||
+                item->NextEntryOffset > sizeof(buffer) - offset)
+                return BM_WS_IO_ERROR;
+            offset += item->NextEntryOffset;
+        }
+    }
+    return BM_WS_OK;
 }
 
 extern "C" BM_WS_API bm_ws_status bm_ws_read_text(

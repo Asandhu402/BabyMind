@@ -192,20 +192,8 @@ class BabyMindCoordinator:
             user_approved=user_approved,
         )
 
-    def launch_coding_session(self, workspace: str | Path, *, user_approved: bool = False) -> int:
-        """Launch the external coding assistant with workspace-scoped write access."""
-        from .integrations.open_interpreter import launch_workspace_session
+    def coding_assist(self, task: str, *, context: str = "") -> str:
+        """Draft code and debugging guidance through BabyMind's shared llama.cpp provider."""
+        from .integrations.coding import assist_with_code
+        return assist_with_code(self.provider, task, context=context)
 
-        provider = self.provider
-        base_url = str(getattr(provider, "base_url", ""))
-        if not (
-            base_url.startswith("http://127.0.0.1:")
-            or base_url.startswith("http://localhost:")
-        ):
-            raise ValueError("The coding assistant must use BabyMind's local model endpoint.")
-        resolver = getattr(provider, "_resolve_model", None)
-        model = str(resolver() if callable(resolver) else getattr(provider, "model", None) or "")
-        process = launch_workspace_session(
-            workspace, model=model, base_url=base_url, user_approved=user_approved,
-        )
-        return int(process.pid)

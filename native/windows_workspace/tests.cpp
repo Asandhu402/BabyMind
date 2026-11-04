@@ -1,4 +1,5 @@
 #include "workspace_broker.h"
+#include "broker_protocol.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -6,6 +7,7 @@
 #include <barrier>
 #include <cwchar>
 #include <iostream>
+#include <cstring>
 #include <string>
 #include <thread>
 #include <vector>
@@ -17,6 +19,7 @@ static bm_ws_status validate(const wchar_t* value, int allow_empty = 0) {
 }
 
 int main() {
+    CHECK(bm_ws_abi_version() == 1);
     CHECK(validate(L"src/main.py") == BM_WS_OK);
     CHECK(validate(L"docs/guide.md") == BM_WS_OK);
     CHECK(validate(L"folder/file name.txt") == BM_WS_OK);
@@ -40,6 +43,47 @@ int main() {
     const std::wstring too_long(501, L'a');
     CHECK(bm_ws_validate_relative_path(too_long.c_str(), too_long.size(), 0) == BM_WS_INVALID_RELATIVE_PATH);
     CHECK(bm_ws_validate_relative_path(nullptr, 1, 0) == BM_WS_INVALID_ARGUMENT);
+
+
+    {
+        auto put32=[](std::vector<uint8_t>& b,uint32_t v){auto p=reinterpret_cast<const uint8_t*>(&v);b.insert(b.end(),p,p+4);};
+        auto frame=[&](uint32_t op,const std::wstring& path,const std::vector<uint8_t>& data){
+            std::vector<uint8_t>b;put32(b,1);put32(b,op);put32(b,0);for(uint8_t i=1;i<=16;++i)b.push_back(i);
+            put32(b,static_cast<uint32_t>(path.size()));for(wchar_t c:path){uint16_t x=static_cast<uint16_t>(c);b.push_back(x&255);b.push_back(x>>8);}
+            put32(b,static_cast<uint32_t>(data.size()));b.insert(b.end(),data.begin(),data.end());uint32_t n=static_cast<uint32_t>(b.size());std::memcpy(b.data()+8,&n,4);return b;
+        };
+        bm_ws_protocol::Request req{};
+        auto f=frame(1,L"src",{});
+        CHECK(bm_ws_protocol::parse_request(f.data(),f.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
+        CHECK(req.relative_path==L"src"&&req.payload.empty());
+        auto root_frame=frame(1,L"",{});
+        CHECK(bm_ws_protocol::parse_request(root_frame.data(),root_frame.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
+        CHECK(req.relative_path.empty());
+        auto c=frame(3,L"notes/new.txt",{'o','k'});
+        CHECK(bm_ws_protocol::parse_request(c.data(),c.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
+        CHECK(req.payload.size()==2&&req.payload[0]=='o');
+        auto short_frame=f;
+        short_frame.pop_back();
+        const uint32_t short_size=static_cast<uint32_t>(short_frame.size());
+        std::memcpy(short_frame.data()+8,&short_size,sizeof(short_size));
+        CHECK(bm_ws_protocol::parse_request(short_frame.data(),short_frame.size(),&req)==bm_ws_protocol::ParseStatus::Truncated);
+        auto bad=frame(2,L"../secret",{});
+        CHECK(bm_ws_protocol::parse_request(bad.data(),bad.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPath);
+        auto op=frame(99,L"file.txt",{});
+        CHECK(bm_ws_protocol::parse_request(op.data(),op.size(),&req)==bm_ws_protocol::ParseStatus::UnsupportedOperation);
+        auto p=frame(2,L"file.txt",{'x'});
+        CHECK(bm_ws_protocol::parse_request(p.data(),p.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto nul_text=frame(3,L"file.txt",{0});
+        CHECK(bm_ws_protocol::parse_request(nul_text.data(),nul_text.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto invalid_utf8=frame(3,L"file.txt",{0xC0,0xAF});
+        CHECK(bm_ws_protocol::parse_request(invalid_utf8.data(),invalid_utf8.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto empty=frame(3,L"file.txt",{});
+        CHECK(bm_ws_protocol::parse_request(empty.data(),empty.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto version=f;uint32_t v=2;std::memcpy(version.data(),&v,4);
+        CHECK(bm_ws_protocol::parse_request(version.data(),version.size(),&req)==bm_ws_protocol::ParseStatus::UnsupportedVersion);
+        auto trailing=f;trailing.push_back(0);
+        CHECK(bm_ws_protocol::parse_request(trailing.data(),trailing.size(),&req)==bm_ws_protocol::ParseStatus::InvalidLength);
+    }
 
     wchar_t temp[MAX_PATH]{};
     CHECK(GetTempPathW(MAX_PATH, temp) != 0);
@@ -74,6 +118,24 @@ int main() {
 
     const uint8_t payload[] = {'B','a','b','y','M','i','n','d'};
     CHECK(bm_ws_create_new_text(root, L"nested/hello.txt", payload, sizeof(payload), 1024) == BM_WS_OK);
+
+    bm_ws_directory_entry listed[8]{};
+    size_t listed_count = 0;
+    int listing_truncated = 0;
+    CHECK(bm_ws_list_directory(root, L"", listed, 8, &listed_count, &listing_truncated) == BM_WS_OK);
+    CHECK(listing_truncated == 0);
+    bool saw_nested = false;
+    bool saw_escape_reparse = false;
+    for (size_t i = 0; i < listed_count; ++i) {
+        if (std::wstring(listed[i].name) == L"nested" && listed[i].type == 1) saw_nested = true;
+        if (std::wstring(listed[i].name) == L"escape" && listed[i].type == 2) saw_escape_reparse = true;
+    }
+    CHECK(saw_nested && saw_escape_reparse);
+    CHECK(bm_ws_list_directory(root, L"nested", listed, 8, &listed_count, &listing_truncated) == BM_WS_OK);
+    CHECK(listed_count == 1 && std::wstring(listed[0].name) == L"hello.txt" && listed[0].type == 0);
+    CHECK(bm_ws_list_directory(root, L"nested", listed, 0, &listed_count, &listing_truncated) == BM_WS_INVALID_ARGUMENT);
+    CHECK(bm_ws_list_directory(root, L"escape", listed, 8, &listed_count, &listing_truncated) == BM_WS_REPARSE_POINT);
+
     uint8_t output[1025]{};
     size_t bytes_read = 0;
     CHECK(bm_ws_read_text(root, L"nested/hello.txt", 1024, output, sizeof(output), &bytes_read) == BM_WS_OK);

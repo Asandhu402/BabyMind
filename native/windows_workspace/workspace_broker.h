@@ -3,8 +3,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(_WIN32)
+#if defined(_WIN32) && defined(BABYMIND_WORKSPACE_BUILD)
 #define BM_WS_API __declspec(dllexport)
+#elif defined(_WIN32)
+#define BM_WS_API __declspec(dllimport)
 #else
 #define BM_WS_API
 #endif
@@ -12,6 +14,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* ABI version changes whenever exported structure/function contracts change. */
+BM_WS_API uint32_t bm_ws_abi_version(void);
 
 typedef enum bm_ws_status {
     BM_WS_OK = 0,
@@ -37,6 +42,18 @@ BM_WS_API bm_ws_status bm_ws_validate_relative_path(
 BM_WS_API bm_ws_status bm_ws_open_workspace_root(
     const wchar_t* absolute_path, void** out_root);
 BM_WS_API void bm_ws_close_workspace_root(void* root);
+
+
+typedef struct bm_ws_directory_entry {
+    wchar_t name[256];
+    uint32_t type; /* 0=file, 1=directory, 2=reparse point (never followed) */
+} bm_ws_directory_entry;
+
+/* Lists one directory only; an empty relative path selects the workspace root.
+ * Capacity is limited to 200 entries. Reparse points are identified, never followed. */
+BM_WS_API bm_ws_status bm_ws_list_directory(
+    void* root, const wchar_t* relative_path, bm_ws_directory_entry* entries,
+    size_t capacity, size_t* entries_written, int* truncated);
 
 /* Reads through a handle opened relative to the pinned root/parent handles.
  * output_capacity must be at least max_bytes + 1 to detect oversized files. */

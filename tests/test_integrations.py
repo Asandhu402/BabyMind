@@ -9,7 +9,6 @@ from unittest.mock import patch
 from babymind.integrations.browser import run_browser_task
 from babymind.integrations.catalog import integration_status
 from babymind.integrations.documents import IntegrationUnavailable, convert_document
-from babymind.integrations.open_interpreter import launch_workspace_session
 from babymind.integrations.speech import transcribe_audio
 
 
@@ -18,11 +17,12 @@ class IntegrationTests(unittest.TestCase):
         statuses = integration_status()
         self.assertEqual(
             {item["integration_id"] for item in statuses},
-            {"docling", "faster-whisper", "browser-use", "open-interpreter", "cognee", "voicebox", "promptfoo"},
+            {"docling", "faster-whisper", "browser-use", "coding-assistant", "cognee", "voicebox", "promptfoo"},
         )
-        coding = next(item for item in statuses if item["integration_id"] == "open-interpreter")
-        self.assertFalse(coding["available"])
-        self.assertIn("llama.cpp", coding["safety"])
+        coding = next(item for item in statuses if item["integration_id"] == "coding-assistant")
+        self.assertTrue(coding["available"])
+        self.assertIn("llama.cpp", coding["purpose"])
+        self.assertIn("No automatic workspace", coding["safety"])
 
     def test_voicebox_rejects_non_loopback_endpoint(self):
         from babymind.integrations.voicebox import _base_url
@@ -107,26 +107,6 @@ class IntegrationTests(unittest.TestCase):
                     "Read this page", model="local-model", user_approved=True
                 ))
 
-    def test_open_interpreter_requires_approval_before_launch(self):
-        with self.assertRaises(PermissionError):
-            launch_workspace_session(".")
-
-    def test_open_interpreter_fails_closed_without_llama_cpp_native_support(self):
-        with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaisesRegex(RuntimeError, "llama.cpp-native"):
-                launch_workspace_session(
-                    folder, model="local-model", base_url="http://127.0.0.1:1235/v1",
-                    user_approved=True,
-                )
-
-    def test_open_interpreter_rejects_nonlocal_model_endpoint(self):
-        with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaises(ValueError):
-                launch_workspace_session(
-                    folder, model="remote", base_url="https://api.example.com/v1",
-                    user_approved=True,
-                )
-
     def test_missing_optional_docling_is_reported_cleanly(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "note.txt"
@@ -134,6 +114,56 @@ class IntegrationTests(unittest.TestCase):
             with patch.dict("sys.modules", {"docling": None}):
                 with self.assertRaises(IntegrationUnavailable):
                     convert_document(path)
+
+
+    def test_coding_assistant_uses_provider_and_marks_context_untrusted(self):
+        from babymind.integrations.coding import assist_with_code
+        class Provider:
+            def complete(self, system, user):
+                self.system, self.user = system, user
+                return "Proposed implementation."
+        provider = Provider()
+        result = assist_with_code(provider, "Fix the parser", context="ValueError at line 4")
+        self.assertEqual(result, "Proposed implementation.")
+        self.assertIn("no filesystem or command tools", provider.system)
+        self.assertIn("untrusted data", provider.user)
+
+    def test_coding_assistant_rejects_empty_and_oversized_requests(self):
+        from babymind.integrations.coding import assist_with_code
+        class Provider:
+            def complete(self, system, user):
+                raise AssertionError("Provider must not be called for invalid input.")
+        for task in ("", " "):
+            with self.assertRaises(ValueError):
+                assist_with_code(Provider(), task)
+        with self.assertRaises(ValueError):
+            assist_with_code(Provider(), "x" * 12001)
+        with self.assertRaises(ValueError):
+            assist_with_code(Provider(), "valid", context="x" * 24001)
+
+
+    def test_native_workspace_binding_is_not_loaded_or_enabled_on_import(self):
+        from babymind import approval
+        from babymind.integrations import native_workspace
+        self.assertFalse(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
+        self.assertTrue(callable(native_workspace.load_native_workspace_library))
+        with patch("babymind.integrations.native_workspace.os.name", "posix"):
+            with self.assertRaises(OSError):
+                native_workspace.load_native_workspace_library()
+
+
+    def test_native_workspace_binding_rejects_invalid_limits_before_ffi(self):
+        from babymind.integrations.native_workspace import _NativeWorkspaceRoot
+        class NoCallLibrary:
+            def __getattr__(self, name):
+                raise AssertionError(f"Native function unexpectedly called: {name}")
+        root = _NativeWorkspaceRoot(NoCallLibrary(), 1)
+        with self.assertRaises(ValueError):
+            root.list_directory("", capacity=201)
+        with self.assertRaises(ValueError):
+            root.read_text("../outside.txt", max_bytes=0)
+        with self.assertRaises(ValueError):
+            root.create_new_text("new.txt", "too long", max_bytes=1)
 
 
 if __name__ == "__main__":
