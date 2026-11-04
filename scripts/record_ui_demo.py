@@ -71,8 +71,11 @@ def read_core_source(relative: str) -> tuple[Path, str]:
             errors.append(f"{candidate}: {error}")
     raise RuntimeError(
         f"Could not read BabyMind core source {relative!r}. "
+    details = "; ".join(errors)
+    raise RuntimeError(
+        f"Could not read BabyMind core source {relative!r}. "
         f"Checkout root: {ROOT}; package file: {module_path}; "
-        f"read errors: {"; ".join(errors)}"
+        f"read errors: {details}"
     )
 
 def collect_local_code_context() -> str:
