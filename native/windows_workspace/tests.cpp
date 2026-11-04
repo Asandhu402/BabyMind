@@ -135,7 +135,7 @@ int main() {
     // Native ABI path inputs must be NUL-terminated within the documented
     // maximum; reject malformed caller buffers without scanning indefinitely.
     wchar_t unterminated_path[501];
-    std::fill(std::begin(unterminated_path), std::end(unterminated_path), L'a');
+    std::fill_n(unterminated_path, 501, L'a');
     CHECK(bm_ws_list_directory(root, unterminated_path, nullptr, 0,
         &listed_count, &listing_truncated) == BM_WS_INVALID_ARGUMENT);
     bm_ws_directory_entry malformed_entries[1]{};
