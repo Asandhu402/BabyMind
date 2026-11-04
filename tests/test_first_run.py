@@ -1,4 +1,4 @@
-"""Tests for the portable Windows first-run setup helpers."""
+"""Tests for the Linux first-run setup helpers."""
 
 import hashlib
 import tempfile
@@ -38,7 +38,7 @@ class FirstRunSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             runtime = Path(folder) / "llama.cpp"
             runtime.mkdir()
-            executable = runtime / "llama-server.exe"
+            executable = runtime / "llama-server"
             executable.write_bytes(b"test")
             with patch.dict("os.environ", {}, clear=True):
                 self.assertEqual(_find_llama_server(Path(folder)), executable)
@@ -47,7 +47,7 @@ class FirstRunSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             runtime = Path(folder) / "llama.cpp" / "bin"
             runtime.mkdir(parents=True)
-            executable = runtime / "llama-server.exe"
+            executable = runtime / "llama-server"
             executable.write_bytes(b"test")
             with patch.dict("os.environ", {}, clear=True):
                 self.assertEqual(_find_llama_server(Path(folder)), executable)
