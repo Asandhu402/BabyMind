@@ -1,59 +1,49 @@
-# Windows workspace filesystem security
+# Linux workspace filesystem security
 
-**Status: design gate only. Workspace file actions must remain disabled. BabyMind currently targets Windows 10/11 only.** This document records the Windows implementation requirements and unresolved guarantees. It is not evidence that a secure backend has been implemented.
+**Status: design gate only. Workspace file actions must remain disabled.** This document defines requirements for a future Linux-native workspace broker; it is not evidence that a secure backend has been implemented.
 
 ## Threat model
 
-The workspace root is selected by the user. Relative paths and directory entries may be attacker-controlled. A concurrent process may rename, replace, or create path components while BabyMind is operating. The backend must never escape the originally authorized workspace directory through traversal, symbolic links, junctions, mount points, or other reparse points.
+The workspace root is selected by the user. Relative paths and directory entries may be attacker-controlled. A concurrent process may rename, replace, or create path components while BabyMind is operating. The backend must never escape the authorized workspace through traversal, symbolic links, bind mounts, mount points, or path replacement races.
 
-A handle-relative API does not automatically provide a snapshot of directory names or protect a file's contents from a same-user process that can independently open and modify that file. The product must define whether same-user concurrent writers are in scope. If they are, a stronger OS-enforced isolation boundary is required; advisory locks and a second hash check are not sufficient.
+A descriptor-relative API does not automatically isolate file contents from a malicious process running as the same user. The product must define whether same-user concurrent writers are in scope. Advisory locks and a second path check are not sufficient isolation.
 
-## Windows implementation direction and unresolved contract
+## Required architecture
 
-Windows needs directory handles and child opens relative to those handles, while refusing reparse points at every component. `NtCreateFile` documents a `RootDirectory` handle for relative names and `FILE_OPEN_REPARSE_POINT` behavior. `OBJ_DONT_REPARSE` is the relevant fail-on-reparse object attribute in the general `OBJECT_ATTRIBUTES` documentation; it is distinct from `FILE_OPEN_REPARSE_POINT`, which opens the reparse point itself rather than refusing traversal.
+Use a small Linux-native broker with a narrow typed interface. Python must not perform privileged path resolution or file I/O for brokered operations.
 
-### Research evidence (November 3, 2026)
+- Admit the selected root by opening it as a directory and retaining the directory file descriptor.
+- Resolve every child relative to a pinned parent descriptor.
+- Use `openat2` with restrictive resolution flags where available (including `RESOLVE_BENEATH`, `RESOLVE_NO_SYMLINKS`, and an explicitly chosen mount-crossing policy).
+- Provide a reviewed descriptor-relative fallback only when its guarantees are equivalent for the supported kernel; otherwise fail closed.
+- Reject symlinks, magic links, unexpected mount transitions, non-regular files, and invalid path components.
+- Use `O_NOFOLLOW`, `O_CLOEXEC`, and exclusive creation where appropriate.
+- Verify opened object type and identity through the file descriptor, not by reopening a path.
+- Keep parent descriptors alive for the entire operation.
+- Bound directory entries, file sizes, content sizes, and operation time.
+- Bind one-use approvals to the exact operation, root identity, relative path, content digest, size limit, and expiry.
+- Record every decision and operation in the audit trail without logging file contents or secrets.
 
-A Microsoft Q&A thread reports a successful test on Windows 11 build 26200, local NTFS, using a directory handle as `RootDirectory`, a single relative component, and `OBJ_DONT_REPARSE | OBJ_CASE_INSENSITIVE`. The test reports `STATUS_REPARSE_POINT_ENCOUNTERED` for a junction. This is useful experimental evidence and suggests a viable implementation direction.
+## Initial operation scope
 
-However, the Q&A distinguishes that measured behavior from the published contract: the user-mode `NtCreateFile` page narrows its `Attributes` description to zero or `OBJ_CASE_INSENSITIVE`, while the general `OBJECT_ATTRIBUTES` page defines `OBJ_DONT_REPARSE`. The cited docs do not unambiguously resolve acceptance of this exact combination across supported Windows versions and filesystems.
+The first reviewed release may support only:
+1. Non-recursive listing of one selected directory.
+2. Bounded UTF-8 text reads.
+3. Exclusive creation of a new text file.
 
-The available research also does not establish namespace stability during concurrent rename, replacement, or reparse-point changes. Initial acquisition of the trusted root handle is a separate problem: a descendant open cannot retroactively prove that the absolute root path and its ancestors were admitted without following an untrusted reparse point.
+Editing, deletion, recursive search, arbitrary command execution, and project test execution require separate threat reviews and must remain disabled until approved.
 
-Therefore, this is not enough to enable workspace operations. A Windows prototype must validate the tested combination on a declared Windows/filesystem matrix, securely establish the root handle, verify the opened object through its handle, and separately define/mitigate concurrent namespace changes. Do not claim race-free behavior from the flag alone.
+## OS isolation
 
-References:
-- https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile
-- https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntcreatefile
-- https://learn.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-_object_attributes
-- https://learn.microsoft.com/en-us/answers/questions/6052628/documented-user-mode-ntcreatefile-contract-for-fil
-- https://learn.microsoft.com/en-us/answers/questions/6059091/is-ntcreatefile-with-rootdirectory-race-safe-again
+A broker process running under the same unrestricted user identity is not, by itself, a security boundary against hostile same-user software. If the threat model includes that attacker, use an independently provisioned restricted identity and narrowly scoped filesystem permissions, or another reviewed Linux isolation design. Never call a path-checking subprocess a sandbox.
 
-## Required operations and invariants
+## Verification requirements
 
-Before any workspace action can be enabled, the Windows backend must provide and test:
+- Test traversal, absolute paths, empty components, dot components, symlinks, magic links, bind mounts, mount crossings, hard links, and path replacement races.
+- Test concurrent rename and replacement attempts during root admission and every operation.
+- Test crash, cancellation, timeout, descriptor cleanup, and partial-write behavior.
+- Test the declared kernel and distribution matrix.
+- Verify the broker fails closed when required kernel features or isolation controls are unavailable.
+- Obtain an independent security review before enabling any workspace API or UI operation.
 
-1. Secure admission of the configured workspace root, including every ancestor component; reject roots that are reparse points or whose ancestry cannot be established safely.
-2. Directory-relative resolution of each component from a pinned root/parent handle, with no path-based reopen after validation.
-3. Type verification from the opened handle (directory vs regular file), not from a separate path lookup.
-4. Bounded reads from the opened file handle, with size and file-type checks on that handle.
-5. New-file creation that is exclusive and relative to a pinned parent directory handle.
-6. Edits that have a defensible concurrency model. A hash check followed by a path-based replace is not sufficient. If the backend cannot guarantee that the reviewed object is the object being changed under the stated threat model, editing must remain unavailable.
-7. Cleanup that uses the same trusted parent handle and cannot unlink a substituted path.
-8. Explicit refusal on unsupported Windows versions, filesystems, API behavior, or fallback paths.
-
-## Windows security test matrix
-
-Run on supported Windows CI runners and repeat race tests many times:
-
-- Symlink, junction, and other reparse points at the root, each intermediate component, and the final component.
-- Replace an intermediate directory with a junction/reparse point during resolution.
-- Rename or replace the final file between proposal and approval.
-- Replace a directory entry during enumeration and file creation.
-- Attempt `..`, absolute paths, alternate separators, drive paths, UNC paths, device paths, and case/Unicode edge cases.
-- Concurrent same-user modification of the reviewed file; verify the chosen threat model and behavior explicitly.
-- Verify all failures leave no outside-workspace reads, writes, or cleanup deletions.
-
-## Enablement rule
-
-Keep `WORKSPACE_FILE_ACTIONS_ENABLED = False` and keep the API/UI disabled until the Windows implementation has code review, a documented supported Windows/filesystem matrix, adversarial race tests, and passing Windows CI. Project test execution is a separate feature and still requires a real Windows OS-level sandbox for process, network, filesystem, and resource isolation.
+Until all required evidence exists, workspace operations stay disabled.
