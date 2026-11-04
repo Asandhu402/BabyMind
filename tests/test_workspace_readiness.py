@@ -29,7 +29,7 @@ class WorkspaceReadinessTests(unittest.TestCase):
         self.assertEqual(execution["status"] == "sandboxed", execution["sandbox_available"])
         self.assertTrue(execution["sandbox_detail"])
         self.assertIn("environment", execution["sandbox_mechanisms"])
-        self.assertEqual(report["local_app_builder"]["os_sandbox"], execution["sandbox_available"])
+        self.assertFalse(report["local_app_builder"]["os_sandbox"])
 
     def test_report_reflects_closed_production_file_action_gate(self) -> None:
         with patch.object(approval, "WORKSPACE_FILE_ACTIONS_ENABLED", False):

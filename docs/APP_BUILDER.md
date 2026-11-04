@@ -1,25 +1,24 @@
 # Local app builder
 
 **Status: implemented and opt-in (disabled by default).** BabyMind can turn a short brief into a
-small working app, write the files into one dedicated folder, and run the Python entry point once
-so you can see the result. It uses the same local llama.cpp model as chat — no cloud model, no
+small app, and write the files into one dedicated folder. In source mode it can run the Python entry point once; the portable app cannot run it. It uses the same local llama.cpp model as chat — no cloud model, no
 extra account.
 
 This is the only path in BabyMind that creates files and runs generated code. It is deliberately
 narrow, and the rest of the workspace gates stay closed (see
-`WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md` and `workspace_readiness()`).
+`workspace_readiness()`).
 
 ## Enable it
 
 Set two environment variables, then restart BabyMind:
 
-```powershell
-$env:BABYMIND_APP_BUILDER_ENABLED = "true"
-$env:BABYMIND_BUILDER_ROOT = "C:\Users\you\BabyMindApps"
+```bash
+export BABYMIND_APP_BUILDER_ENABLED=true
+export BABYMIND_BUILDER_ROOT="$HOME/BabyMindApps"
 ```
 
 `BABYMIND_BUILDER_ROOT` (or `BABYMIND_WORKSPACE_ROOT`) must already exist. Generated apps are
-created under `<root>\apps\<app-slug>\`. Without both settings the builder reports `disabled` and
+created under `<root>/apps/<app-slug>/`. Without both settings the builder reports `disabled` and
 every builder endpoint refuses the request.
 
 ## How a build works
@@ -30,7 +29,7 @@ every builder endpoint refuses the request.
 3. **Approve.** You approve *that hash*. In the API this is `POST /api/builder/build` with
    `{"plan_id": ..., "plan_hash": ...}`.
 4. **Write + run.** BabyMind creates `<root>/apps/<slug>/`, writes each file with `O_EXCL` (an
-   existing file is never overwritten), then runs the entry point once:
+   existing file is never overwritten), then, only in source mode, runs the entry point once:
    `<python interpreter> -u <entry>` in the app folder, no shell, scrubbed environment, 60-second
    limit, output captured and shown.
 
@@ -56,15 +55,14 @@ paths, a non-`.py` entry point, and reusing an app name that already exists.
 
 ## What this is not
 
-- **Sandboxed where the platform allows it.** Build steps and test runs go
-  through `runner.py` with `BABYMIND_SANDBOX=auto`: on Linux they execute inside
-  the namespaced chroot, with no network and no access to your home directory. On
-  Windows and macOS there is no backend yet, so they run as ordinary child
-  processes and the result records `sandbox: "unavailable"`.
+- **The app builder is not sandboxed.** In source mode it executes generated
+  Python directly as your user, regardless of namespace availability. It can
+  read private files or use the network. Do not execute untrusted generated code.
+  In the portable app generated-code execution is disabled.
 - **Not a full sandbox against a hostile model.** Generated code runs with your user account's privileges when no backend exists. It can read what you
   can read and use the network. The containment is the folder, the approval, and the review — not
   an operating-system boundary.
-- **Not a shell.** There is no way to run `cmd`, `powershell`, or an arbitrary program through
+- **Not a shell.** There is no way to run a shell or an arbitrary program through
   this feature. Only the reviewed `.py` entry point runs.
 - **Not an approval bypass.** The existing workspace file broker (`approval.py`) stays disabled;
   this is a separate, narrower capability with its own gate.

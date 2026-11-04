@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import platform
 import shutil
-import sys
 from pathlib import Path
 
 # (minimum RAM in GB, recommended parameter class, context, note)
@@ -23,29 +22,6 @@ TIERS = (
 
 def _ram_gb() -> float | None:
     try:
-        if sys.platform == "win32":
-            import ctypes
-
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-                ]
-
-            status = MEMORYSTATUSEX()
-            status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-                return round(status.ullTotalPhys / (1024 ** 3), 1)
-            return None
-        if sys.platform == "darwin":
-            import subprocess
-
-            out = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True,
-                                 text=True, timeout=5, check=False)
-            return round(int(out.stdout.strip()) / (1024 ** 3), 1)
         with open("/proc/meminfo", encoding="utf-8") as handle:
             for line in handle:
                 if line.startswith("MemTotal:"):
@@ -57,29 +33,10 @@ def _ram_gb() -> float | None:
 
 def _cpu_name() -> str:
     try:
-        if sys.platform == "win32":
-            try:
-                import winreg
-
-                with winreg.OpenKey(
-                    winreg.HKEY_LOCAL_MACHINE,
-                    r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
-                ) as key:
-                    return str(winreg.QueryValueEx(key, "ProcessorNameString")[0]).strip()
-            except OSError:
-                return platform.processor() or platform.machine()
-        if sys.platform.startswith("linux"):
-            with open("/proc/cpuinfo", encoding="utf-8") as handle:
-                for line in handle:
-                    if line.lower().startswith("model name"):
-                        return line.split(":", 1)[1].strip()
-            return platform.machine()
-        if sys.platform == "darwin":
-            import subprocess
-
-            out = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
-                                 capture_output=True, text=True, timeout=5, check=False)
-            return out.stdout.strip() or platform.machine()
+        with open("/proc/cpuinfo", encoding="utf-8") as handle:
+            for line in handle:
+                if line.lower().startswith("model name"):
+                    return line.split(":", 1)[1].strip()
     except (OSError, ValueError, ImportError, AttributeError):
         pass
     return platform.processor() or platform.machine() or "unknown CPU"
@@ -88,8 +45,6 @@ def _cpu_name() -> str:
 def _gpu_hint() -> str:
     if shutil.which("nvidia-smi"):
         return "NVIDIA tooling detected. Verify a CUDA-enabled llama.cpp build before enabling GPU layers."
-    if sys.platform == "darwin" and platform.machine() == "arm64":
-        return "Apple Silicon: Metal-enabled llama.cpp builds can use the GPU."
     return "No dedicated GPU tooling detected. CPU inference is the supported default."
 
 

@@ -2,9 +2,8 @@
 
 The archive is encrypted with scrypt + AES-256-GCM. It contains the existing
 encrypted SQLite databases and their key files; it never exports plaintext
-conversation or memory text. Windows DPAPI-protected keys remain bound to the
-same Windows user/device, so this is a disaster-recovery backup, not a
-cross-device migration format.
+conversation or memory text. Preserve both the archive and its password;
+backups do not contain source checkout snapshots.
 """
 from __future__ import annotations
 

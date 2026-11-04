@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from typing import Protocol
@@ -145,7 +146,7 @@ class LlamaCppProvider(LlamaCppHTTPClient):
         if not executable or not model_path:
             raise ProviderError(
                 "The BabyMind llama.cpp engine needs BABYMIND_LLAMA_SERVER "
-                "(path to llama-server.exe) and BABYMIND_GGUF_MODEL "
+                "(path to llama-server) and BABYMIND_GGUF_MODEL "
                 "(path to a .gguf model file)."
             )
         exe = Path(executable).expanduser()
@@ -164,7 +165,10 @@ class LlamaCppProvider(LlamaCppHTTPClient):
         self._process = None
         try:
             with urlopen(f"http://127.0.0.1:{port}/health", timeout=1):
-                return
+                raise ProviderError(
+                    f"Port {port} is already serving a model; BabyMind will not reuse "
+                    "an unverified server. Choose a free BABYMIND_LLAMA_PORT."
+                )
         except (URLError, TimeoutError, OSError):
             pass
         command = [
@@ -173,11 +177,17 @@ class LlamaCppProvider(LlamaCppHTTPClient):
             os.getenv("BABYMIND_CONTEXT_SIZE", "4096"),
             "--reasoning-format", "none",
         ]
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        # PyInstaller adjusts LD_LIBRARY_PATH for the frozen app; do not pass
+        # its private Qt/Python libraries to the independent llama executable.
+        child_env = os.environ.copy()
+        if "LD_LIBRARY_PATH_ORIG" in child_env:
+            child_env["LD_LIBRARY_PATH"] = child_env.pop("LD_LIBRARY_PATH_ORIG")
+        elif getattr(sys, "frozen", False):
+            child_env.pop("LD_LIBRARY_PATH", None)
         try:
             self._process = subprocess.Popen(
                 command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, creationflags=creationflags,
+                stderr=subprocess.DEVNULL, env=child_env,
             )
         except OSError as error:
             raise ProviderError(f"Could not start llama.cpp: {error}") from error

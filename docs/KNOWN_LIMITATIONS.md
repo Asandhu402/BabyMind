@@ -5,14 +5,10 @@ missing, not what is planned.
 
 ## Platform and packaging
 
-- **Windows is unverified in this build.** The code paths are written for
-  Windows 10/11, but the test run recorded in `docs/TEST_REPORT.md` was executed
-  on Linux. Windows-only behaviour (Job Objects, DPAPI, `taskkill /T`, portable
-  packaging, installer, autostart) has not been run here.
-- **No installer or updater ships from this session.** The release workflow
-  produces a portable ZIP; there is no auto-update channel, no code signing, and
-  no separate supervisor process that can repair a broken installation.
-- macOS and Linux builds of the desktop shell are not produced.
+- The supported portable target is Linux x86-64 with glibc 2.35+ and a graphical desktop. The package, first-run GUI, real model download and inference have not been verified end to end in this environment.
+- No installer, auto-updater, code signing, or self-repair supervisor ships.
+- Linux x86-64 is the sole supported desktop target.
+- The portable executable is not a Python interpreter. Source tests and generated Python app execution are unavailable in the portable build.
 
 ## Sandboxing and execution
 
@@ -22,11 +18,9 @@ missing, not what is planned.
   loopback. `self_test()` proves each of those four claims against the live
   kernel, and the sandboxed suite runs the same green result as an unsandboxed
   one.
-- **No Windows or macOS backend exists.** `sandbox.backend()` returns
-  `available: false` with the reason (`AppContainer/Job Object backend not
-  implemented`, `sandbox-exec backend not implemented`). `BABYMIND_SANDBOX=require`
-  then refuses to run commands at all, and the default `auto` mode records
-  `sandbox: "unavailable"` on every result instead of claiming isolation.
+- **The frozen app cannot launch the namespace helper.** `BABYMIND_SANDBOX=require`
+  refuses commands there. In source mode, `auto` may fall back to unsandboxed
+  execution; never use that fallback for untrusted code.
 - **Nested sandboxes fail closed to plain execution.** The kernel forbids user
   namespaces inside a user namespace, so a verification run started *by* a
   sandboxed process reports the backend as unavailable and executes inside the
@@ -80,9 +74,7 @@ missing, not what is planned.
 
 - No model is bundled in the repository. First launch downloads ~2.7 GB, and
   that download has not been exercised in this environment.
-- Conversations, missions, and memory are encrypted at rest with a key protected
-  by DPAPI on Windows. That protects the files when the app is closed; it does
-  not protect a running session or a compromised user account.
+- Conversations, missions, and memory are encrypted at rest with a local key file on Linux. It is readable by the same user and does not protect against a compromised account.
 - Knowledge-graph and voice integrations remain optional and unverified here.
 
 ## Interface

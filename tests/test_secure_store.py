@@ -52,8 +52,25 @@ class SecureTextStoreTests(unittest.TestCase):
             path = Path(folder) / "key"
             SecureTextStore(path)
             self.assertTrue(path.is_file())
-            if os.name != "nt":
-                self.assertEqual(path.stat().st_mode & 0o077, 0)
+            self.assertEqual(path.stat().st_mode & 0o077, 0)
+
+    def test_unreadable_legacy_key_is_preserved(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "key"
+            legacy = b"BMK1" + b"legacy encrypted key contents" * 3
+            path.write_bytes(legacy)
+            with self.assertRaisesRegex(RuntimeError, "Keep the original key"):
+                SecureTextStore(path)
+            self.assertEqual(path.read_bytes(), legacy)
+
+    def test_raw_key_with_legacy_prefix_remains_valid(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "key"
+            key = b"BMK1" + bytes(range(28))
+            path.write_bytes(key)
+            store = SecureTextStore(path)
+            self.assertEqual(store.decrypt(store.encrypt("safe")), "safe")
+            self.assertEqual(path.read_bytes(), key)
 
 
 if __name__ == "__main__":

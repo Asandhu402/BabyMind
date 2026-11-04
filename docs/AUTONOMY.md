@@ -1,6 +1,6 @@
 # Autonomous development architecture
 
-**Status: implemented, tested on Linux; Windows-specific paths are untested.**
+**Status: implemented in part; Linux is the supported platform.**
 BabyMind now has a mission orchestrator over 50 development roles, a
 self-development engine with checkpoints and automatic rollback, a bounded
 command runner, GitHub/licence research, and offline hardware sizing.
@@ -125,10 +125,7 @@ backend exists (`BABYMIND_SANDBOX=auto` by default, `require` to fail closed,
 
 `GET /api/sandbox` reports the backend and mechanisms; `POST
 /api/sandbox/self-test` runs four live probes (network, host secret, system
-write, workspace write) and returns the raw output. On macOS and Windows the
-backend reports **unavailable** with an explanation instead of pretending: no
-AppContainer/Job Object backend has been written yet, and `require` mode refuses
-to run rather than falling back silently.
+write, workspace write) and returns the raw output. The portable application cannot launch the namespace helper and `require` refuses to run commands there.
 
 Two honest limits. Nested user namespaces are not permitted on this kernel, so a
 test run started from inside the sandbox reports the backend unavailable and

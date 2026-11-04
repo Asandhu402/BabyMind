@@ -1,6 +1,5 @@
-"""Tests for the portable Windows first-run setup helpers."""
+"""Tests for the portable Linux first-run setup helpers."""
 
-import builtins
 import hashlib
 import tempfile
 import unittest
@@ -35,41 +34,37 @@ class FirstRunSetupTests(unittest.TestCase):
                 _ensure_model(path)
             verify.assert_called_once_with(path)
 
-    def test_verified_existing_model_does_not_import_tkinter(self) -> None:
+    def test_existing_mismatched_model_is_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "model.gguf"
-            path.write_bytes(b"verified model fixture")
-            real_import = builtins.__import__
-            def no_tk(name, *args, **kwargs):
-                if name == "tkinter":
-                    raise AssertionError("Tkinter must not be imported for a verified model")
-                return real_import(name, *args, **kwargs)
-            with patch("babymind.first_run._sha256", return_value=MODEL_SHA256) as verify, \
-                 patch("builtins.__import__", side_effect=no_tk):
+            path.write_bytes(b"do not delete this file")
+            with self.assertRaisesRegex(RuntimeError, "not deleted"):
                 _ensure_model(path)
-            verify.assert_called_once_with(path)
-            self.assertEqual(path.with_suffix(".gguf.sha256").read_text(encoding="ascii"), MODEL_SHA256)
+            self.assertEqual(path.read_bytes(), b"do not delete this file")
 
-    def test_missing_tkinter_explains_first_run_requirements(self) -> None:
+    def test_missing_model_invokes_downloader_and_rechecks_hash(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "model.gguf"
-            real_import = builtins.__import__
-            def no_tk(name, *args, **kwargs):
-                if name == "tkinter":
-                    raise ModuleNotFoundError("No module named 'tkinter'", name="tkinter")
-                return real_import(name, *args, **kwargs)
-            with patch("builtins.__import__", side_effect=no_tk), \
-                 patch("babymind.first_run._download_model") as download:
-                with self.assertRaisesRegex(RuntimeError, "Tkinter is required.*BABYMIND_GGUF_MODEL"):
-                    _ensure_model(path)
-            download.assert_not_called()
-            self.assertFalse(path.exists())
+            with patch("babymind.first_run._sha256", return_value=MODEL_SHA256):
+                _ensure_model(path, lambda target: target.write_bytes(b"fixture"))
+            self.assertTrue(path.exists())
+
+    def test_downloader_cannot_bypass_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "model.gguf"
+            with self.assertRaisesRegex(RuntimeError, "verified pinned model"):
+                _ensure_model(path, lambda target: target.write_bytes(b"bad"))
+
+    def test_missing_model_without_downloader_explains_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(RuntimeError, "desktop window"):
+                _ensure_model(Path(folder) / "model.gguf")
 
     def test_finds_bundled_llama_server(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             runtime = Path(folder) / "llama.cpp"
             runtime.mkdir()
-            executable = runtime / "llama-server.exe"
+            executable = runtime / "llama-server"
             executable.write_bytes(b"test")
             with patch.dict("os.environ", {}, clear=True):
                 self.assertEqual(_find_llama_server(Path(folder)), executable)
@@ -78,7 +73,7 @@ class FirstRunSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             runtime = Path(folder) / "llama.cpp" / "bin"
             runtime.mkdir(parents=True)
-            executable = runtime / "llama-server.exe"
+            executable = runtime / "llama-server"
             executable.write_bytes(b"test")
             with patch.dict("os.environ", {}, clear=True):
                 self.assertEqual(_find_llama_server(Path(folder)), executable)

@@ -31,7 +31,7 @@ ROLES = (
     ("Full-Stack Developer", "Assess integration between client and server."),
     ("Desktop Application Developer", "Assess desktop packaging and lifecycle."),
     ("Mobile Application Developer", "Assess mobile platform constraints and delivery."),
-    ("Windows Systems Engineer", "Assess Windows integration and platform constraints."),
+    ("Windows Systems Engineer", "Review migration risks and ensure the Linux-only boundary is maintained."),
     ("Linux Systems Engineer", "Assess Linux integration and platform constraints."),
     ("Database Engineer", "Assess schema, migration, integrity and backup needs."),
     ("API Integration Engineer", "Assess API contracts and integration failure modes."),
@@ -84,12 +84,8 @@ class ReviewProcessLock:
                 self.file.write(b'\0')
                 self.file.flush()
             self.file.seek(0)
-            if os.name == 'nt':
-                import msvcrt
-                msvcrt.locking(self.file.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self.file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            import fcntl
+            fcntl.flock(self.file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.locked = True
         except OSError:
             self.file.close()
@@ -100,12 +96,8 @@ class ReviewProcessLock:
             return
         try:
             self.file.seek(0)
-            if os.name == 'nt':
-                import msvcrt
-                msvcrt.locking(self.file.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self.file.fileno(), fcntl.LOCK_UN)
+            import fcntl
+            fcntl.flock(self.file.fileno(), fcntl.LOCK_UN)
         finally:
             self.locked = False
             self.file.close()

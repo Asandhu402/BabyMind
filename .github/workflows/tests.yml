@@ -1,39 +1,49 @@
-name: BabyMind tests
-
+name: BabyMind Linux tests and portable build
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  test:
-    runs-on: windows-latest
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Build and test native Windows workspace broker prototype
-        shell: pwsh
+          python-version: '3.11'
+      - name: Install Linux desktop test libraries
         run: |
-          cmake -S native/windows_workspace -B build/native-workspace -A x64
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build/native-workspace --config Release
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ctest --test-dir build/native-workspace -C Release --output-on-failure
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Install BabyMind
-        run: python -m pip install -e .
-      - name: Compile Python sources
-        run: python -m compileall -q src tests
-      - name: Check browser JavaScript syntax
-        run: node --check src/babymind/web/app.js; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; node --check src/babymind/web/approvals.js
-        shell: pwsh
-      - name: Audit installed Python dependencies
-        run: python -m pip install pip-audit; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; python -m pip_audit
-        shell: pwsh
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -v
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libnss3 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libasound2 libegl1 libgbm1
+      - name: Build Linux portable directory
+        run: ./build-linux.sh
+      - name: Test source
+        run: |
+          .venv/bin/python -m compileall -q src tests
+          .venv/bin/python -m unittest discover -s tests -q
+          for file in src/babymind/web/*.js; do node --check "$file"; done
+      - name: Exercise real Qt window with a local fixture
+        env:
+          BABYMIND_GUI_TEST: '1'
+          QTWEBENGINE_DISABLE_SANDBOX: '1' # CI smoke test only; not an app default.
+        run: xvfb-run -a .venv/bin/python -m unittest discover -s tests -p test_gui_linux.py -v
+      - name: Check runtime and packaged assets
+        run: |
+          test -x dist/BabyMind/BabyMind
+          test -x dist/BabyMind/llama.cpp/llama-server
+          test -f dist/BabyMind/_internal/babymind/web/index.html
+          dist/BabyMind/llama.cpp/llama-server --version
+          dist/BabyMind/BabyMind --check-package
+      - name: Archive without losing executable permissions
+        run: tar -C dist -czf dist/BabyMind-Linux-x86_64.tar.gz BabyMind
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BabyMind-Linux-x86_64
+          path: dist/BabyMind-Linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 14

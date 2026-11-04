@@ -1,6 +1,6 @@
 # BabyMind integrated capabilities and local engines
 
-BabyMind is one assistant identity, one shared local model, one central coordinator, and 50 specialist role prompts. The capabilities below are implemented in BabyMind's own source tree and are routed through `BabyMindCoordinator`; they do not create competing assistant identities. Some heavyweight engines run as local processes/services so a lightweight Windows installation does not have to load every model at startup.
+BabyMind is one assistant identity, one shared local model, one central coordinator, and 50 specialist role prompts. The capabilities below are implemented in BabyMind's own source tree and are routed through `BabyMindCoordinator`; they do not create competing assistant identities. Some heavyweight engines run as local processes/services so a lightweight Linux installation does not have to load every model at startup.
 
 ## Capability map
 
@@ -41,10 +41,8 @@ whether the supplied keys decrypt the stored text before replacing live files.
 It stages the replacement and rolls back changed files if a replacement fails.
 
 The backup password must be at least 12 characters. Losing it makes the
-archive unrecoverable. On Windows, the inner database keys are DPAPI-protected
-for the same Windows user on the same device. Consequently, the current
-backup format is for disaster recovery on that installation, not cross-device
-or cross-account migration. The archive must be saved outside BabyMind's live
+archive unrecoverable. On Linux, the local keys are stored as files; protect
+the user account and backup password. The archive must be saved outside BabyMind's live
 data directory. After a restore, close and reopen BabyMind.
 
 ## Shared coordinator and memory

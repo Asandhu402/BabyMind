@@ -12,7 +12,7 @@ Do not publish secrets, access tokens, private conversation data, or a working e
 
 - Keep BabyMind bound to loopback unless LAN access is explicitly needed.
 - LAN mode uses HTTPS with a local certificate authority and a bearer token. Install and explicitly trust the exported CA certificate on each client device. Use it only on a trusted private Wi-Fi network; do not expose the port to the internet.
-- Conversation titles, message bodies, and saved memory text are encrypted at rest with AES-256-GCM. On Windows, the encryption key is protected with DPAPI for the current Windows user. Protect the Windows account and device; encryption does not protect against malware running as the same user or access while BabyMind is unlocked.
+- Conversation titles, message bodies, and saved memory text are encrypted at rest with AES-256-GCM. On Linux, the encryption key is a local file readable by the current user. Protect the account and device; encryption does not protect against malware running as the same user or access while BabyMind is unlocked.
 - The bundled local model and runtime should only be downloaded from the pinned sources documented in the repository.
 - Every HTTP request must carry a `Host` header matching the address BabyMind was started on
   (`127.0.0.1`, `localhost`, `::1`, or the printed LAN IP). Requests addressed to any other host are
@@ -21,7 +21,7 @@ Do not publish secrets, access tokens, private conversation data, or a working e
 - The local app builder is off unless `BABYMIND_APP_BUILDER_ENABLED=true`. When on, it writes only
   inside `<BABYMIND_BUILDER_ROOT>/apps/<slug>/`, never overwrites a file, requires the SHA-256 of the
   reviewed plan, and runs only the generated Python entry point (no shell). Generated code still
-  runs with the current user's privileges and may use the network; it is not an OS sandbox.
+  runs with the current user's privileges and may use the network; it is not an OS sandbox. The portable desktop disables generated Python execution because its executable is not an interpreter.
 
 ## Autonomy, self-development, and command execution
 
@@ -36,6 +36,7 @@ Do not publish secrets, access tokens, private conversation data, or a working e
   a timeout, and process-tree termination. Same-user code still shares your
   files and your network. The API and CLI report `os_sandbox: false` rather than
   implying containment.
+- The Linux portable desktop defaults to `BABYMIND_SANDBOX=require`; source mode defaults to `auto`, which may run without an OS sandbox.
 - `BABYMIND_RUNNER_UNRESTRICTED=true` removes the executable allowlist and is
   equivalent to giving the engine a shell. Leave it off unless you intend that.
 - Mission contributions are written to an encrypted local SQLite database. They
@@ -49,4 +50,4 @@ A passing automated test suite is not a security certification or penetration te
 
 ## Local data encryption
 
-BabyMind encrypts conversation titles, message bodies, and saved memory text with AES-256-GCM. On Windows, the 256-bit data key is protected using Windows DPAPI for the current user. The key files use the `.key` suffix beside their corresponding SQLite databases. Keep each key file with its database and do not delete it: losing the key makes encrypted content unrecoverable. This is at-rest protection, not protection against malware or an attacker operating as the unlocked Windows user. LAN mode uses TLS 1.2+ with a local certificate authority. Clients must explicitly trust the exported CA certificate. Use only on a trusted private Wi-Fi network.
+BabyMind encrypts conversation titles, message bodies, and saved memory text with AES-256-GCM. On Linux, the 256-bit data key is stored in a local file with restrictive permissions, not a hardware-backed keystore. The key files use the `.key` suffix beside their corresponding SQLite databases. Keep each key file with its database and do not delete it: losing the key makes encrypted content unrecoverable. This is at-rest protection, not protection against malware or an attacker operating as the unlocked user. LAN mode uses TLS 1.2+ with a local certificate authority. Clients must explicitly trust the exported CA certificate. Use only on a trusted private Wi-Fi network.
