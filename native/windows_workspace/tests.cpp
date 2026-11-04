@@ -69,6 +69,10 @@ int main() {
         CHECK(bm_ws_protocol::parse_request(op.data(),op.size(),&req)==bm_ws_protocol::ParseStatus::UnsupportedOperation);
         auto p=frame(2,L"file.txt",{'x'});
         CHECK(bm_ws_protocol::parse_request(p.data(),p.size(),&req)==bm_ws_protocol::ParseStatus::InvalidLength);
+        auto nul_text=frame(3,L"file.txt",{0});
+        CHECK(bm_ws_protocol::parse_request(nul_text.data(),nul_text.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto invalid_utf8=frame(3,L"file.txt",{0xC0,0xAF});
+        CHECK(bm_ws_protocol::parse_request(invalid_utf8.data(),invalid_utf8.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
         auto empty=frame(3,L"file.txt",{});
         CHECK(bm_ws_protocol::parse_request(empty.data(),empty.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
         auto version=f;uint32_t v=2;std::memcpy(version.data(),&v,4);
