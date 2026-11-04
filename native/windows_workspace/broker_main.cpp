@@ -3,6 +3,7 @@
 
 #include "broker_protocol.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <iostream>

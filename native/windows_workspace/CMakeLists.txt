@@ -25,3 +25,7 @@ if(MSVC)
 endif()
 enable_testing()
 add_test(NAME workspace_broker_tests COMMAND workspace_broker_tests)
+add_test(NAME broker_rejects_unrestricted_token
+    COMMAND ${CMAKE_COMMAND}
+        -DBROKER_EXE=$<TARGET_FILE:babymind_workspace_broker>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_appcontainer_guard.cmake)
