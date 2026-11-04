@@ -22,8 +22,9 @@ The Windows smoke launcher now:
 - Creates or reuses a dedicated AppContainer profile and launches the broker suspended with `PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES`.
 - Uses `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` to inherit only the request pipe and two NUL output handles.
 - Sends exactly one bounded root-list request through the private anonymous pipe, then closes the parent writer to signal EOF.
+- Runs a second negative smoke case with a deliberate trailing byte and requires the broker to reject it as malformed/chained IPC.
 - Places the child in a kill-on-close Job Object with a one-process and 256 MiB process-memory limit.
-- Requires the broker to parse the frame and return the deliberate “operation not implemented” denial exit code.
+- Requires the broker to parse the valid frame and return the deliberate “operation not implemented” denial exit code.
 
 This is an end-to-end isolation/IPC smoke test, not a production launcher or authorization path. It does not grant workspace ACLs, show a native approval dialog, or dispatch file operations.
 
