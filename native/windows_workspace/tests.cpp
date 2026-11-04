@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <algorithm>
 #include <barrier>
 #include <cwchar>
 #include <iostream>
@@ -130,6 +131,25 @@ int main() {
     void* root = nullptr;
     CHECK(bm_ws_open_workspace_root(root_path.c_str(), &root) == BM_WS_OK);
     CHECK(root != nullptr);
+
+    // Native ABI path inputs must be NUL-terminated within the documented
+    // maximum; reject malformed caller buffers without scanning indefinitely.
+    wchar_t unterminated_path[501];
+    std::fill_n(unterminated_path, 501, L'a');
+    size_t malformed_count = 0;
+    int malformed_truncated = 0;
+    CHECK(bm_ws_list_directory(root, unterminated_path, nullptr, 0,
+        &malformed_count, &malformed_truncated) == BM_WS_INVALID_ARGUMENT);
+    bm_ws_directory_entry malformed_entries[1]{};
+    CHECK(bm_ws_list_directory(root, unterminated_path, malformed_entries, 1,
+        &malformed_count, &malformed_truncated) == BM_WS_INVALID_RELATIVE_PATH);
+    uint8_t malformed_output[2]{};
+    size_t malformed_bytes = 0;
+    CHECK(bm_ws_read_text(root, unterminated_path, 1, malformed_output,
+        sizeof(malformed_output), &malformed_bytes) == BM_WS_INVALID_RELATIVE_PATH);
+    void* malformed_root = nullptr;
+    CHECK(bm_ws_open_workspace_root(unterminated_path, &malformed_root) == BM_WS_INVALID_ARGUMENT);
+    CHECK(malformed_root == nullptr);
 
     const uint8_t payload[] = {'B','a','b','y','M','i','n','d'};
     CHECK(bm_ws_create_new_text(root, L"nested/hello.txt", payload, sizeof(payload), 1024) == BM_WS_OK);

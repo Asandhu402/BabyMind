@@ -38,6 +38,20 @@ constexpr size_t kMaxPathChars = 500;
 constexpr size_t kMaxReadBytes = 16 * 1024 * 1024;
 constexpr size_t kMaxCreateBytes = 1024 * 1024;
 
+// Bound every NUL-terminated string received through the native ABI before
+// constructing std::wstring or passing it to path validation. This prevents
+// an unterminated caller buffer from triggering an unbounded wcslen scan.
+bool bounded_wide_length(const wchar_t* value, size_t maximum, size_t* length) {
+    if (value == nullptr || length == nullptr) return false;
+    for (size_t i = 0; i <= maximum; ++i) {
+        if (value[i] == L'\0') {
+            *length = i;
+            return true;
+        }
+    }
+    return false;
+}
+
 class UniqueHandle {
 public:
     explicit UniqueHandle(HANDLE value = INVALID_HANDLE_VALUE) : value_(value) {}
@@ -156,8 +170,10 @@ bool nt_open_relative(HANDLE parent, std::wstring_view component,
 bm_ws_status open_parent(void* root_value, const wchar_t* relative_path,
                          UniqueHandle* parent, std::wstring* leaf) {
     if (root_value == nullptr || relative_path == nullptr || leaf == nullptr) return BM_WS_INVALID_ARGUMENT;
-    const size_t length = wcslen(relative_path);
-    if (bm_ws_validate_relative_path(relative_path, length, 0) != BM_WS_OK) return BM_WS_INVALID_RELATIVE_PATH;
+    size_t length = 0;
+    if (!bounded_wide_length(relative_path, kMaxPathChars, &length) ||
+        bm_ws_validate_relative_path(relative_path, length, 0) != BM_WS_OK)
+        return BM_WS_INVALID_RELATIVE_PATH;
 
     std::vector<std::wstring> components;
     size_t start = 0;
@@ -206,8 +222,9 @@ bm_ws_status open_directory_handle(void* root_value, const wchar_t* relative_pat
                                    UniqueHandle* directory) {
     if (root_value == nullptr || relative_path == nullptr || directory == nullptr)
         return BM_WS_INVALID_ARGUMENT;
-    const size_t length = wcslen(relative_path);
-    if (bm_ws_validate_relative_path(relative_path, length, 1) != BM_WS_OK)
+    size_t length = 0;
+    if (!bounded_wide_length(relative_path, kMaxPathChars, &length) ||
+        bm_ws_validate_relative_path(relative_path, length, 1) != BM_WS_OK)
         return BM_WS_INVALID_RELATIVE_PATH;
     HANDLE duplicate = INVALID_HANDLE_VALUE;
     if (!DuplicateHandle(GetCurrentProcess(), reinterpret_cast<HANDLE>(root_value),
@@ -259,8 +276,10 @@ extern "C" BM_WS_API bm_ws_status bm_ws_open_workspace_root(
     const wchar_t* absolute_path, void** out_root) {
     if (absolute_path == nullptr || out_root == nullptr) return BM_WS_INVALID_ARGUMENT;
     *out_root = nullptr;
-    const std::wstring absolute(absolute_path);
-    const size_t length = absolute.size();
+    size_t length = 0;
+    if (!bounded_wide_length(absolute_path, kMaxPathChars, &length))
+        return BM_WS_INVALID_ARGUMENT;
+    const std::wstring absolute(absolute_path, length);
     if (length < 4 || length > kMaxPathChars || absolute_path[1] != L':' ||
         absolute_path[2] != L'\\' || !((absolute_path[0] >= L'A' && absolute_path[0] <= L'Z') ||
         (absolute_path[0] >= L'a' && absolute_path[0] <= L'z'))) return BM_WS_INVALID_ARGUMENT;
