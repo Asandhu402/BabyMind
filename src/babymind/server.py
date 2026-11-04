@@ -15,12 +15,13 @@ import secrets
 import socket
 import sqlite3
 import threading
+import time
 import webbrowser
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
@@ -37,6 +38,33 @@ DB_LOCK = threading.RLock()
 # The local model is CPU/RAM intensive. Start with one inference at a time.
 INFERENCE_SEMAPHORE = threading.BoundedSemaphore(1)
 COORDINATOR = BabyMindCoordinator()
+# Reviewed app-builder plans live in memory only and are single-use.
+BUILDER_LOCK = threading.RLock()
+BUILDER_PLANS: dict[str, dict] = {}
+BUILDER_PLAN_TTL = 1_800
+# Mission control state is created lazily so tests can relocate DATA_HOME.
+_MISSION_STORE = None
+_MISSION_HOME: Path | None = None
+MISSION_LOCK = threading.RLock()
+
+
+def mission_store():
+    """Return the encrypted mission store for the current data home."""
+    global _MISSION_STORE, _MISSION_HOME
+    from .orchestrator import MissionStore
+
+    with MISSION_LOCK:
+        if _MISSION_STORE is None or _MISSION_HOME != DATA_HOME:
+            _MISSION_STORE = MissionStore(DATA_HOME)
+            _MISSION_HOME = DATA_HOME
+        return _MISSION_STORE
+
+
+def orchestrator():
+    from .orchestrator import Orchestrator
+
+    budget = int(os.getenv("BABYMIND_MISSION_MAX_SECONDS", "900") or 900)
+    return Orchestrator(COORDINATOR.provider, mission_store(), max_seconds=budget)
 
 
 @contextmanager
@@ -108,6 +136,22 @@ def init_db() -> None:
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _split_host(raw: str) -> tuple[str, str]:
+    """Split a Host header into (hostname, port), including bracketed IPv6."""
+    value = (raw or "").strip().lower()
+    if value.startswith("["):
+        end = value.find("]")
+        if end == -1:
+            return value, ""
+        hostname = value[1:end]
+        rest = value[end + 1:]
+        return hostname, rest[1:] if rest.startswith(":") else ""
+    hostname, separator, port = value.rpartition(":")
+    if separator and port.isdigit():
+        return hostname, port
+    return value, ""
 
 
 def persist_integration_exchange(
@@ -217,8 +261,35 @@ class Handler(BaseHTTPRequestHandler):
                 return False
         return True
 
+    def validate_host(self) -> bool:
+        """Reject requests addressed to a hostname this server was not started for.
+
+        Without this check a page on the public web can point its own domain at
+        127.0.0.1 (DNS rebinding), become same-origin with BabyMind, and read
+        decrypted conversations through the plain GET endpoints.
+        """
+        raw = self.headers.get("Host", "").strip().lower()
+        if not raw:
+            self.send_json({"error": "Requests must include a Host header."}, 400)
+            return False
+        hostname, port = _split_host(raw)
+        expected_port = str(getattr(self.server, "server_address", ("", 0))[1])
+        if port and port != expected_port:
+            self.send_json({"error": "Request host does not match this BabyMind server."}, 403)
+            return False
+        allowed = {"127.0.0.1", "localhost", "::1"}
+        lan_ip = getattr(self.server, "lan_ip", None)
+        if lan_ip:
+            allowed.add(str(lan_ip).lower())
+        if hostname not in allowed:
+            self.send_json({"error": "Request host does not match this BabyMind server."}, 403)
+            return False
+        return True
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if not self.validate_host():
+            return
         if not self.authorize(path):
             return
         if path == "/api/health":
@@ -245,6 +316,46 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/workspace/readiness":
             from .workspace_readiness import workspace_readiness
             self.send_json(workspace_readiness())
+        elif path == "/api/builder/status":
+            from .builder import builder_status
+            self.send_json(builder_status())
+        elif path == "/api/roles":
+            from .orchestrator import phase_catalogue, role_catalogue
+            self.send_json({
+                "roles": role_catalogue(),
+                "phases": phase_catalogue(),
+                "count": len(role_catalogue()),
+                "notice": "50 roles share one local model; they are not 50 independent models.",
+            })
+        elif path == "/api/agents/activity":
+            self.send_json(mission_store().agent_stats())
+        elif path == "/api/missions":
+            self.send_json(mission_store().list_missions(limit=30))
+        elif path.startswith("/api/missions/"):
+            mission_id = path.rstrip("/").rsplit("/", 1)[-1]
+            try:
+                self.send_json(mission_store().get(mission_id))
+            except ValueError:
+                self.send_json({"error": "Mission not found."}, 404)
+        elif path == "/api/model/hardware":
+            from .hardware import hardware_report
+            self.send_json(hardware_report(DATA_HOME))
+        elif path == "/api/sandbox":
+            from .sandbox import status as sandbox_status
+            self.send_json(sandbox_status(probe=False))
+        elif path == "/api/dev/status":
+            from .selfdev import status as selfdev_status
+            self.send_json(selfdev_status())
+        elif path == "/api/dev/checkpoints":
+            from .selfdev import list_checkpoints
+            self.send_json(list_checkpoints(limit=20))
+        elif path == "/api/dev/tree":
+            from .selfdev import tree
+            self.send_json({"files": tree()})
+        elif path == "/api/dev/file":
+            from .selfdev import read_file
+            relative = parse_qs(urlparse(self.path).query).get("path", [""])[0]
+            self.send_json(read_file(relative))
         elif path == "/api/agents":
             self.send_json([{
                 "id": agent.agent_id, "name": agent.name,
@@ -329,6 +440,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if not self.validate_host():
+            return
         if not self.authorize(path):
             return
         if not self.validate_browser_origin():
@@ -563,6 +676,112 @@ class Handler(BaseHTTPRequestHandler):
                     "agent_name": "BabyMind Coding Assistant",
                     "notice": "Generated by BabyMind's shared local llama.cpp model. No files or commands were accessed."
                 })
+            elif path == "/api/missions":
+                brief = str(payload.get("brief", ""))
+                mission_id = orchestrator().start(brief, self_edit=bool(payload.get("self_edit")))
+                self.send_json({
+                    "id": mission_id, "status": "running", "agents": 50,
+                    "self_edit": bool(payload.get("self_edit")),
+                    "notice": (
+                        "All 50 roles are queued. With self_edit the mission also proposes one patch "
+                        "to BabyMind's own source and applies it only if the test suite accepts it."
+                        if payload.get("self_edit") else
+                        "All 50 roles are queued. Poll this mission for per-role records."
+                    ),
+                }, 202)
+            elif path.startswith("/api/missions/") and path.endswith("/cancel"):
+                mission_id = path.strip("/").split("/")[2]
+                orchestrator().cancel(mission_id)
+                self.send_json({"id": mission_id, "cancelled": True})
+            elif path in {"/api/research/github", "/api/research/github/repo"}:
+                from .research import github_repository, github_search
+                if path.endswith("/repo"):
+                    result = github_repository(
+                        str(payload.get("owner", "")).strip(),
+                        str(payload.get("repo", "")).strip(),
+                    )
+                else:
+                    result = {
+                        "results": github_search(str(payload.get("query", "")),
+                                                 limit=int(payload.get("limit", 5))),
+                        "notice": "Metadata only. Licences are classified, not cleared; "
+                                  "never import a repository without review.",
+                    }
+                self.send_json(result)
+            elif path == "/api/dev/checkpoint":
+                from .selfdev import checkpoint
+                record = checkpoint(str(payload.get("label", ""))[:160])
+                self.send_json({"id": record["id"], "file_count": record["file_count"],
+                                "bytes": record["bytes"], "created_at": record["created_at"]}, 201)
+            elif path == "/api/dev/preview":
+                from .selfdev import preview_edits
+                reviewed = preview_edits(payload.get("edits"))
+                self.send_json({"files": [
+                    {key: value for key, value in item.items() if key != "content"}
+                    for item in reviewed
+                ]})
+            elif path == "/api/dev/apply":
+                from .selfdev import apply_edits
+                result = apply_edits(
+                    payload.get("edits"),
+                    reason=str(payload.get("reason", "")),
+                    agent_id=str(payload.get("agent_id", "BM-03")),
+                    verify=bool(payload.get("verify", True)),
+                    test_timeout=min(int(payload.get("test_timeout", 300) or 300), 600),
+                )
+                self.send_json(result, 201 if result["status"] == "applied" else 200)
+            elif path == "/api/dev/repair":
+                from .orchestrator import _extract_json
+                from .selfdev import apply_with_repair
+
+                brief = str(payload.get("brief", "")).strip()
+                if not brief:
+                    raise ValueError("Describe the change you want the engine to make.")
+                attempts = max(1, min(int(payload.get("attempts", 2) or 2), 3))
+                provider = COORDINATOR.provider
+                system = (
+                    "You are BabyMind's Coding Agent working on its own source tree. Return ONLY JSON: "
+                    '{"reason": "...", "edits": [{"path": "src/babymind/example.py", '
+                    '"content": "full file contents"}]}. Paths are relative to the project; never target '
+                    ".git, state/, keys, databases or binaries. If no safe change is possible return "
+                    '{"reason": "...", "edits": []}.'
+                )
+
+                def propose(attempt: int, failure: str):
+                    user = f"BRIEF:\n{brief}"
+                    if failure:
+                        user += ("\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. The verification output was:\n"
+                                 + failure + "\nReturn a corrected patch that fixes exactly this failure.")
+                    proposal = json.loads(_extract_json(provider.complete(system, user)))
+                    edits = proposal.get("edits") or []
+                    if not isinstance(edits, list):
+                        raise ValueError("the model did not return a list of edits")
+                    return edits
+
+                outcome = apply_with_repair(
+                    propose,
+                    attempts=attempts,
+                    reason=brief[:200],
+                    agent_id="BM-03",
+                    verify=True,
+                    test_timeout=600,
+                )
+                self.send_json(outcome, 201 if outcome["status"] == "applied" else 200)
+            elif path == "/api/dev/rollback":
+                from .selfdev import rollback
+                self.send_json(rollback(str(payload.get("checkpoint_id", "")),
+                                        agent_id=str(payload.get("agent_id", "BM-47"))))
+            elif path == "/api/sandbox/self-test":
+                from .sandbox import self_test
+                from .selfdev import dev_root
+                self.send_json(self_test(dev_root()))
+            elif path == "/api/dev/tests":
+                from .selfdev import run_tests
+                self.send_json(run_tests(timeout=min(int(payload.get("timeout", 300) or 300), 600)))
+            elif path == "/api/builder/plan":
+                self.handle_builder_plan(payload)
+            elif path == "/api/builder/build":
+                self.handle_builder_build(payload)
             elif path == "/api/tasks":
                 title = str(payload.get("title", "")).strip()
                 details = str(payload.get("details", "")).strip()
@@ -786,6 +1005,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         path = urlparse(self.path).path
+        if not self.validate_host():
+            return
         if not self.authorize(path):
             return
         if not self.validate_browser_origin():
@@ -800,6 +1021,59 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"deleted": deleted})
         else:
             self.send_json({"error": "Not found"}, 404)
+
+    def handle_builder_plan(self, payload: dict) -> None:
+        """Ask BabyMind's local model to plan a small app, without writing anything."""
+        from .builder import create_plan
+
+        self._prune_builder_plans()
+        with INFERENCE_SEMAPHORE:
+            plan = create_plan(
+                str(payload.get("brief", "")),
+                COORDINATOR.provider,
+                name_hint=str(payload.get("name", "")),
+            )
+        plan_id = secrets.token_urlsafe(12)
+        with BUILDER_LOCK:
+            BUILDER_PLANS[plan_id] = {"plan": plan, "created": time.monotonic()}
+        self.send_json({
+            "plan_id": plan_id,
+            "name": plan["name"],
+            "summary": plan["summary"],
+            "target": plan["target"],
+            "entry": plan["entry"] or None,
+            "will_run": plan["will_run"],
+            "files": plan["file_summary"],
+            "total_bytes": plan["total_bytes"],
+            "plan_hash": plan["plan_hash"],
+            "status": "awaiting_approval",
+            "notice": (
+                "Nothing has been written yet. Review the file list, then approve this exact "
+                "plan hash to create the app and run its entry point once."
+            ),
+        }, 201)
+
+    def handle_builder_build(self, payload: dict) -> None:
+        """Write an approved plan and run its entry point exactly once."""
+        from .builder import apply_plan
+
+        plan_id = str(payload.get("plan_id", "")).strip()
+        if not plan_id:
+            raise ValueError("Choose a reviewed plan to build.")
+        with BUILDER_LOCK:
+            stored = BUILDER_PLANS.pop(plan_id, None)
+        if stored is None:
+            raise ValueError("That plan is no longer available. Request a new plan.")
+        if time.monotonic() - stored["created"] > BUILDER_PLAN_TTL:
+            raise ValueError("That plan expired. Request a new plan.")
+        self.send_json(apply_plan(stored["plan"], str(payload.get("plan_hash", ""))), 201)
+
+    @staticmethod
+    def _prune_builder_plans() -> None:
+        cutoff = time.monotonic() - BUILDER_PLAN_TTL
+        with BUILDER_LOCK:
+            for key in [key for key, value in BUILDER_PLANS.items() if value["created"] < cutoff]:
+                BUILDER_PLANS.pop(key, None)
 
     def handle_chat(self, payload: dict) -> None:
         task = str(payload.get("message", "")).strip()
@@ -928,6 +1202,7 @@ def main() -> None:
     if tls_context is not None:
         server.socket = tls_context.wrap_socket(server.socket, server_side=True)
     server.auth_token = auth_token
+    server.lan_ip = lan_ip
     scheme = "https" if args.lan else "http"
     url = f"{scheme}://127.0.0.1:{args.port}"
     print("BabyMind web app")

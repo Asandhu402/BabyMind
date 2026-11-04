@@ -24,6 +24,7 @@
         <button class="nav-item" data-view="agents"><span class="nav-icon">✳</span> Agent directory <span class="nav-count">50</span></button>
         <button class="nav-item" data-view="memory"><span class="nav-icon">⌁</span> Memory</button>
         <button class="nav-item" data-view="tasks"><span class="nav-icon">☷</span> Task queue <span class="nav-count" id="taskCount">0</span></button>
+        <button class="nav-item" data-view="mission"><span class="nav-icon">◎</span> Mission control <span class="nav-count">50</span></button>
         <button class="nav-item" data-view="approvals"><span class="nav-icon">✓</span> Approvals <span class="nav-count" id="approvalCount">0</span></button>
       </nav>
       <div class="history-heading"><span>RECENT CONVERSATIONS</span><span class="history-count" id="historyCount">0</span></div>
@@ -73,6 +74,43 @@
         <div class="approval-toolbar"><strong>Pending and completed proposals</strong><button class="task-refresh" id="refreshApprovals" type="button">Refresh</button></div>
         <div class="approval-list" id="approvalList"><div class="empty-state">Loading approval requests…</div></div>
       </section>
+      <section class="view secondary-view" id="missionView">
+        <div class="section-intro"><div class="eyebrow"><span class="eyebrow-line"></span> AUTONOMOUS DEVELOPMENT</div><h2>Mission <span>control.</span></h2><p>Every mission walks all 50 roles through planning, research, design, architecture, implementation, verification, review, delivery and acceptance. One local model, fifty role passes, every contribution recorded.</p></div>
+        <div class="mission-grid">
+          <article class="settings-card">
+            <div class="settings-icon">◎</div><h3>Run a mission</h3>
+            <p>Describe the product or change. BabyMind assigns all 50 roles and records each contribution with its phase and timing.</p>
+            <label for="missionBrief">Mission brief</label>
+            <textarea id="missionBrief" class="integration-input" rows="4" maxlength="8000" placeholder="Build a complete inventory management application with a database, user accounts, reporting and backup."></textarea>
+            <button class="task-primary" id="startMission" type="button">Start mission across 50 roles</button>
+            <label class="toggle-label mission-toggle" title="After the acceptance phase, propose one patch to BabyMind's own source and apply it only if the test suite accepts it"><input type="checkbox" id="missionSelfEdit"><span class="toggle"></span> Also apply one verified self-edit</label>
+            <button class="task-refresh" id="cancelMission" type="button" disabled>Cancel</button>
+            <div class="setting-status" id="missionStatus">No mission running.</div>
+            <div class="mission-progress"><div id="missionBar"></div></div>
+            <div class="mission-counts" id="missionCounts"></div>
+          </article>
+          <article class="settings-card">
+            <div class="settings-icon">⟲</div><h3>Self-development</h3>
+            <p>BabyMind can edit its own source. Every change is checkpointed, compiled, and tested; a failing change is rolled back automatically and recorded in the audit log.</p>
+            <div class="setting-status" id="selfdevStatus">Checking self-development engine…</div>
+            <div class="checkpoint-list" id="checkpointList"></div>
+            <button class="task-refresh" id="runTests" type="button">Run the test suite now</button>
+            <pre class="builder-output" id="testOutput" hidden></pre>
+          </article>
+        </div>
+        <article class="settings-card mission-edit-card">
+          <div class="settings-icon">⌘</div><h3>Edit BabyMind's own source</h3>
+          <p>The transaction runs only <code>python -m compileall</code> and the project's unittest suite. Nothing else executes.</p>
+          <label for="devPath">Project-relative path</label><input id="devPath" class="integration-input" maxlength="240" placeholder="src/babymind/example.py">
+          <label for="devContent">New file content</label><textarea id="devContent" class="integration-input" rows="8" placeholder="Full new contents of the file…"></textarea>
+          <label for="devReason">Reason for the change</label><input id="devReason" class="integration-input" maxlength="400" placeholder="Fix the empty-response handling in providers.py">
+          <button class="task-primary" id="previewEdit" type="button">Preview diff</button>
+          <button class="task-primary" id="applyEdit" type="button">Apply, test, and keep or roll back</button>
+          <pre class="builder-output" id="devDiff" hidden></pre>
+          <pre class="builder-output" id="devResult" hidden></pre>
+        </article>
+        <div class="mission-agents-wrap"><div class="approval-toolbar"><strong>Role activity</strong><span id="missionAgentSummary"></span></div><div class="mission-agents" id="missionAgents"><div class="empty-state">No mission has run yet.</div></div></div>
+      </section>
       <section class="view secondary-view" id="settingsView"><div class="section-intro"><div class="eyebrow"><span class="eyebrow-line"></span> PERSONAL WORKSPACE</div><h2>Settings & <span>control.</span></h2><p>BabyMind runs its managed llama.cpp engine locally on this computer.</p></div><div class="settings-grid"><article class="settings-card"><div class="settings-icon">◉</div><h3>Local model engine</h3><p>BabyMind connects only to a local inference engine:</p><code>127.0.0.1 · local only</code><div class="setting-status" id="modelSettingStatus">Checking connection…</div></article><article class="settings-card"><div class="settings-icon">⌂</div><h3>Local data</h3><p>Conversations and memories are stored in your local BabyMind data folder.</p><code>~/.babymind/</code><div class="setting-status">Stored on this computer</div></article><article class="settings-card"><div class="settings-icon">✳</div><h3>Agent network</h3><p>Exactly 50 specialist roles are registered and available through one coordinator.</p><code>BM-01 — BM-50</code><div class="setting-status">50 roles registered</div></article><article class="settings-card"><div class="settings-icon">◇</div><h3>Privacy controls</h3><p>Memory is opt-in. No cloud account or external analytics are built into this app.</p><code>Memory: user controlled</code><div class="setting-status">Local-first configuration</div></article><article class="settings-card"><div class="settings-icon">⌘</div><h3>Integrated coding workspace</h3><p>Live release gates for project inspection, approved file changes, and isolated test execution. This panel is read-only and cannot enable these capabilities.</p><div class="setting-status" id="workspaceReadinessStatus">Checking security gates…</div><ul id="workspaceReadinessDetails"><li>Workspace access remains disabled until the production broker is reviewed.</li><li>Project test execution remains disabled until an OS-enforced sandbox is available.</li></ul></article></div>
         <div class="integration-workspace">
           <div class="section-intro integration-intro"><div class="eyebrow"><span class="eyebrow-line"></span> DATA PROTECTION</div><h2>Encrypted <span>backup.</span></h2><p>Protect your local conversations, tasks and saved memories with a password-protected backup. The backup stores encrypted databases and keys, not plaintext chat content.</p></div>
@@ -96,6 +134,7 @@
             <article class="settings-card"><div class="settings-icon">◖</div><h3>BabyMind speech input</h3><p>Transcribe local audio on CPU/INT8 and send the transcript to BabyMind for analysis.</p><label for="audioPath">Local audio path</label><input id="audioPath" class="integration-input" maxlength="2048" placeholder="C:\\Users\\you\\Music\\recording.wav"><label for="audioInstruction">What should BabyMind do?</label><input id="audioInstruction" class="integration-input" maxlength="1000" value="Summarize this recording and extract important points."><button class="task-primary" id="processAudio" type="button">Transcribe with faster-whisper</button><button class="task-primary" id="processVoiceboxAudio" type="button">Transcribe with Voicebox</button><div class="setting-status" id="audioStatus">Checking faster-whisper…</div></article>
             <article class="settings-card"><div class="settings-icon">⌕</div><h3>Browser actions · Browser Use</h3><p>Visible, supervised browser automation using BabyMind's local model. Disabled unless BABYMIND_BROWSER_AUTOMATION_ENABLED=true.</p><label for="browserTask">Task description</label><textarea id="browserTask" class="integration-input" rows="3" maxlength="4000" placeholder="Describe the browser task…"></textarea><button class="task-primary" id="runBrowserTask" type="button">Review and run browser task</button><div class="setting-status" id="browserStatus">Checking Browser Use…</div></article>
             <article class="settings-card"><div class="settings-icon">⌘</div><h3>BabyMind coding assistant · llama.cpp</h3><p>Ask BabyMind to explain code, debug errors, design changes, write functions, and draft patches using the same local model as chat. File access and command execution are not enabled yet.</p><label for="codingTask">Coding task</label><textarea id="codingTask" class="integration-input" rows="3" maxlength="12000" placeholder="Describe the bug, feature, or code you want written…"></textarea><label for="codingContext">Optional code or error context</label><textarea id="codingContext" class="integration-input" rows="4" maxlength="24000" placeholder="Paste relevant code, traceback, or test output…"></textarea><button class="task-primary" id="launchCodingSession" type="button">Ask BabyMind coding assistant</button><div class="setting-status" id="codingStatus">Built in · uses BabyMind's local llama.cpp model</div></article>
+<article class="settings-card" id="builderCard"><div class="settings-icon">▶</div><h3>App builder · local</h3><p>Describe a small app. BabyMind's local model plans the files, you review the exact plan, then BabyMind writes it into the <code>apps</code> folder and runs the Python entry point once.</p><label for="builderBrief">What should BabyMind build?</label><textarea id="builderBrief" class="integration-input" rows="3" maxlength="2000" placeholder="A tip calculator as one HTML page with a dark theme…"></textarea><label for="builderName">App name (optional)</label><input id="builderName" class="integration-input" maxlength="80" placeholder="Tip Calculator"><button class="task-primary" id="builderPlan" type="button">Plan app</button><div class="setting-status" id="builderStatus">Checking app builder…</div><div id="builderPlanBox" hidden><strong id="builderPlanName"></strong><ul class="builder-files" id="builderFiles"></ul><code id="builderTarget"></code><button class="task-primary" id="builderApprove" type="button">Approve &amp; build</button></div><pre class="builder-output" id="builderOutput" hidden></pre></article>
             <article class="settings-card"><div class="settings-icon">◉</div><h3>BabyMind speech output</h3><p>Speak BabyMind text locally through the self-hosted Voicebox server. The default CPU Piper voice is lightweight.</p><label for="voiceboxText">Text to speak</label><textarea id="voiceboxText" class="integration-input" rows="3" maxlength="4000" placeholder="Type something for BabyMind to say…"></textarea><button class="task-primary" id="speakVoicebox" type="button">Speak locally</button><div class="setting-status" id="voiceboxStatus">Checking Voicebox…</div></article>
             <article class="settings-card"><div class="settings-icon">⌁</div><h3>BabyMind knowledge</h3><p>Index only notes you explicitly approve. Cognee stores a separate local graph/vector database that is not encrypted by BabyMind.</p><label for="cogneeNote">Approved note to index</label><textarea id="cogneeNote" class="integration-input" rows="3" maxlength="20000" placeholder="Paste a note you want in the knowledge graph…"></textarea><button class="task-primary" id="indexCognee" type="button">Review and index note</button><label for="cogneeQuery">Ask BabyMind's knowledge</label><input id="cogneeQuery" class="integration-input" maxlength="1000" placeholder="Ask a question about your approved notes…"><button class="task-primary" id="searchCognee" type="button">Search Cognee</button><div class="setting-status" id="cogneeStatus">Disabled until explicitly enabled</div></article>
             <article class="settings-card"><div class="settings-icon">✓</div><h3>Quality & security tests · Promptfoo</h3><p>Run local-only smoke tests against BabyMind's own coordinator. The supplied suite has no hosted grader and does not send prompts to cloud models.</p><code>quality/promptfooconfig.yaml</code><div class="setting-status" id="promptfooStatus">Checking Promptfoo…</div></article>
@@ -107,5 +146,7 @@
   <div class="toast" id="toast" role="status"></div>
   <script src="/assets/app.js" defer></script>
   <script src="/assets/approvals.js" defer></script>
+  <script src="/assets/builder.js" defer></script>
+  <script src="/assets/mission.js" defer></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 const state = { agents: [], conversations: [], tasks: [], conversationId: null, busy: false, filter: "all", view: "chat", attachment: null };
-const domainLabels = {core:"Core",research:"Research",knowledge:"Knowledge",memory:"Memory",safety:"Safety",development:"Development",language:"Language",content:"Content",education:"Education",analysis:"Analysis",productivity:"Productivity",lifestyle:"Lifestyle",career:"Career",finance:"Finance",creative:"Creative",automation:"Automation",quality:"Quality"};
-const symbols = {core:"✳",research:"⌕",knowledge:"▤",memory:"⌁",safety:"◈",development:"⌘",language:"文",content:"✎",education:"⌂",analysis:"∑",productivity:"◷",lifestyle:"◇",career:"↗",finance:"＄",creative:"✧",automation:"⟳",quality:"✓"};
+const domainLabels = {core:"Core",research:"Research",knowledge:"Knowledge",memory:"Memory",safety:"Safety",development:"Development",language:"Language",content:"Content",education:"Education",analysis:"Analysis",productivity:"Productivity",lifestyle:"Lifestyle",career:"Career",finance:"Finance",creative:"Creative",automation:"Automation",quality:"Quality",design:"Design"};
+const symbols = {core:"✳",research:"⌕",knowledge:"▤",memory:"⌁",safety:"◈",development:"⌘",language:"文",content:"✎",education:"⌂",analysis:"∑",productivity:"◷",lifestyle:"◇",career:"↗",finance:"＄",creative:"✧",automation:"⟳",quality:"✓",design:"◇"};
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 function markdown(value) {
   let safe = escapeHTML(value);
@@ -32,11 +32,12 @@ function setView(name) {
   document.querySelectorAll(".view").forEach(view=>view.classList.remove("active"));
   const target=$("#"+name+"View") || $("#chatView"); target.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(item=>item.classList.toggle("active",item.dataset.view===name));
-  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",settings:"Settings"})[name]||"Chat";
+  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",settings:"Settings"})[name]||"Chat";
   $("#sidebar").classList.remove("open");
   if(name==="memory") loadMemory();
   if(name==="tasks") loadTasks();
   if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); }
+  if(name==="mission" && window.babymindLoadMission) window.babymindLoadMission();
 }
 function renderAgentSelect() {
   $("#agentSelect").innerHTML=state.agents.map(agent=>`<option value="${agent.id}">${agent.id} · ${escapeHTML(agent.name)}</option>`).join("");
@@ -226,7 +227,8 @@ async function loadWorkspaceReadiness(){
     const report=await api("/api/workspace/readiness");
     const fileAccess=report.native_workspace.file_actions_enabled;
     const sandbox=report.project_execution.sandbox_available;
-    status.textContent="Not release-ready · workspace access "+(fileAccess?"enabled":"disabled")+" · test sandbox "+(sandbox?"available":"not implemented");
+    const backend=report.project_execution.sandbox_backend||"none";
+    status.textContent="Not release-ready · workspace access "+(fileAccess?"enabled":"disabled")+" · test sandbox "+(sandbox?"available ("+backend+")":"not implemented on this platform");
     details.innerHTML=report.blockers.map(item=>"<li>"+escapeHTML(item)+"</li>").join("");
     details.setAttribute("aria-label","Remaining BabyMind release blockers");
   }catch(error){

@@ -15,6 +15,9 @@ build/
 .env.*
 !.env.example
 
+# BabyMind self-development checkpoints and audit log
+state/
+
 # BabyMind local data and model files
 .babymind/
 *.gguf
