@@ -179,7 +179,7 @@ class BabyMindCoordinator:
         from .integrations.browser import run_browser_task
 
         provider = self.provider
-        base_url = str(getattr(provider, "base_url", "http://127.0.0.1:1234/v1"))
+        base_url = str(getattr(provider, "base_url", "http://127.0.0.1:1235/v1"))
         if not (base_url.startswith("http://127.0.0.1:") or base_url.startswith("http://localhost:")):
             raise ValueError("Browser automation only supports a local model endpoint.")
         resolver = getattr(provider, "_resolve_model", None)
@@ -188,7 +188,7 @@ class BabyMindCoordinator:
             raise ValueError("Load a local model before starting browser automation.")
         return await run_browser_task(
             task, model=model, base_url=base_url,
-            api_key=str(getattr(provider, "api_key", None) or "lm-studio"),
+            api_key=str(getattr(provider, "api_key", None) or "local"),
             user_approved=user_approved,
         )
 
