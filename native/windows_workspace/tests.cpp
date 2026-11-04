@@ -136,11 +136,13 @@ int main() {
     // maximum; reject malformed caller buffers without scanning indefinitely.
     wchar_t unterminated_path[501];
     std::fill_n(unterminated_path, 501, L'a');
+    size_t malformed_count = 0;
+    int malformed_truncated = 0;
     CHECK(bm_ws_list_directory(root, unterminated_path, nullptr, 0,
-        &listed_count, &listing_truncated) == BM_WS_INVALID_ARGUMENT);
+        &malformed_count, &malformed_truncated) == BM_WS_INVALID_ARGUMENT);
     bm_ws_directory_entry malformed_entries[1]{};
     CHECK(bm_ws_list_directory(root, unterminated_path, malformed_entries, 1,
-        &listed_count, &listing_truncated) == BM_WS_INVALID_RELATIVE_PATH);
+        &malformed_count, &malformed_truncated) == BM_WS_INVALID_RELATIVE_PATH);
     uint8_t malformed_output[2]{};
     size_t malformed_bytes = 0;
     CHECK(bm_ws_read_text(root, unterminated_path, 1, malformed_output,
