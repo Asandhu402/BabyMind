@@ -78,17 +78,14 @@ def read_core_source(relative: str) -> tuple[Path, str]:
 
 def collect_local_code_context() -> str:
     """Read complete, bounded core files; never silently present partial files as complete."""
-    # One complete high-impact core file keeps CPU inference bounded.
     source_paths = ["src/babymind/providers.py"]
-    # The chat API rejects user messages over 20,000 characters. Keep headroom
-    # for the review prompt and public-project excerpts.
     total_limit = 10_000
     sections: list[str] = []
     total_chars = 0
     omitted: list[str] = []
     for relative in source_paths:
         try:
-            path, content = read_core_source(relative)
+            _, content = read_core_source(relative)
         except (OSError, UnicodeError, RuntimeError) as error:
             omitted.append(f"{relative} (could not read: {error})")
             continue
@@ -103,13 +100,14 @@ def collect_local_code_context() -> str:
         )
         total_chars += len(content)
     if not sections:
-        raise RuntimeError(
         details = "; ".join(omitted)
         raise RuntimeError(
             "No complete BabyMind core source files were available for inspection. "
             f"Checkout root: {ROOT}; package file: {babymind.__file__}; "
             f"providers module: {providers_module.__file__}; details: {details}"
         )
+    manifest = (
+        "SOURCE-COVERAGE MANIFEST: Every file below is included in full, from first byte "
         "to last byte. No file contents were clipped. Files not listed were not inspected; "
         "never infer defects from their absence.\n"
         + ("Files deliberately omitted: " + "; ".join(omitted) + "\n" if omitted else "")
