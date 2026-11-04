@@ -25,17 +25,12 @@ MIN_TIMEOUT = 1
 
 # Callers may extend this list explicitly; see runner_status() for the truth.
 DEFAULT_ALLOWLIST = {
-    "python", "python3", "python.exe", "python3.exe", "py", "py.exe",
-    "node", "node.exe", "npm", "npm.cmd", "npx",
-    "git", "git.exe", "cmake", "cmake.exe", "ctest", "ctest.exe",
-    "pytest", "pytest.exe",
+    "python", "python3", "node", "npm", "npx", "git", "cmake", "ctest", "pytest",
 }
 
 _ENV_PASSTHROUGH = {
-    "PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR",
-    "HOME", "USERPROFILE", "LANG", "LC_ALL", "APPDATA", "LOCALAPPDATA", "PROGRAMFILES",
-    "PROGRAMDATA", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "PYTHONIOENCODING",
-    "PYTHONUTF8", "VIRTUAL_ENV", "SYSTEMDRIVE",
+    "PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "PYTHONIOENCODING",
+    "PYTHONUTF8", "VIRTUAL_ENV",
 }
 
 
@@ -67,14 +62,12 @@ def runner_status() -> dict:
 
 def isolation_report() -> dict:
     """Describe the containment that is actually enforced on this platform."""
-    windows = sys.platform == "win32"
     return {
         "os_sandbox": False,
         "filesystem_containment": "none at OS level; the working directory is validated before launch",
         "network_isolation": False,
-        "cpu_memory_limits": "posix rlimits (CPU, file size, open files)" if not windows
-        else "not available without a Job Object; reported as unenforced",
-        "process_tree_kill": "process group" if not windows else "taskkill /T",
+        "cpu_memory_limits": "POSIX rlimits (CPU, file size, open files)",
+        "process_tree_kill": "process group",
         "environment_scrubbed": True,
         "note": (
             "A same-user subprocess is not a security boundary. Untrusted or generated code that "
@@ -142,10 +135,7 @@ def _scrubbed_environment(extra: dict[str, str] | None) -> dict[str, str]:
 
 def _limits() -> None:
     """Best-effort POSIX limits for the child process."""
-    try:
-        import resource
-    except ImportError:  # pragma: no cover - Windows
-        return
+    import resource
     for limit, value in (
         (getattr(resource, "RLIMIT_CPU", None), 300),
         (getattr(resource, "RLIMIT_FSIZE", None), 64 * 1024 * 1024),
@@ -161,15 +151,6 @@ def _limits() -> None:
 
 def _terminate(process: subprocess.Popen) -> None:
     if process.poll() is not None:
-        return
-    if sys.platform == "win32":
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-                capture_output=True, timeout=15, check=False,
-            )
-        except (OSError, subprocess.SubprocessError):
-            process.kill()
         return
     try:
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
@@ -243,12 +224,8 @@ def run_command(
         stderr=subprocess.PIPE,
         text=True,
         errors="replace",
-        start_new_session=sys.platform != "win32",
-        preexec_fn=_limits if sys.platform != "win32" else None,
-        creationflags=(
-            getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        ) if sys.platform == "win32" else 0,
+        start_new_session=True,
+        preexec_fn=_limits,
     )
     timed_out = False
     try:
