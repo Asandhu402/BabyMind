@@ -1,16 +1,14 @@
-"""Truthful capability reporting for the integrated Windows coding workflow.
+"""Truthful capability reporting for BabyMind's Linux coding workflow.
 
-This module is intentionally descriptive only: it never enables filesystem or
-process access. The release gates stay closed until their security boundaries
-are implemented and independently verified.
+This module is descriptive only: it never enables filesystem or process access.
+The release gates stay closed until Linux security boundaries are implemented
+and independently verified.
 """
 from __future__ import annotations
 
-import sys
-
 
 def workspace_readiness() -> dict:
-    """Return the currently supported project-workflow capabilities."""
+    """Return the currently supported Linux project-workflow capabilities."""
     from . import approval, builder, sandbox as sandboxing, selfdev
 
     workspace_enabled = bool(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
@@ -18,6 +16,7 @@ def workspace_readiness() -> dict:
     development = selfdev.status()
     isolation = sandboxing.status()
     return {
+        "platform": "linux",
         "model_engine": "llama.cpp",
         "coding_assistant": {
             "status": "drafting_only",
@@ -26,7 +25,7 @@ def workspace_readiness() -> dict:
             "can_run_commands": False,
         },
         "native_workspace": {
-            "status": "experimental_primitives" if sys.platform == "win32" else "windows_only",
+            "status": "not_implemented",
             "file_actions_enabled": workspace_enabled,
             "production_broker": False,
             "broker_owned_approval": False,
@@ -73,15 +72,13 @@ def workspace_readiness() -> dict:
         },
         "release_ready": False,
         "blockers": [
-            "Production broker launcher, package verification, and workspace ACL provisioning are incomplete.",
-            "Broker-owned, single-use approval and adversarial Windows security tests are incomplete.",
+            "Linux-native workspace broker, descriptor-relative operations, and adversarial filesystem tests are incomplete.",
+            "Broker-owned, single-use approval and independent Linux security review are incomplete.",
             "The coding assistant is not yet connected to authorized workspace read/write operations.",
-            ("No Windows or macOS execution sandbox backend exists yet; commands are only "
-             "isolated on Linux.") if isolation["available"] else
-            "No OS-enforced project execution sandbox is available on this platform.",
+            "The Linux execution sandbox must be validated on supported distributions and kernel configurations.",
         ],
         "notice": (
-            "This is a read-only readiness report. It does not enable workspace "
+            "Linux-only read-only readiness report. It does not enable workspace "
             "access, file changes, command execution, or project test execution."
         ),
     }
