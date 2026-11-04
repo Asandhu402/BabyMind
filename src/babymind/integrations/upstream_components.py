@@ -19,20 +19,8 @@ _UPSTREAMS = {
         "constraints": [
             "Source reference only; not currently installed or used for database migration.",
             "Protect keys separately using the OS credential store; never hardcode or colocate keys.",
-            "Test Windows wheels, WAL, migration, wrong-key recovery, backups, and restore before adoption.",
+            "Test Linux wheels, WAL, migration, wrong-key recovery, backups, and restore before adoption.",
             "Preserve SQLCipher and binding license notices in any redistributed package.",
-        ],
-    },
-    "flaui": {
-        "name": "FlaUI",
-        "repository": "https://github.com/FlaUI/FlaUI",
-        "role": "windows_desktop_test_automation",
-        "integration": "test_only_evaluation",
-        "capabilities": ["windows_ui_automation", "native_dialog_testing", "desktop_window_assertions"],
-        "constraints": [
-            "Test-only .NET tooling; never a BabyMind runtime dependency.",
-            "Run only in a dedicated interactive CI/test profile.",
-            "Use Playwright CDP for WebView2 content and FlaUI for native UI surfaces.",
         ],
     },
     "code_symbol_index": {
