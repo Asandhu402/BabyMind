@@ -11,7 +11,7 @@ BabyMind is one assistant identity, one shared local model, one central coordina
 | Speech output | `synthesize_speech` | Voicebox |
 | Knowledge retrieval | `index_knowledge_note` / `ask_with_knowledge` | Cognee |
 | Browser tasks | `run_browser_task` | Browser Use |
-| Project coding | `launch_coding_session` | Open Interpreter with OS-enforced workspace sandbox |
+| Project coding | Disabled | Waiting for a verified llama.cpp-native coding adapter and OS-enforced workspace sandbox |
 | Quality/security checks | Repository CI and `quality/` | Promptfoo |
 
 The main app, API and coordinator own the workflows. Upstream projects are used as local engines; their source code is not copied into BabyMind. Keep the engines lazy-loaded and avoid starting multiple large CPU models concurrently.
@@ -22,7 +22,7 @@ Install the local Python engines required by the capabilities you use:
 
     py -m pip install -e ".[documents,voice,browser,knowledge-graph]"
 
-Browser Use requires Python 3.11 or newer. The base application supports Python 3.10. Open Interpreter is a separate CLI distribution and must be installed using its official upstream instructions.
+Browser Use requires Python 3.11 or newer. The base application supports Python 3.10. The external coding CLI adapter is intentionally disabled until it can use BabyMind's llama.cpp runtime directly.
 
 Voicebox runs as a self-hosted loopback service. Example:
 
@@ -74,10 +74,7 @@ Browser Use runs a visible local browser against BabyMind's local model endpoint
 
 ## Project coding safety
 
-Open Interpreter is launched with the local OSS provider, selected local model, `--sandbox workspace-write`, `--ask-for-approval on-request`, and network access disabled. The selected project folder is the permitted workspace for reading, creating, editing, renaming and deleting project files and running project commands. Launch requires approval; escalation requires further approval.
-
-The OS sandbox is the technical boundary, not the confirmation dialog. Native Windows sandboxing must be configured and enforced by Open Interpreter. If enforcement is unavailable, the session must fail closed. BabyMind never selects `danger-full-access`, `--yolo`, or approval-bypass flags. This is project-folder access, not full-PC access.
-
+The external coding CLI adapter is currently disabled. The previous CLI integration selected a separate local-model provider rather than BabyMind's llama.cpp server. BabyMind now fails closed instead of launching a different model runtime. Re-enable coding only after an implementation can connect directly to llama.cpp and enforce the selected workspace boundary with a reviewed OS-level sandbox.
 ## Quality and security checks
 
 Promptfoo is a developer/CI test harness, not a second runtime assistant. The checked-in provider targets BabyMind's loopback API. The smoke suite has no hosted grader. Do not add hosted graders or remote red-team generation to privacy-sensitive CI; use local attack/grading models if expanding the suite.
