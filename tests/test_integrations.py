@@ -142,5 +142,15 @@ class IntegrationTests(unittest.TestCase):
             assist_with_code(Provider(), "valid", context="x" * 24001)
 
 
+    def test_native_workspace_binding_is_not_loaded_or_enabled_on_import(self):
+        from babymind import approval
+        from babymind.integrations import native_workspace
+        self.assertFalse(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
+        self.assertTrue(callable(native_workspace.load_native_workspace_library))
+        with patch("babymind.integrations.native_workspace.os.name", "posix"):
+            with self.assertRaises(OSError):
+                native_workspace.load_native_workspace_library()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,8 @@
 #define FILE_CREATE 0x00000002
 #endif
 
+extern "C" BM_WS_API uint32_t bm_ws_abi_version(void) { return 1; }
+
 namespace {
 constexpr size_t kMaxPathChars = 500;
 constexpr size_t kMaxReadBytes = 16 * 1024 * 1024;

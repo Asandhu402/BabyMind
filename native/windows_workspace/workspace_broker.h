@@ -13,6 +13,9 @@
 extern "C" {
 #endif
 
+/* ABI version changes whenever exported structure/function contracts change. */
+BM_WS_API uint32_t bm_ws_abi_version(void);
+
 typedef enum bm_ws_status {
     BM_WS_OK = 0,
     BM_WS_INVALID_ARGUMENT = 1,
