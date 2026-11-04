@@ -60,26 +60,14 @@ _UPSTREAMS = {
             "Do not expose its filesystem or shell tools before sandbox enforcement.",
         ],
     },
-    "wincage": {
-        "name": "wincage",
-        "repository": "https://github.com/rymorrisj/wincage",
-        "role": "windows_process_isolation",
-        "integration": "security_evaluation",
-        "capabilities": ["appcontainer", "job_object_limits", "resource_limits", "grant_revocation"],
-        "constraints": [
-            "Treat AppContainer and Job Objects as primitives, not a complete security proof.",
-            "Verify identity, ACL scope, process mitigations, cleanup, and adversarial cases.",
-            "Never fall back to an ordinary same-user process and label it a sandbox.",
-        ],
-    },
     "sandbox_runtime": {
         "name": "Anthropic sandbox-runtime",
         "repository": "https://github.com/anthropics/sandbox-runtime",
         "role": "filesystem_and_network_sandbox",
         "integration": "security_evaluation",
-        "capabilities": ["filesystem_policy", "network_egress_policy", "windows_restricted_identity"],
+        "capabilities": ["filesystem_policy", "network_egress_policy", "linux_restricted_identity"],
         "constraints": [
-            "Upstream labels Windows support alpha; independently verify the pinned release.",
+            "Verify the Linux backend and pinned release independently.",
             "Do not assume its policy covers BabyMind's broker or host application.",
             "Require network-deny and filesystem-isolation adversarial tests before use.",
         ],
@@ -91,7 +79,7 @@ _UPSTREAMS = {
         "integration": "workflow_reference",
         "capabilities": ["disposable_microvm", "private_git_clone", "verified_git_bundle", "host_integrity_check"],
         "constraints": [
-            "Requires Docker Sandboxes and a compatible Windows virtualization setup.",
+            "Requires Docker Sandboxes and a compatible Linux virtualization setup.",
             "Keep the host working tree untouched; accept only verified passive Git refs.",
             "Do not make Docker, accounts, or cloud model services mandatory for BabyMind.",
         ],
