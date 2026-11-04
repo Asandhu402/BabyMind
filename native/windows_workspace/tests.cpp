@@ -1,4 +1,5 @@
 #include "workspace_broker.h"
+#include "broker_protocol.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -6,6 +7,7 @@
 #include <barrier>
 #include <cwchar>
 #include <iostream>
+#include <cstring>
 #include <string>
 #include <thread>
 #include <vector>
@@ -41,6 +43,36 @@ int main() {
     const std::wstring too_long(501, L'a');
     CHECK(bm_ws_validate_relative_path(too_long.c_str(), too_long.size(), 0) == BM_WS_INVALID_RELATIVE_PATH);
     CHECK(bm_ws_validate_relative_path(nullptr, 1, 0) == BM_WS_INVALID_ARGUMENT);
+
+
+    {
+        auto put32=[](std::vector<uint8_t>& b,uint32_t v){auto p=reinterpret_cast<const uint8_t*>(&v);b.insert(b.end(),p,p+4);};
+        auto frame=[&](uint32_t op,const std::wstring& path,const std::vector<uint8_t>& data){
+            std::vector<uint8_t>b;put32(b,1);put32(b,op);put32(b,0);for(uint8_t i=1;i<=16;++i)b.push_back(i);
+            put32(b,static_cast<uint32_t>(path.size()));for(wchar_t c:path){uint16_t x=static_cast<uint16_t>(c);b.push_back(x&255);b.push_back(x>>8);}
+            put32(b,static_cast<uint32_t>(data.size()));b.insert(b.end(),data.begin(),data.end());uint32_t n=static_cast<uint32_t>(b.size());std::memcpy(b.data()+8,&n,4);return b;
+        };
+        bm_ws_protocol::Request req{};
+        auto f=frame(1,L"src",{});
+        CHECK(bm_ws_protocol::parse_request(f.data(),f.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
+        CHECK(req.relative_path==L"src"&&req.payload.empty());
+        auto c=frame(3,L"notes/new.txt",{'o','k'});
+        CHECK(bm_ws_protocol::parse_request(c.data(),c.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
+        CHECK(req.payload.size()==2&&req.payload[0]=='o');
+        CHECK(bm_ws_protocol::parse_request(f.data(),f.size()-1,&req)==bm_ws_protocol::ParseStatus::Truncated);
+        auto bad=frame(2,L"../secret",{});
+        CHECK(bm_ws_protocol::parse_request(bad.data(),bad.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPath);
+        auto op=frame(99,L"file.txt",{});
+        CHECK(bm_ws_protocol::parse_request(op.data(),op.size(),&req)==bm_ws_protocol::ParseStatus::UnsupportedOperation);
+        auto p=frame(2,L"file.txt",{'x'});
+        CHECK(bm_ws_protocol::parse_request(p.data(),p.size(),&req)==bm_ws_protocol::ParseStatus::InvalidLength);
+        auto empty=frame(3,L"file.txt",{});
+        CHECK(bm_ws_protocol::parse_request(empty.data(),empty.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto version=f;uint32_t v=2;std::memcpy(version.data(),&v,4);
+        CHECK(bm_ws_protocol::parse_request(version.data(),version.size(),&req)==bm_ws_protocol::ParseStatus::UnsupportedVersion);
+        auto trailing=f;trailing.push_back(0);
+        CHECK(bm_ws_protocol::parse_request(trailing.data(),trailing.size(),&req)==bm_ws_protocol::ParseStatus::InvalidLength);
+    }
 
     wchar_t temp[MAX_PATH]{};
     CHECK(GetTempPathW(MAX_PATH, temp) != 0);

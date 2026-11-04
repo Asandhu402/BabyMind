@@ -14,6 +14,10 @@ This is an experimental MSVC/CMake native component with a versioned C ABI and a
 - Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory and file symlink escape rejection, read-size enforcement, and concurrent exclusive-create behavior.
 - Windows CI build and CTest steps.
 
+## IPC frame parser
+
+`broker_protocol.cpp` implements a bounded, versioned little-endian parser for the proposed operation codes. It checks exact frame lengths, operation-specific payload rules, UTF-16 validity, relative paths and the 32 KiB create payload limit. Tests cover truncation, trailing bytes, unknown operations/versions, traversal and invalid payload combinations. Parsing does not authorize filesystem access or user approval.
+
 ## Approval and process isolation
 
 See [NATIVE_WORKSPACE_BROKER_PROTOCOL.md](../../docs/NATIVE_WORKSPACE_BROKER_PROTOCOL.md) for the required broker-owned confirmation, one-use approval, AppContainer isolation, IPC framing, and enablement gates. This is a design contract, not implemented functionality.
