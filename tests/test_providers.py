@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from babymind.providers import (
-    LMStudioProvider,
+    LocalOpenAICompatibleClient,
     LlamaCppProvider,
     ProviderError,
     create_provider,
@@ -14,7 +14,7 @@ from babymind.providers import (
 
 class ProviderSelectionTests(unittest.TestCase):
     def test_generation_settings_are_sent_to_local_chat_api(self) -> None:
-        provider = LMStudioProvider(base_url="http://127.0.0.1:1234/v1", model="local")
+        provider = LocalOpenAICompatibleClient(base_url="http://127.0.0.1:1234/v1", model="local")
         with patch.dict(os.environ, {
             "BABYMIND_TEMPERATURE": "0.35",
             "BABYMIND_TOP_P": "0.92",
@@ -38,7 +38,7 @@ class ProviderSelectionTests(unittest.TestCase):
         )
 
     def test_invalid_generation_settings_fail_clearly(self) -> None:
-        provider = LMStudioProvider(base_url="http://127.0.0.1:1234/v1", model="local")
+        provider = LocalOpenAICompatibleClient(base_url="http://127.0.0.1:1234/v1", model="local")
         with patch.dict(os.environ, {"BABYMIND_MAX_TOKENS": "not-a-number"}, clear=True):
             with self.assertRaisesRegex(ProviderError, "valid numeric values"):
                 provider.complete("system", "question")
@@ -49,10 +49,6 @@ class ProviderSelectionTests(unittest.TestCase):
             self.assertEqual(provider.base_url, "http://127.0.0.1:1235/v1")
             with self.assertRaisesRegex(ProviderError, "first-run setup"):
                 provider.complete("system", "question")
-
-    def test_lm_studio_is_only_selected_explicitly(self) -> None:
-        with patch.dict(os.environ, {"BABYMIND_ENGINE": "lm-studio"}, clear=True):
-            self.assertIsInstance(create_provider(), LMStudioProvider)
 
     def test_unknown_backend_is_rejected(self) -> None:
         with patch.dict(os.environ, {"BABYMIND_ENGINE": "cloud-service"}, clear=True):
