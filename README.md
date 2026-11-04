@@ -318,7 +318,7 @@ It checks the Python version, 50-role registry, local storage permissions,
 existing encrypted memory database/key availability, local model connection,
 and the current workspace/execution security gates. It never starts a model,
 executes project code, or creates a replacement encryption key. A disconnected
-model is reported as a warning so you can start LM Studio and run the command
+model is reported as a warning so you can start BabyMind's llama.cpp runtime and run the command
 again. A missing memory key is a failure: do not delete or replace it.
 
 
