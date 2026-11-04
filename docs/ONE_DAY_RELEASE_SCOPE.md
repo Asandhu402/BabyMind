@@ -17,7 +17,7 @@ Primary device: Windows 11 laptop. Secondary device: iPhone on the same trusted 
 | Feature | Current state | Release requirement |
 |---|---|---|
 | Unified identity and 50 specialist roles | Implemented foundation | Keep one personality; roles are expertise profiles |
-| Local model support | LM Studio and llama.cpp adapters | Model picker, connection test, context/model settings, clear errors |
+| Local model support | llama.cpp-only local inference | Fixed runtime, connection test, context/model settings, clear errors |
 | Chat and conversation history | Implemented foundation | Search, rename, delete, export, resume |
 | Encrypted local memory | Implemented foundation; lexical retrieval | User-controlled remember/use switches, inspect/search/delete/export, memory backup |
 | Task queue | Implemented foundation | Task details, status, pause/resume/cancel, durable run history |
@@ -40,14 +40,14 @@ Primary device: Windows 11 laptop. Secondary device: iPhone on the same trusted 
 
 ## 3. Reuse decisions: integrate selectively, do not assemble a fragile pile
 
-### A. Coding and computer actions: Open Interpreter
+### A. Coding and computer actions: disabled pending a llama.cpp-native adapter
 
 Repository: https://github.com/openinterpreter/openinterpreter  
 License: Apache-2.0 (verify the exact pinned release before redistribution).
 
-Use it as the candidate coding/execution subsystem because it documents Windows support, OpenAI-compatible providers including local model endpoints, workspace permissions, approval policies, and sandbox modes. Do not run it with a dangerous full-access mode. BabyMind remains the front door and policy owner; an adapter must pass an explicit, scoped workspace and must not bypass BabyMind's approval record.
+The current external CLI adapter is disabled because its local-provider integration does not provide a verified direct connection to BabyMind's llama.cpp server. Do not launch it through another runtime. A future coding subsystem must connect directly to llama.cpp, enforce a reviewed OS-level workspace boundary, and preserve BabyMind's approval records before it can be enabled.
 
-**Same-day decision:** document and prototype the adapter boundary; do not enable unattended execution or claim that a separate process under the same Windows user is a security boundary. Validate the current Windows sandbox implementation and failure modes before production use.
+**Current decision:** keep coding execution disabled. Revisit only after a llama.cpp-native adapter and independently enforced Windows sandbox have been reviewed and tested.
 
 References:
 - https://github.com/openinterpreter/openinterpreter/blob/main/docs/windows.md
@@ -80,7 +80,7 @@ Reference: https://github.com/OpenHands/OpenHands
 
 1. **BabyMind UI and identity:** existing app remains the only user-facing home.
 2. **Coordinator:** routes a request to one of the 50 roles using the one configured model.
-3. **Model adapter:** LM Studio or llama.cpp; no hidden cloud fallback.
+3. **Model adapter:** llama.cpp only; no alternate runtime or hidden cloud fallback.
 4. **Memory service:** existing encrypted SQLite store; explicit remember/use/delete controls.
 5. **Tool registry:** each tool declares input schema, risk class, required permissions, timeout, network access and audit fields.
 6. **Policy/approval gateway:** validates exact action, target, content hash, scope, expiry and one-time approval. Approval is not inferred from conversation text or model output.
@@ -108,8 +108,8 @@ No plugin, tool, model, webpage, attachment or memory may grant itself new permi
 - Add browser adapter interface, with execution disabled until per-action approval and sandbox checks pass.
 
 ### P2 — guarded coding capability
-- Review Open Interpreter's current Windows sandbox and permission behavior against BabyMind's threat model.
-- Run it only as an explicit, separately visible user-approved session.
+- Implement and review a direct llama.cpp-native coding adapter and its Windows sandbox before enabling execution.
+- Run any future coding session only as an explicit, separately visible user-approved session.
 - Confirm its configured workspace and command permissions before any command.
 - Do not claim protection against hostile same-user processes unless an independent security boundary exists.
 - Never fall back to raw Python path-based file operations.

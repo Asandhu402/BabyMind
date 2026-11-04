@@ -11,8 +11,8 @@ async def run_browser_task(
     task: str,
     *,
     model: str,
-    base_url: str = "http://127.0.0.1:1234/v1",
-    api_key: str = "lm-studio",
+    base_url: str = "http://127.0.0.1:1235/v1",
+    api_key: str = "local",
     user_approved: bool = False,
 ) -> str:
     """Run a Browser Use task against a local OpenAI-compatible model.

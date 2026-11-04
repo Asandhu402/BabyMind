@@ -6,6 +6,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from typing import Protocol
 
+from .response_quality import strip_internal_reasoning
+
 
 class ChatProvider(Protocol):
     """Common interface for model backends."""
@@ -19,8 +21,8 @@ class ProviderError(RuntimeError):
     """Raised when a model provider cannot complete a request."""
 
 
-class LMStudioProvider:
-    """OpenAI-compatible client for a model served locally by LM Studio."""
+class LlamaCppHTTPClient:
+    """OpenAI-compatible HTTP client used by BabyMind's local llama.cpp server."""
 
     def __init__(
         self,
@@ -29,11 +31,10 @@ class LMStudioProvider:
         api_key: str | None = None,
         timeout: int = 120,
     ) -> None:
-        self.base_url = (base_url or os.getenv(
-            "BABYMIND_BASE_URL", "http://127.0.0.1:1234/v1"
-        )).rstrip("/")
+        port = os.getenv("BABYMIND_LLAMA_PORT", "1235")
+        self.base_url = (base_url or f"http://127.0.0.1:{port}/v1").rstrip("/")
         self.model = model or os.getenv("BABYMIND_MODEL")
-        self.api_key = api_key or os.getenv("BABYMIND_API_KEY")
+        self.api_key = api_key
         self.timeout = timeout
 
     def _request_json(self, url: str, payload: dict | None = None) -> dict:
@@ -51,15 +52,15 @@ class LMStudioProvider:
         except HTTPError as error:
             detail = error.read().decode("utf-8", errors="replace")
             raise ProviderError(
-                f"LM Studio returned HTTP {error.code}: {detail[:500]}"
+                f"Local model server returned HTTP {error.code}: {detail[:500]}"
             ) from error
         except (URLError, TimeoutError, OSError) as error:
             raise ProviderError(
-                "Could not reach LM Studio. Start its local server and check "
+                "Could not reach the local model server. Start the configured engine and check "
                 f"the address {self.base_url}. Details: {error}"
             ) from error
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            raise ProviderError("LM Studio returned invalid JSON.") from error
+            raise ProviderError("Local model server returned invalid JSON.") from error
 
     def _resolve_model(self) -> str:
         if self.model:
@@ -68,10 +69,14 @@ class LMStudioProvider:
         models = response.get("data", [])
         if not models or not models[0].get("id"):
             raise ProviderError(
-                "No model is available. Load a model in LM Studio, or set "
+                "No model is available from the local model server; set "
                 "BABYMIND_MODEL to a model ID."
             )
         return str(models[0]["id"])
+
+    def _request_options(self) -> dict:
+        """Return backend-specific OpenAI-compatible request options."""
+        return {}
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         # Configurable conservative defaults for local inference.
@@ -100,6 +105,7 @@ class LMStudioProvider:
             "top_p": top_p,
             "max_tokens": max_tokens,
         }
+        payload.update(self._request_options())
         response = self._request_json(
             f"{self.base_url}/chat/completions", payload
         )
@@ -107,20 +113,28 @@ class LMStudioProvider:
             content = response["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as error:
             raise ProviderError(
-                "LM Studio response did not contain a chat completion."
+                "Local model server response did not contain a chat completion."
             ) from error
         if not isinstance(content, str) or not content.strip():
-            raise ProviderError("LM Studio returned an empty response.")
-        return content.strip()
+            raise ProviderError("Local model server returned an empty response.")
+        try:
+            return strip_internal_reasoning(content)
+        except ValueError as error:
+            raise ProviderError(str(error)) from error
 
-class LlamaCppProvider(LMStudioProvider):
+class LlamaCppProvider(LlamaCppHTTPClient):
     """Launch and use a local llama.cpp server with a user-supplied GGUF model.
 
     No model is downloaded automatically. The executable and model remain
     under the user's control and inference runs on this computer.
     """
 
-    def __init__(self, timeout: int = 180) -> None:
+    def _request_options(self) -> dict:
+        # Qwen-family instruct templates can spend the entire token budget in
+        # hidden reasoning unless the template is explicitly told to disable it.
+        return {"chat_template_kwargs": {"enable_thinking": False}}
+
+    def __init__(self, timeout: int = 600) -> None:
         import atexit
         import subprocess
         import time
@@ -157,6 +171,7 @@ class LlamaCppProvider(LMStudioProvider):
             str(exe), "--model", str(model), "--host", "127.0.0.1",
             "--port", str(port), "--ctx-size",
             os.getenv("BABYMIND_CONTEXT_SIZE", "4096"),
+            "--reasoning-format", "none",
         ]
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
@@ -199,13 +214,28 @@ class LlamaCppProvider(LMStudioProvider):
             raise ProviderError(f"BabyMind local llama.cpp engine: {error}") from error
 
 
+class UnconfiguredLlamaCppProvider(LlamaCppHTTPClient):
+    """Keep the app importable until first-run setup supplies local runtime paths."""
+
+    def __init__(self) -> None:
+        port = int(os.getenv("BABYMIND_LLAMA_PORT", "1235"))
+        super().__init__(base_url=f"http://127.0.0.1:{port}/v1", timeout=600)
+
+    def complete(self, system_prompt: str, user_prompt: str) -> str:
+        raise ProviderError(
+            "BabyMind standalone llama.cpp is not configured yet. Complete first-run "
+            "setup so BABYMIND_LLAMA_SERVER and BABYMIND_GGUF_MODEL point to the "
+            "bundled runtime and pinned model."
+        )
+
+
 def create_provider() -> ChatProvider:
     """Select the local inference backend from BABYMIND_ENGINE."""
-    engine = os.getenv("BABYMIND_ENGINE", "lm-studio").strip().lower()
+    engine = os.getenv("BABYMIND_ENGINE", "llama.cpp").strip().lower()
     if engine in {"llama.cpp", "llamacpp", "llama-cpp"}:
+        if not os.getenv("BABYMIND_LLAMA_SERVER", "").strip() or not os.getenv("BABYMIND_GGUF_MODEL", "").strip():
+            return UnconfiguredLlamaCppProvider()
         return LlamaCppProvider()
-    if engine in {"lm-studio", "lmstudio"}:
-        return LMStudioProvider()
     raise ProviderError(
-        f"Unknown BABYMIND_ENGINE '{engine}'. Use 'llama.cpp' or 'lm-studio'."
+        f"Unknown BABYMIND_ENGINE '{engine}'. Use 'llama.cpp'."
     )

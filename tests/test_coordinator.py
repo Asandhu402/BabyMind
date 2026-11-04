@@ -6,7 +6,7 @@ from pathlib import Path
 
 from babymind.coordinator import BabyMindCoordinator
 from babymind.memory import LocalMemory
-from babymind.providers import LMStudioProvider, ProviderError
+from babymind.providers import LlamaCppHTTPClient, ProviderError
 
 
 class FakeProvider:
@@ -110,7 +110,7 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(self.memory.recent(), [])
 
     def test_provider_requires_loaded_model_when_model_not_set(self) -> None:
-        provider = LMStudioProvider(base_url="http://127.0.0.1:1/v1", timeout=1)
+        provider = LlamaCppHTTPClient(base_url="http://127.0.0.1:1235/v1", timeout=1)
         with self.assertRaises(ProviderError):
             provider.complete("system", "task")
 

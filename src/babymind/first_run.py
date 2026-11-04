@@ -132,7 +132,7 @@ def _ensure_model(model_path: Path) -> None:
         "BabyMind needs to download its first local AI model "
         f"({MODEL_SIZE_LABEL}).\n\n"
         "This is a one-time download. The model will be saved on this computer "
-        "and used locally. No LM Studio account or API key is required.\n\n"
+        "and used locally. No external model account or API key is required.\n\n"
         "Download now?",
         parent=root,
     )
@@ -207,20 +207,15 @@ def _ensure_model(model_path: Path) -> None:
 def prepare_local_engine() -> None:
     """Configure the bundled CPU engine and ensure its verified model exists."""
     selected = os.getenv("BABYMIND_ENGINE", "").strip().lower()
-    if selected in {"lm-studio", "lmstudio"}:
-        return
     if selected and selected not in {"llama.cpp", "llamacpp", "llama-cpp"}:
         raise RuntimeError(f"Unknown BABYMIND_ENGINE setting: {selected}")
 
     app_dir = _app_directory()
     server = _find_llama_server(app_dir)
-    if server is None and not selected and not getattr(sys, "frozen", False):
-        # Keep source/developer launches compatible with the existing LM Studio default.
-        return
     if server is None:
         raise RuntimeError(
-            "The bundled llama.cpp runtime is missing. Download the complete "
-            "BabyMind Windows package again; do not move only BabyMind.exe."
+            "The llama.cpp runtime is missing. Set BABYMIND_LLAMA_SERVER to a valid "
+            "llama-server executable or download the complete BabyMind Windows package."
         )
 
     # BabyMind always uses the single bundled, SHA-256-pinned model.

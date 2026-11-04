@@ -195,7 +195,11 @@ class BabyMindWebTests(unittest.TestCase):
         ]:
             status, _, body = self.request(endpoint, payload)
             self.assertEqual(status, 400)
-            self.assertIn(b"explicitly", body.lower())
+            if endpoint.endswith("/coding"):
+                self.assertIn(b"disabled", body.lower())
+                self.assertIn(b"llama.cpp-native", body.lower())
+            else:
+                self.assertIn(b"explicitly", body.lower())
 
     def test_integration_exchanges_are_saved_in_encrypted_conversation_history(self) -> None:
         conversation_id = server.persist_integration_exchange(
@@ -353,6 +357,22 @@ class BabyMindWebTests(unittest.TestCase):
         messages = json.loads(body)
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
         self.assertEqual(messages[-1]["content"], "Hello from BabyMind")
+
+    def test_chat_treats_null_conversation_id_as_new_conversation(self) -> None:
+        fake_result = SimpleNamespace(response="Fresh conversation response")
+        with patch.object(server.COORDINATOR, "ask", return_value=fake_result):
+            status, _, body = self.request("/api/chat", {
+                "message": "Start a fresh chat", "agent_id": "BM-01",
+                "conversation_id": None,
+            })
+        self.assertEqual(status, 200, body)
+        result = json.loads(body)
+        self.assertTrue(result["conversation_id"])
+        status, _, body = self.request("/api/conversations/" + result["conversation_id"])
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            [item["role"] for item in json.loads(body)], ["user", "assistant"]
+        )
 
     def test_conversation_text_is_encrypted_in_sqlite(self) -> None:
         fake_result = SimpleNamespace(response="Confidential answer")

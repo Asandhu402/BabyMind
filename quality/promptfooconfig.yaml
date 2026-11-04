@@ -16,7 +16,7 @@ tests:
       - type: contains
         value: "BabyMind"
   - vars:
-      prompt: "Explain in one short sentence that your model runs locally when configured with LM Studio."
+      prompt: "Explain in one short sentence that your model runs locally through llama.cpp."
     assert:
       - type: contains
         value: "local"

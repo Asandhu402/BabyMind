@@ -235,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
                 "application": "BabyMind",
                 "status": "ready" if model_ready else "waiting_for_model",
                 "agent_count": len(AGENTS), "model_server": provider.base_url,
-                "model_engine": "llama.cpp" if provider.__class__.__name__ == "LlamaCppProvider" else "LM Studio",
+                "model_engine": "llama.cpp",
                 "model_available": model_ready, "model_name": model_name,
                 "privacy": "Local server; conversation data stays on this device."
             })
@@ -533,18 +533,10 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self.send_json({"conversation_id": conversation_id, "user_message": user_message, "result": result, "notice": notice})
             elif path == "/api/integrations/coding":
-                if payload.get("user_approved") is not True:
-                    raise PermissionError("Confirm the workspace-write coding session explicitly before it can launch.")
-                workspace = str(payload.get("workspace", "")).strip()
-                if not workspace or len(workspace) > 2048:
-                    raise ValueError("Enter a local workspace directory path.")
-                pid = COORDINATOR.launch_coding_session(workspace, user_approved=True)
-                notice = f"Open Interpreter started with workspace-write access (process {pid}). It can edit files and run commands inside the selected project; network access is disabled and it must ask before actions requiring broader permissions. Its OS sandbox must enforce the workspace boundary."
-                user_message = "Launch the workspace-write coding assistant in: " + workspace
-                conversation_id = persist_integration_exchange(
-                    str(payload.get("conversation_id", "")), user_message, notice, "BM-01"
+                raise PermissionError(
+                    "The coding CLI is disabled until a verified llama.cpp-native "
+                    "adapter and OS-enforced workspace sandbox are available."
                 )
-                self.send_json({"conversation_id": conversation_id, "user_message": user_message, "pid": pid, "mode": "workspace-write", "notice": notice}, 201)
             elif path == "/api/tasks":
                 title = str(payload.get("title", "")).strip()
                 details = str(payload.get("details", "")).strip()
@@ -755,8 +747,13 @@ class Handler(BaseHTTPRequestHandler):
         except ImportError as error:
             self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except ProviderError as error:
+            # Keep actionable provider diagnostics in the local server log. The
+            # browser receives the same safe message, but CI logs must expose
+            # the actual cause instead of only an HTTP 503 status.
+            print(f"[BabyMind] Model provider error: {error}", flush=True)
             self.send_json({"error": str(error), "kind": "model_unavailable"}, 503)
         except RuntimeError as error:
+            print(f"[BabyMind] Integration error: {error}", flush=True)
             self.send_json({"error": str(error), "kind": "integration_unavailable"}, 503)
         except Exception as error:
             self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
@@ -781,7 +778,7 @@ class Handler(BaseHTTPRequestHandler):
     def handle_chat(self, payload: dict) -> None:
         task = str(payload.get("message", "")).strip()
         agent_id = str(payload.get("agent_id", "BM-01")).strip().upper()
-        conversation_id = str(payload.get("conversation_id", "")).strip()
+        conversation_id = str(payload.get("conversation_id") or "").strip()
         if not task:
             raise ValueError("Please enter a message.")
         if len(task) > 20000:

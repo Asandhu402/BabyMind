@@ -118,11 +118,20 @@ async function sendMessage(message) {
       }
       submitted += evidence.slice(0,Math.max(0,19000-submitted.length));
     }
-    const result=await api("/api/chat",{method:"POST",body:JSON.stringify({
-      message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId,
+    const chatPayload = () => ({
+      message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId || "",
       collaborate:$("#collaborateToggle").checked,use_memory:$("#memoryToggle").checked,
       remember:$("#rememberToggle").checked
-    })});
+    });
+    let result;
+    try {
+      result = await api("/api/chat",{method:"POST",body:JSON.stringify(chatPayload())});
+    } catch (error) {
+      if (!String(error.message).toLowerCase().includes("conversation not found")) throw error;
+      state.conversationId = null;
+      result = await api("/api/chat",{method:"POST",body:JSON.stringify(chatPayload())});
+      toast("Previous conversation was unavailable; started a new chat.");
+    }
     state.conversationId=result.conversation_id;
     state.attachment=null;renderAttachment();$("#exportButton").disabled=false;
     $("#typingIndicator")?.remove();
