@@ -132,7 +132,7 @@ def _ensure_model(model_path: Path) -> None:
         "BabyMind needs to download its first local AI model "
         f"({MODEL_SIZE_LABEL}).\n\n"
         "This is a one-time download. The model will be saved on this computer "
-        "and used locally. No LM Studio account or API key is required.\n\n"
+        "and used locally. No external model account or API key is required.\n\n"
         "Download now?",
         parent=root,
     )
