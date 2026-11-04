@@ -69,8 +69,6 @@ def read_core_source(relative: str) -> tuple[Path, str]:
             return candidate, candidate.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as error:
             errors.append(f"{candidate}: {error}")
-    raise RuntimeError(
-        f"Could not read BabyMind core source {relative!r}. "
     details = "; ".join(errors)
     raise RuntimeError(
         f"Could not read BabyMind core source {relative!r}. "
