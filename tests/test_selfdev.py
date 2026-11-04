@@ -63,6 +63,96 @@ class SelfDevTests(unittest.TestCase):
         self.assertTrue(result["tests"]["summary"]["passed"])
         self.assertTrue(selfdev.verify_audit_chain()["valid"])
 
+    def test_partial_write_failure_restores_existing_and_removes_created_files(self) -> None:
+        original_link = os.link
+        def fail_last_edit(source, destination):
+            if Path(destination).name == "last.py" and ".bmedit-" in str(source):
+                raise OSError("simulated write failure")
+            return original_link(source, destination)
+
+        with patch("babymind.selfdev.os.link", side_effect=fail_last_edit):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "reverted"):
+                selfdev.apply_edits([
+                    {"path": "src/babymind/mod.py", "content": "VALUE = 99\n"},
+                    {"path": "src/babymind/new.py", "content": "VALUE = 2\n"},
+                    {"path": "src/babymind/last.py", "content": "VALUE = 3\n"},
+                ], verify=False)
+        self.assertEqual((self.root / "src/babymind/mod.py").read_text(), "VALUE = 1\n")
+        self.assertFalse((self.root / "src/babymind/new.py").exists())
+        self.assertFalse((self.root / "src/babymind/last.py").exists())
+        self.assertEqual(list((self.root / "src/babymind").glob("*.bmedit-*")), [])
+
+    def test_missing_checkpoint_backup_blocks_edit(self) -> None:
+        with patch("babymind.selfdev.MAX_SNAPSHOT_BYTES", 1):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "missing from the checkpoint"):
+                selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 99\n"}], verify=False)
+        self.assertEqual((self.root / "src/babymind/mod.py").read_text(), "VALUE = 1\n")
+
+    def test_new_file_that_appears_during_transaction_is_preserved(self) -> None:
+        target = self.root / "src/babymind/new.py"
+        original_link = os.link
+        def another_writer(source, destination):
+            target.write_text("USER_DATA = True\n")
+            return original_link(source, destination)
+        with patch("babymind.selfdev.os.link", side_effect=another_writer):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "reverted"):
+                selfdev.apply_edits([{"path": "src/babymind/new.py", "content": "VALUE = 2\n"}], verify=False)
+        self.assertEqual(target.read_text(), "USER_DATA = True\n")
+
+    def test_rollback_failure_is_not_reported_as_success(self) -> None:
+        original_link = os.link
+        def fail_last(source, destination):
+            if Path(destination).name == "last.py":
+                raise OSError("write failed")
+            return original_link(source, destination)
+        with patch("babymind.selfdev.os.link", side_effect=fail_last), \
+             patch("babymind.selfdev.rollback", side_effect=OSError("restore failed")):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "automatic rollback failed.*checkpoint"):
+                selfdev.apply_edits([
+                    {"path": "src/babymind/mod.py", "content": "VALUE = 99\n"},
+                    {"path": "src/babymind/last.py", "content": "VALUE = 3\n"},
+                ], verify=False)
+
+    def test_verification_exception_rolls_back_only_edited_files(self) -> None:
+        unrelated = self.root / "src/babymind/unrelated.py"
+        unrelated.write_text("before = 1\n")
+        def failed_compile(*args, **kwargs):
+            unrelated.write_text("user_change = 2\n")
+            raise RuntimeError("verification infrastructure failed")
+        with patch("babymind.selfdev.runner.run_compile_check", side_effect=failed_compile):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "change was reverted"):
+                selfdev.apply_edits([
+                    {"path": "src/babymind/mod.py", "content": "VALUE = 99\n"},
+                    {"path": "src/babymind/new.py", "content": "VALUE = 2\n"},
+                ], verify=False)
+        self.assertEqual((self.root / "src/babymind/mod.py").read_text(), "VALUE = 1\n")
+        self.assertFalse((self.root / "src/babymind/new.py").exists())
+        self.assertEqual(unrelated.read_text(), "user_change = 2\n")
+
+    def test_rollback_does_not_overwrite_later_change_to_edited_file(self) -> None:
+        edited = self.root / "src/babymind/mod.py"
+        def compile_fails(*args, **kwargs):
+            edited.write_text("USER_CHANGE = 42\n")
+            return {"ok": False}
+        with patch("babymind.selfdev.runner.run_compile_check", side_effect=compile_fails):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "automatic rollback failed.*manual recovery"):
+                selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 99\n"}], verify=False)
+        self.assertEqual(edited.read_text(), "USER_CHANGE = 42\n")
+
+    def test_failed_verification_preserves_unrelated_concurrent_edit(self) -> None:
+        unrelated = self.root / "src/babymind/unrelated.py"
+        unrelated.write_text("before = 1\n")
+        def compile_fails(*args, **kwargs):
+            unrelated.write_text("user_change = 2\n")
+            return {"ok": False}
+        with patch("babymind.selfdev.runner.run_compile_check", side_effect=compile_fails):
+            result = selfdev.apply_edits([
+                {"path": "src/babymind/mod.py", "content": "VALUE = 99\n"},
+            ], verify=False)
+        self.assertEqual(result["status"], "rolled_back")
+        self.assertEqual((self.root / "src/babymind/mod.py").read_text(), "VALUE = 1\n")
+        self.assertEqual(unrelated.read_text(), "user_change = 2\n")
+
     def test_new_file_is_created_and_removable_by_rollback(self) -> None:
         result = selfdev.apply_edits(
             [{"path": "src/babymind/extra.py", "content": "FLAG = True\n"}],

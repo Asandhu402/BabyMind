@@ -301,12 +301,15 @@ def checkpoint(label: str = "", *, reason: str = "", extra_paths: list[str] | No
     entries: dict[str, dict] = {}
     total = 0
     skipped = []
-    candidates = _project_files(root)
+    candidates = []
+    # Prioritise explicitly edited files so unrelated project files cannot
+    # exhaust the snapshot budget before the targets are backed up.
     for relative_raw in extra_paths or []:
         try:
             candidates.append(resolve_path(root, relative_raw))
         except SelfDevError:
             skipped.append(relative_raw)
+    candidates.extend(_project_files(root))
     for path in dict.fromkeys(candidates):
         if not path.is_file():
             continue
@@ -361,7 +364,9 @@ def _load_checkpoint(root: Path, checkpoint_id: str) -> dict:
     return record
 
 
-def rollback(checkpoint_id: str, *, agent_id: str = "BM-47", require_permission: bool = True) -> dict:
+def rollback(checkpoint_id: str, *, agent_id: str = "BM-47", require_permission: bool = True,
+             _only_paths: set[str] | None = None, _created_paths: list[str] | None = None,
+             _expected_hashes: dict[str, str] | None = None) -> dict:
     """Restore every file recorded in a checkpoint and drop files it created.
 
     ``require_permission`` is False only for the engine's own automatic
@@ -372,10 +377,22 @@ def rollback(checkpoint_id: str, *, agent_id: str = "BM-47", require_permission:
         require("recovery.rollback", agent_id)
     record = _load_checkpoint(root, checkpoint_id)
     directory = Path(record["_directory"])
+    # Do not silently overwrite a later user's change to an edited path. Check
+    # the whole set first, before restoring any file. This is not a lock and
+    # cannot eliminate races with a concurrent writer after the check.
+    if _expected_hashes is not None:
+        for relative in _only_paths or set():
+            target = resolve_path(root, relative)
+            if not target.is_file() or _sha256(target.read_bytes()) != _expected_hashes.get(relative):
+                raise SelfDevError(f"{relative} changed after the edit; manual recovery is required.")
     restored, created_removed = [], []
     for relative, meta in record["files"].items():
+        if _only_paths is not None and relative not in _only_paths:
+            continue
         source = directory / "files" / relative
         if not source.is_file():
+            if _only_paths is not None:
+                raise SelfDevError(f"Checkpoint is missing the backup for {relative}.")
             continue
         target = resolve_path(root, relative)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -383,7 +400,9 @@ def rollback(checkpoint_id: str, *, agent_id: str = "BM-47", require_permission:
         shutil.copy2(source, temporary)
         os.replace(temporary, target)
         restored.append(relative)
-    for relative in record.get("created", []):
+    for relative in record.get("created", []) if _created_paths is None else _created_paths:
+        if _only_paths is not None and relative not in _only_paths:
+            continue
         try:
             target = resolve_path(root, relative)
         except SelfDevError:
@@ -480,21 +499,13 @@ def apply_edits(
         extra_paths=[item["path"] for item in reviewed],
     )
     created = [item["path"] for item in reviewed if not item["exists"]]
-    written: list[str] = []
-    try:
-        for item in reviewed:
-            target = resolve_path(root, item["path"])
-            target.parent.mkdir(parents=True, exist_ok=True)
-            temporary = target.with_name(f".{target.name}.bmedit-{secrets.token_hex(3)}")
-            temporary.write_text(item["content"], encoding="utf-8")
-            os.replace(temporary, target)
-            written.append(item["path"])
-    except Exception as error:
-        _append_audit(root, {"action": "apply_failed", "error": str(error),
-                             "checkpoint": snapshot["id"], "written": written})
-        raise SelfDevError(f"Writing failed and was reverted: {error}") from error
+    missing_backups = [item["path"] for item in reviewed
+                       if item["exists"] and item["path"] not in snapshot["files"]]
+    if missing_backups:
+        raise SelfDevError("Cannot edit files missing from the checkpoint: " + ", ".join(missing_backups))
 
-    # Record created files on the checkpoint so a rollback can remove them.
+    # Record the intended paths before writing so the checkpoint remains useful
+    # if the process is interrupted during the transaction.
     manifest_path = Path(snapshot["_directory"] if "_directory" in snapshot
                          else _checkpoint_root(root) / snapshot["id"]) / "manifest.json"
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -502,30 +513,95 @@ def apply_edits(
     data["applied"] = [item["path"] for item in reviewed]
     manifest_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    purge_bytecode(root)
-    compile_result = runner.run_compile_check(root, sandbox=sandbox_mode())
-    tests_result = None
-    failure = ""
-    if not compile_result["ok"]:
-        failure = "compile check failed"
-    elif verify:
-        purge_bytecode(root)  # never verify against stale bytecode
-        tests_result = runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())
-        summary = tests_result["summary"]
-        # A pre-existing broken test in this environment must not block every
-        # change forever; only a *new* problem counts as a regression.
-        if summary["ran"] == 0 and not summary["passed"]:
-            failure = "test suite could not run"
-        elif summary["problems"] > (baseline or {}).get("problems", 0):
-            failure = (
-                f"test suite regressed: {summary['problems']} problems "
-                f"(baseline {(baseline or {}).get('problems', 0)})"
-            )
-        else:
-            baseline = _record_baseline(root, summary)
+    written: list[str] = []
+    expected_hashes = {item["path"]: _sha256(item["content"].encode("utf-8")) for item in reviewed}
+    temporary: Path | None = None
+    try:
+        for item in reviewed:
+            target = resolve_path(root, item["path"])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if item["exists"]:
+                expected = snapshot["files"][item["path"]]["sha256"]
+                if not target.is_file() or _sha256(target.read_bytes()) != expected:
+                    raise SelfDevError(f"{item['path']} changed after the checkpoint; refusing to overwrite it.")
+            temporary = target.with_name(f".{target.name}.bmedit-{secrets.token_hex(3)}")
+            temporary.write_text(item["content"], encoding="utf-8")
+            if item["exists"]:
+                os.replace(temporary, target)
+                written.append(item["path"])
+            else:
+                # Atomic no-overwrite publication protects files that appeared
+                # after preview. The temporary file is on the same filesystem.
+                os.link(temporary, target)
+                written.append(item["path"])
+                temporary.unlink()
+            temporary = None
+    except Exception as error:
+        cleanup_error = None
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError as cleanup_failure:
+                cleanup_error = cleanup_failure
+        try:
+            rollback(snapshot["id"], agent_id=agent_id, require_permission=False,
+                     _only_paths=set(written), _created_paths=created,
+                     _expected_hashes=expected_hashes)
+        except Exception as rollback_error:
+            raise SelfDevError(
+                f"Writing failed and automatic rollback failed: {rollback_error}. "
+                f"Manual recovery may be needed from checkpoint {snapshot['id']}."
+            ) from error
+        if cleanup_error:
+            raise SelfDevError(f"Writing failed and edits were reverted, but a temporary file could not be removed: {cleanup_error}") from error
+        _append_audit(root, {"action": "apply_failed", "error": str(error),
+                             "checkpoint": snapshot["id"], "written": written})
+        raise SelfDevError(f"Writing failed and was reverted: {error}") from error
+
+    try:
+        purge_bytecode(root)
+        compile_result = runner.run_compile_check(root, sandbox=sandbox_mode())
+        tests_result = None
+        failure = ""
+        if not compile_result["ok"]:
+            failure = "compile check failed"
+        elif verify:
+            purge_bytecode(root)  # never verify against stale bytecode
+            tests_result = runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())
+            summary = tests_result["summary"]
+            # A pre-existing broken test in this environment must not block every
+            # change forever; only a *new* problem counts as a regression.
+            if summary["ran"] == 0 and not summary["passed"]:
+                failure = "test suite could not run"
+            elif summary["problems"] > (baseline or {}).get("problems", 0):
+                failure = (
+                    f"test suite regressed: {summary['problems']} problems "
+                    f"(baseline {(baseline or {}).get('problems', 0)})"
+                )
+            else:
+                baseline = _record_baseline(root, summary)
+    except Exception as error:
+        try:
+            rollback(snapshot["id"], agent_id=agent_id, require_permission=False,
+                     _only_paths=set(written), _created_paths=created,
+                     _expected_hashes=expected_hashes)
+        except Exception as rollback_error:
+            raise SelfDevError(
+                f"Verification failed and automatic rollback failed: {rollback_error}. "
+                f"Manual recovery may be needed from checkpoint {snapshot['id']}."
+            ) from error
+        raise SelfDevError(f"Verification failed and the change was reverted: {error}") from error
 
     if failure:
-        restore = rollback(snapshot["id"], agent_id=agent_id, require_permission=False)
+        try:
+            restore = rollback(snapshot["id"], agent_id=agent_id, require_permission=False,
+                               _only_paths=set(written), _created_paths=created,
+                               _expected_hashes=expected_hashes)
+        except Exception as rollback_error:
+            raise SelfDevError(
+                f"{failure}; automatic rollback failed: {rollback_error}. "
+                f"Manual recovery may be needed from checkpoint {snapshot['id']}."
+            ) from rollback_error
         _append_audit(root, {
             "action": "auto_rollback", "reason": failure, "checkpoint": snapshot["id"],
             "applied": [item["path"] for item in reviewed], "agent": agent_id,

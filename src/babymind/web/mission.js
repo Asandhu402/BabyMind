@@ -51,7 +51,7 @@
     if (counts) {
       counts.innerHTML = [
         ["recorded", recorded],
-        ["contributed", map.contributed || 0],
+        ["returned text", map.contributed || 0],
         ["errors", map.error || 0],
         ["deferred", map.deferred || 0],
       ].map(([label, value]) => `<span><strong>${value}</strong> ${label}</span>`).join("");

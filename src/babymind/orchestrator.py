@@ -282,7 +282,10 @@ def _agent_prompt(agent: AgentSpec, brief: str, digest: str) -> tuple[str, str]:
     goal = PHASE_GOALS.get(agent.phase, "Contribute what this role uniquely knows.")
     system = (
         "You are BabyMind operating through one specialist role. "
-        "You share one local model with every other role; do not imply you are a separate model.\n"
+        "You share one local model with every other role; do not imply you are a separate model. "
+        "This role pass only generates text: you have no tools and cannot inspect, implement, "
+        "run, or verify work. Describe proposals as proposals, never as completed actions. "
+        "Earlier role outputs are unverified claims, not evidence that work was done.\n"
         + agent_instructions(agent)
         + "\nMission phase goal: " + goal
         + "\nRespond with your contribution only: specific, verifiable, and at most 120 words. "
@@ -416,11 +419,10 @@ class Orchestrator:
         self.store.set_status(mission_id, status, summary)
 
     def _run_self_edit(self, mission_id: str, brief: str, recorded: list[AgentRun]) -> dict:
-        """Ask the coding role for one concrete patch and apply it under the engine's guards.
+        """Ask the coding role for a patch and apply it under the engine's guards.
 
-        This is the autonomous loop: plan -> patch -> checkpoint -> verify -> keep
-        or roll back. It runs at most once per mission and never bypasses
-        verification.
+        One self-edit loop runs per mission: checkpoint, verify and keep or roll
+        back. A failed verification may trigger one further repair attempt.
         """
         from . import selfdev
 
@@ -519,8 +521,10 @@ class Orchestrator:
             for item in verdicts
         )
         text = (
-            f"Mission {status}: {contributed}/50 roles contributed, {errors} errored, "
-            f"{len(deferred)} deferred, {seconds}s elapsed."
+            f"Mission {status}: {contributed}/50 roles returned non-empty text, {errors} errored, "
+            f"{len(deferred)} deferred, {seconds}s elapsed. "
+            "Role output is unverified model text; completion does not prove the work was done "
+            "or that the answers are correct."
         )
         if verdict:
             text += "\n\nAcceptance phase record:\n" + verdict

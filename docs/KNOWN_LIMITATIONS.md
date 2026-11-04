@@ -5,8 +5,8 @@ missing, not what is planned.
 
 ## Platform and packaging
 
-- The supported portable target is Linux x86-64 with glibc 2.35+ and a graphical desktop. The package, first-run GUI, real model download and inference have not been verified end to end in this environment.
-- The Ubuntu one-command installer has not been validated end to end on a clean graphical host or against the real model download. There is no auto-updater, code signing, or self-repair supervisor.
+- The supported portable target is Linux x86-64 with glibc 2.35+ and a graphical desktop. A hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response; a clean Ubuntu Desktop session and broader capabilities remain unverified.
+- There is no auto-updater, code signing, or self-repair supervisor.
 - Linux x86-64 is the sole supported desktop target.
 - The portable executable is not a Python interpreter. Source tests and generated Python app execution are unavailable in the portable build.
 
@@ -39,10 +39,11 @@ missing, not what is planned.
 - **50 roles are 50 prompts over one model**, executed sequentially by default.
   There is no multi-model parallelism, no debate protocol beyond the shared
   digest, and no learned routing.
-- A mission only edits source when started with `self_edit: true`. The loop then
-  applies **one** patch proposed by the Coding Agent role, verified by compile
-  and tests. It is not an iterative engineer: it does not read the failure,
-  repair its own patch, and retry within the same mission.
+- A mission only edits source when started with `self_edit: true`, in a source
+  checkout; the frozen desktop cannot self-edit. The loop attempts a patch
+  proposed by the Coding Agent, verified by compile and tests. After a failed
+  verification it can request one repair and retry; malformed or unsafe proposals
+  can stop the loop earlier. This is not an unrestricted iterative engineer.
 - The patch comes from a 4B-class local model. Expect small, local changes, not
   architectural rewrites.
 - Missions stop at the time budget. Unrun roles are recorded as `deferred`; they
@@ -72,8 +73,8 @@ missing, not what is planned.
 
 ## Data and model
 
-- No model is bundled in the repository. First launch downloads ~2.7 GB, and
-  that download has not been exercised in this environment.
+- No model is bundled in the repository. Installation downloads ~2.7 GB; this
+  passed once on a hosted Ubuntu VM, but other networks remain untested.
 - Conversations, missions, and memory are encrypted at rest with a local key file on Linux. It is readable by the same user and does not protect against a compromised account.
 - Knowledge-graph and voice integrations remain optional and unverified here.
 

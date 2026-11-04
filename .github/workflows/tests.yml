@@ -5,10 +5,16 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      real_model_test:
+        description: Run the expensive real-model installer and GUI smoke test
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   linux:
+    if: github.event_name != 'workflow_dispatch' || !inputs.real_model_test
     strategy:
       fail-fast: false
       matrix:
@@ -77,3 +83,64 @@ jobs:
           path: dist/BabyMind-Linux-x86_64.tar.gz
           if-no-files-found: error
           retention-days: 14
+  real-model-installer:
+    # Manual and opt-in: this downloads ~2.71 GB and builds the installer on
+    # an ephemeral Ubuntu VM. Xvfb is not a full Ubuntu Desktop session.
+    if: github.event_name == 'workflow_dispatch' && inputs.real_model_test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record host and install GUI test tools
+        run: |
+          cat /etc/os-release
+          free -h
+          df -h "$RUNNER_TEMP"
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth python3-websocket
+      - name: Run the actual installer in a disposable home
+        id: installer
+        run: |
+          mkdir -p "$RUNNER_TEMP/babymind-test-home"
+          export HOME="$RUNNER_TEMP/babymind-test-home"
+          set +e
+          bash ./install-linux.sh 2>&1 | tee "$RUNNER_TEMP/babymind-installer.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-installer.log" Installer "$status"
+            exit "$status"
+          fi
+      - name: Exercise installed Qt GUI and real-model response under Xvfb
+        run: |
+          export HOME="$RUNNER_TEMP/babymind-test-home"
+          set +e
+          xvfb-run -a /usr/bin/python3 scripts/verify_installed_desktop.py \
+            "$HOME/.local/bin/babymind" --log "$RUNNER_TEMP/babymind-desktop.log" 2>&1 | tee "$RUNNER_TEMP/babymind-gui-test.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-gui-test.log" GUI "$status"
+            exit "$status"
+          fi
+      - name: Exercise real model roles, coding, and disposable source self-edit
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        run: |
+          export HOME="$RUNNER_TEMP/babymind-test-home"
+          /usr/bin/python3 -m venv "$RUNNER_TEMP/acceptance-venv"
+          "$RUNNER_TEMP/acceptance-venv/bin/python" -m pip install 'cryptography>=50,<51'
+          set +e
+          PYTHONPATH="$GITHUB_WORKSPACE/src" "$RUNNER_TEMP/acceptance-venv/bin/python" \
+            scripts/verify_real_model_roles.py --home "$HOME" --workdir "$RUNNER_TEMP" \
+            --report "$RUNNER_TEMP/babymind-real-model-report.json" 2>&1 | tee "$RUNNER_TEMP/babymind-roles-test.log"
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-roles-test.log" Roles "$status"
+            exit "$status"
+          fi
+      - name: Upload disposable test report
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: babymind-real-model-test-report
+          path: ${{ runner.temp }}/babymind-real-model-report.json
+          if-no-files-found: warn
+          retention-days: 7

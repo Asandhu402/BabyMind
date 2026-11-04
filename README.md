@@ -22,13 +22,11 @@ model plus several GB for dependencies and build files; 10 GB free recommended).
 It may prompt for your sudo password. Open **BabyMind** from Applications when
 finished, or run `~/.local/bin/babymind`.
 
-The installer and real model host have **not been validated end to end** on a
-clean Ubuntu desktop. The latest verified GitHub Linux CI run passed its
-Ubuntu 22.04 build, 316 source tests, synthetic llama.cpp completion test and
-headless Qt window test. The synthetic model has random weights; its output
-does not measure the quality of BabyMind's pinned model. The CI workflow now
-also targets Ubuntu 24.04, so that compatibility result must be confirmed by
-the corresponding run. See [Linux verification](docs/LINUX_VERIFICATION.md).
+The installer and one real-model chat response passed on a hosted Ubuntu 22.04
+VM with an Xvfb virtual display. Separate CI builds and fixture tests passed on
+Ubuntu 22.04 and 24.04; the synthetic model used there does not measure the
+pinned model's quality. A clean Ubuntu Desktop session and broader model
+capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
 
 ## Portable desktop
 
