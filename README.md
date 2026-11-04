@@ -23,7 +23,7 @@ Workspace file operations and general project command execution remain disabled 
 ## Requirements
 
 - 64-bit Linux.
-- Python 3.10 or newer.
+- Python 3.10 or newer, including the distribution's Tk bindings for first-run model setup.
 - A compatible local llama.cpp build providing `llama-server`.
 - A compatible GGUF model.
 - Node.js only for browser JavaScript checks in development CI.
