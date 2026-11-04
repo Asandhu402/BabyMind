@@ -784,7 +784,9 @@ class BabyMindWebTests(unittest.TestCase):
 
 
     def test_workspace_readiness_api_reports_closed_security_gates(self) -> None:
-        status, _, body = self.request("/api/workspace/readiness")
+        from babymind import approval
+        with patch.object(approval, "WORKSPACE_FILE_ACTIONS_ENABLED", False):
+            status, _, body = self.request("/api/workspace/readiness")
         self.assertEqual(status, 200)
         report = json.loads(body)
         self.assertEqual(report["model_engine"], "llama.cpp")
