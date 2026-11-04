@@ -22,11 +22,13 @@ model plus several GB for dependencies and build files; 10 GB free recommended).
 It may prompt for your sudo password. Open **BabyMind** from Applications when
 finished, or run `~/.local/bin/babymind`.
 
-The single-command installer has **not been validated end to end** on a clean
-Ubuntu desktop or against the real model host in this environment. The previous
-Linux CI run failed at the Qt GUI test; see [verification](docs/LINUX_VERIFICATION.md).
-The command above uses the repository's default branch and will include this
-installer only after its changes are merged there.
+The installer and real model host have **not been validated end to end** on a
+clean Ubuntu desktop. The latest verified GitHub Linux CI run passed its
+Ubuntu 22.04 build, 316 source tests, synthetic llama.cpp completion test and
+headless Qt window test. The synthetic model has random weights; its output
+does not measure the quality of BabyMind's pinned model. The CI workflow now
+also targets Ubuntu 24.04, so that compatibility result must be confirmed by
+the corresponding run. See [Linux verification](docs/LINUX_VERIFICATION.md).
 
 ## Portable desktop
 
@@ -40,8 +42,10 @@ model. There is no API key, paid service, LM Studio or auto-updater.
 CPU inference may be slow and needs substantial memory.
 
 The Linux package and first-run GUI have **not yet been validated end to end**
-in this environment. See [Linux portable instructions](docs/LINUX_PORTABLE.md)
-for compatibility, building from source, and current limitations. Linux is the sole supported desktop target.
+on a normal Ubuntu desktop with the production model. See
+[Linux portable instructions](docs/LINUX_PORTABLE.md) for compatibility,
+building from source, and current limitations. Linux is the sole supported
+desktop target.
 
 ## Safety and capabilities
 
