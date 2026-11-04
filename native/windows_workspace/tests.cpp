@@ -83,6 +83,21 @@ int main() {
         CHECK(bm_ws_protocol::parse_request(version.data(),version.size(),&req)==bm_ws_protocol::ParseStatus::UnsupportedVersion);
         auto trailing=f;trailing.push_back(0);
         CHECK(bm_ws_protocol::parse_request(trailing.data(),trailing.size(),&req)==bm_ws_protocol::ParseStatus::InvalidLength);
+        // A failed parse must clear a previously successful request. This
+        // prevents stale parsed operation data from surviving a malformed frame.
+        CHECK(bm_ws_protocol::parse_request(f.data(),f.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
+        CHECK(req.operation==bm_ws_protocol::Operation::ListDirectory);
+        CHECK(bm_ws_protocol::parse_request(trailing.data(),trailing.size(),&req)==bm_ws_protocol::ParseStatus::InvalidLength);
+        CHECK(req.relative_path.empty() && req.payload.empty());
+        CHECK(req.operation==static_cast<bm_ws_protocol::Operation>(0));
+        // Reject UTF-8 overlong forms, encoded surrogate values, and code points
+        // above U+10FFFF in CREATE_NEW_TEXT payloads.
+        auto overlong=frame(3,L"file.txt",{0xE0,0x80,0x80});
+        CHECK(bm_ws_protocol::parse_request(overlong.data(),overlong.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto surrogate=frame(3,L"file.txt",{0xED,0xA0,0x80});
+        CHECK(bm_ws_protocol::parse_request(surrogate.data(),surrogate.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
+        auto out_of_range=frame(3,L"file.txt",{0xF4,0x90,0x80,0x80});
+        CHECK(bm_ws_protocol::parse_request(out_of_range.data(),out_of_range.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
     }
 
     wchar_t temp[MAX_PATH]{};
