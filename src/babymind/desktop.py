@@ -6,6 +6,7 @@ and first-run model setup are prepared before importing the application server.
 from __future__ import annotations
 
 import socket
+import sys
 import threading
 import time
 import urllib.error
@@ -25,12 +26,7 @@ def _available_port() -> int:
 
 
 def _show_error(message: str) -> None:
-    from tkinter import Tk, messagebox
-
-    root = Tk()
-    root.withdraw()
-    messagebox.showerror("BabyMind could not start", message, parent=root)
-    root.destroy()
+    print(f"BabyMind could not start: {message}", file=sys.stderr)
 
 
 def main() -> None:
