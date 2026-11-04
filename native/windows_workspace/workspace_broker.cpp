@@ -44,7 +44,7 @@ constexpr size_t kMaxCreateBytes = 1024 * 1024;
 bool bounded_wide_length(const wchar_t* value, size_t maximum, size_t* length) {
     if (value == nullptr || length == nullptr) return false;
     for (size_t i = 0; i <= maximum; ++i) {
-        if (value[i] == L'\\0') {
+        if (value[i] == L'\0') {
             *length = i;
             return true;
         }
