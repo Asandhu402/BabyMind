@@ -20,6 +20,9 @@ class IntegrationTests(unittest.TestCase):
             {item["integration_id"] for item in statuses},
             {"docling", "faster-whisper", "browser-use", "open-interpreter", "cognee", "voicebox", "promptfoo"},
         )
+        coding = next(item for item in statuses if item["integration_id"] == "open-interpreter")
+        self.assertFalse(coding["available"])
+        self.assertIn("llama.cpp", coding["safety"])
 
     def test_voicebox_rejects_non_loopback_endpoint(self):
         from babymind.integrations.voicebox import _base_url
