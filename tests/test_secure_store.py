@@ -43,8 +43,8 @@ class SecureTextStoreTests(unittest.TestCase):
             path = Path(folder) / "key"
             SecureTextStore(path)
             self.assertTrue(path.is_file())
-            if os.name != "nt":
-                self.assertEqual(path.stat().st_mode & 0o077, 0)
+            self.assertEqual(path.stat().st_mode & 0o077, 0)
+            self.assertEqual(path.stat().st_uid, os.getuid())
 
 
 if __name__ == "__main__":
