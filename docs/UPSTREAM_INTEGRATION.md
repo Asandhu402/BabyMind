@@ -207,3 +207,56 @@ or semantic correctness.
 Tree-sitter is already a transitive dependency of this project; BabyMind does
 not add a second Tree-sitter submodule. The code-symbol-index project itself
 pins its parser dependencies separately in its own lockfile.
+
+
+## Additional Windows/data-security evaluation sources
+
+| Component | Local path | Upstream | Pinned commit | License | Intended use |
+|---|---|---|---|---|---|
+| sqlcipher3 | `vendor/upstream/sqlcipher3` | https://github.com/coleifer/sqlcipher3 | `e0fad03cbe0a6f4e0960c2f3b676f5e0533fc09e` | zlib (binding); SQLCipher carries its own notices | Encrypted SQLite adapter evaluation |
+| FlaUI | `vendor/upstream/flaui` | https://github.com/FlaUI/FlaUI | `fd7cc64ab01908a0ae4cc7d05e704caa34f98d16` | MIT | Windows desktop UI automation tests only |
+
+### sqlcipher3
+
+The Python binding wraps SQLCipher and offers a self-contained package path.
+It is a candidate for encrypting BabyMind's SQLite databases at rest, including
+separate integration stores that currently sit outside BabyMind's encrypted
+store. It may help findings 19, 38 and 39. The upstream binding has Windows
+wheels for modern CPython, including 3.14, but BabyMind must test the exact
+wheel, packaging, key derivation/storage, migration, WAL/journal handling,
+backup/restore and wrong-key recovery before adoption.
+
+The submodule is a source/compatibility reference only. It is not currently
+installed, imported, or used to migrate any existing user database. Never
+hardcode database keys or place them beside the encrypted database. SQLCipher
+does not by itself solve key recovery, backup design, retention, or access
+control. Preserve existing data and design a tested, reversible migration.
+
+### FlaUI
+
+FlaUI is a mature MIT-licensed .NET UI Automation library. It is a test-only
+candidate for launching and inspecting the actual Windows desktop executable,
+asserting native window state, interacting with native dialogs, and collecting
+failure screenshots. It may help findings 23, 24, 26 and 35. For WebView2 content,
+use Playwright's documented CDP connection to WebView2; FlaUI complements it
+for native windows and dialogs rather than replacing it.
+
+FlaUI is not a runtime dependency and must not ship inside the ordinary BabyMind
+installer. Its test harness requires a Windows interactive desktop and a
+separate .NET test toolchain. UI automation must use a dedicated test profile
+and must not touch the developer's personal desktop or data.
+
+### Candidates deliberately not adopted
+
+- AgentAleph has useful local llama.cpp coding-agent patterns (tool permissions,
+  plan/build modes, checkpoints, patch previews and undo), but its current
+  documented product build is Linux-only and its project footprint is small.
+  OpenCode already provides a stronger existing architecture reference. Reuse
+  concepts selectively rather than add another agent runtime.
+- processkit-py offers process-tree cancellation and Windows Job Object handling,
+  but is a very young, low-adoption project and overlaps with wincage. Reassess
+  only if BabyMind's own process lifecycle tests expose a gap wincage cannot cover.
+- winuse's documented decision provider requires external model services, which
+  conflicts with BabyMind's local-only inference policy.
+- winexecsafe is a smaller, less-reviewed AppContainer wrapper and duplicates
+  the existing wincage evaluation path.

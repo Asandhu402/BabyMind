@@ -16,3 +16,9 @@
 [submodule "vendor/upstream/code-symbol-index"]
 	path = vendor/upstream/code-symbol-index
 	url = https://github.com/hit9/code-symbol-index.git
+[submodule "vendor/upstream/sqlcipher3"]
+	path = vendor/upstream/sqlcipher3
+	url = https://github.com/coleifer/sqlcipher3.git
+[submodule "vendor/upstream/flaui"]
+	path = vendor/upstream/flaui
+	url = https://github.com/FlaUI/FlaUI.git
