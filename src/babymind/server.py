@@ -242,6 +242,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/integrations":
             from .integrations.catalog import integration_status
             self.send_json(integration_status())
+        elif path == "/api/workspace/readiness":
+            from .workspace_readiness import workspace_readiness
+            self.send_json(workspace_readiness())
         elif path == "/api/agents":
             self.send_json([{
                 "id": agent.agent_id, "name": agent.name,
