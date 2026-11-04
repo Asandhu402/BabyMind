@@ -2,53 +2,32 @@
 
 from __future__ import annotations
 
-import json
 import os
 import platform
 import sys
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
 from .agents import AGENTS, validate_registry
 
 
 def _check_local_model(timeout: float = 3.0) -> tuple[str, str]:
-    engine = os.getenv("BABYMIND_ENGINE", "lm-studio").strip().lower()
-    if engine in {"lm-studio", "lmstudio"}:
-        base_url = os.getenv("BABYMIND_BASE_URL", "http://127.0.0.1:1234/v1").rstrip("/")
-        headers = {"Accept": "application/json"}
-        api_key = os.getenv("BABYMIND_API_KEY")
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        try:
-            request = Request(f"{base_url}/models", headers=headers)
-            with urlopen(request, timeout=timeout) as response:
-                payload = json.loads(response.read(256_000).decode("utf-8"))
-            models = payload.get("data", [])
-            if not models:
-                return "WARN", "LM Studio is reachable but has no loaded model."
-            model_names = [str(item.get("id", "unnamed")) for item in models[:5]]
-            return "PASS", "LM Studio connected; loaded model(s): " + ", ".join(model_names)
-        except Exception as error:
-            return "WARN", f"LM Studio not reachable at {base_url}: {error}"
-
-    if engine in {"llama.cpp", "llamacpp", "llama-cpp"}:
-        executable_value = os.getenv("BABYMIND_LLAMA_SERVER", "").strip()
-        model_value = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
-        if not executable_value or not model_value:
-            return "WARN", "Set BABYMIND_LLAMA_SERVER and BABYMIND_GGUF_MODEL."
-        executable = Path(executable_value).expanduser()
-        model = Path(model_value).expanduser()
-        missing = [str(path) for path in (executable, model) if not path.is_file()]
-        if missing:
-            return "FAIL", "Missing local llama.cpp file(s): " + ", ".join(missing)
-        port = os.getenv("BABYMIND_LLAMA_PORT", "1235")
-        try:
-            with urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout):
-                return "PASS", f"llama.cpp server is healthy on 127.0.0.1:{port}."
-        except Exception:
-            return "WARN", "llama.cpp files exist, but its local server is not running."
-    return "FAIL", f"Unknown BABYMIND_ENGINE value: {engine!r}"
+    """Check only BabyMind's supported local llama.cpp runtime."""
+    executable_value = os.getenv("BABYMIND_LLAMA_SERVER", "").strip()
+    model_value = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
+    if not executable_value or not model_value:
+        return "WARN", "Set BABYMIND_LLAMA_SERVER and BABYMIND_GGUF_MODEL for the local llama.cpp runtime."
+    executable = Path(executable_value).expanduser()
+    model = Path(model_value).expanduser()
+    missing = [str(path) for path in (executable, model) if not path.is_file()]
+    if missing:
+        return "FAIL", "Missing local llama.cpp file(s): " + ", ".join(missing)
+    port = os.getenv("BABYMIND_LLAMA_PORT", "1235")
+    try:
+        with urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout):
+            return "PASS", f"llama.cpp server is healthy on 127.0.0.1:{port}."
+    except Exception:
+        return "WARN", "llama.cpp files exist, but its local server is not running."
 
 
 def run_diagnostics(
