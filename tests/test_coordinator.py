@@ -113,6 +113,18 @@ class CoordinatorTests(unittest.TestCase):
         self.assertTrue(task.startswith("bmenc:v1:"))
         self.assertEqual(self.memory.recent()[0]["task"], "Private task")
 
+    def test_marker_prefixed_memory_is_encrypted_and_survives_restart(self) -> None:
+        value = "bmenc:v1:private task"
+        self.memory.remember("BM-01", value, value)
+        import sqlite3
+        with sqlite3.connect(self.memory.database_path) as connection:
+            row = connection.execute("SELECT task, response FROM memories").fetchone()
+        self.assertNotIn(value, row[0])
+        self.assertNotIn(value, row[1])
+        reopened = LocalMemory(self.memory.database_path)
+        self.assertEqual(reopened.recent()[0]["task"], value)
+        self.assertEqual(reopened.recent()[0]["response"], value)
+
     def test_memory_can_be_cleared(self) -> None:
         self.memory.remember("BM-01", "Task", "Response")
         self.assertEqual(self.memory.clear(), 1)

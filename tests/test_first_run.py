@@ -1,5 +1,6 @@
 """Tests for the portable Windows first-run setup helpers."""
 
+import builtins
 import hashlib
 import tempfile
 import unittest
@@ -33,6 +34,36 @@ class FirstRunSetupTests(unittest.TestCase):
             with patch("babymind.first_run._sha256", return_value=MODEL_SHA256) as verify:
                 _ensure_model(path)
             verify.assert_called_once_with(path)
+
+    def test_verified_existing_model_does_not_import_tkinter(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "model.gguf"
+            path.write_bytes(b"verified model fixture")
+            real_import = builtins.__import__
+            def no_tk(name, *args, **kwargs):
+                if name == "tkinter":
+                    raise AssertionError("Tkinter must not be imported for a verified model")
+                return real_import(name, *args, **kwargs)
+            with patch("babymind.first_run._sha256", return_value=MODEL_SHA256) as verify, \
+                 patch("builtins.__import__", side_effect=no_tk):
+                _ensure_model(path)
+            verify.assert_called_once_with(path)
+            self.assertEqual(path.with_suffix(".gguf.sha256").read_text(encoding="ascii"), MODEL_SHA256)
+
+    def test_missing_tkinter_explains_first_run_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "model.gguf"
+            real_import = builtins.__import__
+            def no_tk(name, *args, **kwargs):
+                if name == "tkinter":
+                    raise ModuleNotFoundError("No module named 'tkinter'", name="tkinter")
+                return real_import(name, *args, **kwargs)
+            with patch("builtins.__import__", side_effect=no_tk), \
+                 patch("babymind.first_run._download_model") as download:
+                with self.assertRaisesRegex(RuntimeError, "Tkinter is required.*BABYMIND_GGUF_MODEL"):
+                    _ensure_model(path)
+            download.assert_not_called()
+            self.assertFalse(path.exists())
 
     def test_finds_bundled_llama_server(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

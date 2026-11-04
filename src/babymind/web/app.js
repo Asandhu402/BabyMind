@@ -32,10 +32,11 @@ function setView(name) {
   document.querySelectorAll(".view").forEach(view=>view.classList.remove("active"));
   const target=$("#"+name+"View") || $("#chatView"); target.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(item=>item.classList.toggle("active",item.dataset.view===name));
-  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",settings:"Settings"})[name]||"Chat";
+  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",development:"Development review",githubResearch:"GitHub research",settings:"Settings"})[name]||"Chat";
   $("#sidebar").classList.remove("open");
   if(name==="memory") loadMemory();
   if(name==="tasks") loadTasks();
+  if(name==="development") loadDevelopmentReviews();
   if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); }
 }
 function renderAgentSelect() {

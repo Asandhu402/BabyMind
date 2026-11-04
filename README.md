@@ -4,6 +4,8 @@ BabyMind is a local-first personal AI application with exactly **50 specialist r
 
 The 50 agents are specialist configurations that share one underlying language model. They are not 50 separately trained or separately running models. The optional collaboration mode performs a specialist pass, a quality-review pass, and a final synthesis pass using that same model.
 
+**Autonomous development status:** The full self-developing platform is not implemented. Workspace file actions and project execution remain disabled pending Windows security work. See the [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md) for implemented capabilities, test results, and outstanding acceptance gates.
+
 ## What is included
 
 - **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, dark/light themes, and Markdown conversation export.
@@ -11,11 +13,19 @@ The 50 agents are specialist configurations that share one underlying language m
 - **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue, each with a focused domain playbook and responsibility.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
 - **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
+- **Development review:** a separate desktop view runs the 50 requested development specialist roles sequentially on the same local model, recording their reports and attempts in the encrypted app database. This is an advisory review of text you supply, not autonomous development, file access, testing, or independent verification.
+- **GitHub research:** anonymous, read-only search and commit-pinned inspection of public repository trees and UTF-8 source files; files can be supplied as excerpts to the development-review workflow. Nothing is cloned, executed, or automatically integrated. License metadata requires independent review.
 - **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows. When enabled, BabyMind ranks relevant notes locally using lightweight text matching; no embeddings or extra AI model are used. The Memory workspace also supports local search.
 - **Encrypted conversation storage:** local SQLite history on the computer running BabyMind; message text and titles are encrypted at rest with AES-256-GCM.
 - **Local model runtime:** BabyMind-managed llama.cpp server using a local GGUF model.
 - **CLI:** health, list, ask, route, and memory commands.
 - **Lightweight runtime:** core server, storage, and HTTP client use the Python standard library; the desktop window uses pywebview.
+
+### Development reviews
+
+Open **Development review**, enter a task and optional context, and start a review. Each role gets a separate model call; the first two reports provide limited context to later roles, and the last two receive excerpts of earlier reports. All reports are unverified model output. The review does not inspect your project, make changes, run commands, or verify acceptance criteria.
+
+The model is occupied for the review and it may take a long time on CPU. Cancel stops after the current model request returns, not immediately. Failed or interrupted reviews can be resumed; dependent final reviews are rerun where necessary, and previous attempts remain in history. An interrupted review is marked on the next startup; it is not resumed automatically. Review contents are included in BabyMind's encrypted database backups. Do not paste credentials into the supplied context. Use one BabyMind instance for normal operation; the review worker also uses a cooperative process lock to prevent overlapping review workers.
 
 ## Requirements
 

@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
+from .development_review import DevelopmentReviews, ReviewProcessLock
 from .providers import ProviderError
 from .secure_store import SecureTextStore
 from .lan_tls import create_lan_tls_context
@@ -62,6 +63,66 @@ def text_store() -> SecureTextStore:
     return SecureTextStore(DB_PATH.with_suffix(".key"))
 
 
+def development_reviews() -> DevelopmentReviews:
+    return DevelopmentReviews(db, text_store())
+
+
+def recover_development_reviews():
+    """Recover only when no other app instance owns the review worker."""
+    try:
+        process_lock = ReviewProcessLock(DATA_HOME)
+    except RuntimeError:
+        return
+    try:
+        development_reviews().recover()
+    finally:
+        process_lock.close()
+
+
+def start_development_review(task=None, context="", *, review_id=None):
+    """Start one serialized model review without exposing execution tools."""
+    if not INFERENCE_SEMAPHORE.acquire(blocking=False):
+        raise RuntimeError("BabyMind is busy with another model operation.")
+    process_lock = None
+    try:
+        process_lock = ReviewProcessLock(DATA_HOME)
+        reviews = development_reviews()
+        if review_id is None:
+            review_id = reviews.create(task, context)
+        else:
+            reviews.resume(review_id)
+
+        def run():
+            try:
+                reviews.run(review_id, COORDINATOR.provider)
+            except Exception as error:
+                print(f"[BabyMind] Development review interrupted: {type(error).__name__}", flush=True)
+                try:
+                    reviews.recover()
+                except Exception:
+                    pass
+            finally:
+                try:
+                    process_lock.close()
+                finally:
+                    INFERENCE_SEMAPHORE.release()
+
+        thread = threading.Thread(target=run, name="BabyMindDevelopmentReview", daemon=True)
+        try:
+            thread.start()
+        except Exception:
+            reviews.recover()
+            raise
+    except Exception:
+        try:
+            if process_lock is not None:
+                process_lock.close()
+        finally:
+            INFERENCE_SEMAPHORE.release()
+        raise
+    return review_id
+
+
 def init_db() -> None:
     secure = text_store()
     with DB_LOCK, db() as connection:
@@ -93,15 +154,16 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             )
         """)
+        DevelopmentReviews.create_tables(connection)
         connection.execute("PRAGMA foreign_keys = ON")
         # Encrypt legacy plaintext values in place; the prefix makes this
         # migration idempotent and safe to retry after an interrupted upgrade.
         for row in connection.execute("SELECT id, title FROM conversations").fetchall():
-            encrypted = secure.encrypt(row["title"])
+            encrypted = secure.encrypt_legacy(row["title"])
             if encrypted != row["title"]:
                 connection.execute("UPDATE conversations SET title=? WHERE id=?", (encrypted, row["id"]))
         for row in connection.execute("SELECT id, content FROM messages").fetchall():
-            encrypted = secure.encrypt(row["content"])
+            encrypted = secure.encrypt_legacy(row["content"])
             if encrypted != row["content"]:
                 connection.execute("UPDATE messages SET content=? WHERE id=?", (encrypted, row["id"]))
 
@@ -239,6 +301,13 @@ class Handler(BaseHTTPRequestHandler):
                 "model_available": model_ready, "model_name": model_name,
                 "privacy": "Local server; conversation data stays on this device."
             })
+        elif path == "/api/development-reviews":
+            self.send_json(development_reviews().list())
+        elif path.startswith("/api/development-reviews/"):
+            try:
+                self.send_json(development_reviews().get(path.rsplit("/", 1)[-1]))
+            except ValueError as error:
+                self.send_json({"error": str(error)}, 404)
         elif path == "/api/integrations":
             from .integrations.catalog import integration_status
             self.send_json(integration_status())
@@ -335,7 +404,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self.read_json()
-            if path == "/api/integrations/voicebox/speech":
+            if path == "/api/development-reviews":
+                review_id = start_development_review(payload.get("task"), payload.get("context", ""))
+                self.send_json({"id": review_id}, 202)
+            elif path.startswith("/api/development-reviews/") and path.endswith("/cancel"):
+                review_id = path.split("/")[-2]
+                development_reviews().cancel(review_id)
+                self.send_json({"id": review_id, "status": "cancelling"})
+            elif path.startswith("/api/development-reviews/") and path.endswith("/resume"):
+                review_id = path.split("/")[-2]
+                start_development_review(review_id=review_id)
+                self.send_json({"id": review_id, "status": "running"}, 202)
+            elif path == "/api/integrations/voicebox/speech":
                 audio = COORDINATOR.synthesize_speech(
                     str(payload.get("text", "")),
                     voice=str(payload.get("voice", "")).strip() or None,
@@ -740,6 +820,15 @@ class Handler(BaseHTTPRequestHandler):
                         else "Read-only directory listing completed. No file contents were opened or modified."
                     )
                 })
+            elif path == "/api/research/github/search":
+                from .github_research import search_repositories
+                self.send_json(search_repositories(payload.get("query"), payload.get("limit", 5)))
+            elif path == "/api/research/github/inspect":
+                from .github_research import inspect_repository
+                self.send_json(inspect_repository(payload.get("owner"), payload.get("repo")))
+            elif path == "/api/research/github/file":
+                from .github_research import read_file
+                self.send_json(read_file(payload.get("owner"), payload.get("repo"), payload.get("commit"), payload.get("path")))
             elif path == "/api/research/page":
                 page_url = str(payload.get("url", "")).strip()
                 if not page_url or len(page_url) > 2048:
@@ -790,7 +879,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self.validate_browser_origin():
             return
-        if path.startswith("/api/conversations/"):
+        if path.startswith("/api/development-reviews/"):
+            try:
+                development_reviews().delete(path.rsplit("/", 1)[-1])
+                self.send_json({"deleted": 1})
+            except ValueError as error:
+                self.send_json({"error": str(error)}, 400)
+        elif path.startswith("/api/conversations/"):
             conversation_id = path.rsplit("/", 1)[-1]
             with db() as connection:
                 cursor = connection.execute(
@@ -908,6 +1003,7 @@ def main() -> None:
     if not args.lan and not is_loopback_host(args.host):
         parser.error("Non-loopback binding requires --lan, which enables access-token protection.")
     init_db()
+    recover_development_reviews()
     auth_token = secrets.token_urlsafe(24) if args.lan else None
     lan_ip = None
     tls_context = None

@@ -16,6 +16,15 @@ class SecureTextStoreTests(unittest.TestCase):
             self.assertNotIn("private conversation", encrypted)
             self.assertEqual(store.decrypt(encrypted), "private conversation")
 
+    def test_marker_prefixed_user_input_is_encrypted_as_plaintext(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = SecureTextStore(Path(folder) / "key")
+            value = "bmenc:v1:private text that looks encrypted"
+            encrypted = store.encrypt(value)
+            self.assertNotIn(value, encrypted)
+            self.assertEqual(store.decrypt(encrypted), value)
+            self.assertEqual(store.encrypt_legacy(encrypted), encrypted)
+
     def test_encryption_is_randomized(self):
         with tempfile.TemporaryDirectory() as folder:
             store = SecureTextStore(Path(folder) / "key")

@@ -22,6 +22,7 @@ class LanBindTests(unittest.TestCase):
         with (
             patch.object(server.argparse.ArgumentParser, "parse_args", return_value=args),
             patch.object(server, "init_db"),
+            patch.object(server, "recover_development_reviews"),
             patch.object(server.socket, "socket", return_value=probe),
             patch.object(
                 server, "create_lan_tls_context",

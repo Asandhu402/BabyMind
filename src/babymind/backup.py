@@ -185,6 +185,9 @@ def _validate_encrypted_data(work: Path, files: dict[str, bytes]) -> None:
             "messages": ("content",),
             "tasks": ("title", "details"),
             "execution_proposals": ("payload", "result"),
+            "development_reviews": ("task", "context"),
+            "development_review_roles": ("response",),
+            "development_review_attempts": ("error", "response"),
         },
         "memory.sqlite3": {"memories": ("task", "response")},
     }
