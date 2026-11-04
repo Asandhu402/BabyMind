@@ -21,6 +21,26 @@ class FakeProvider:
         return "Contribution: concrete, verifiable step recorded by this role."
 
 
+class SequencedSelfEditProvider:
+    """First self-edit breaks a test; the second repairs it."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.prompts: list[str] = []
+
+    def complete(self, system_prompt: str, user_prompt: str) -> str:
+        if "Return ONLY JSON" in system_prompt:
+            self.calls += 1
+            self.prompts.append(user_prompt)
+            target = "tests/test_ok.py"
+            value = "1, 2" if self.calls == 1 else "2, 2"
+            return json.dumps({"reason": f"attempt {self.calls}", "edits": [{
+                "path": target,
+                "content": "import unittest\n\n\nclass Ok(unittest.TestCase):\n"
+                           f"    def test_ok(self):\n        self.assertEqual({value})\n"}]})
+        return "Contribution: concrete, verifiable step recorded by this role."
+
+
 def _make_checkout(root: Path) -> None:
     (root / "src" / "babymind").mkdir(parents=True)
     (root / "tests").mkdir()
@@ -78,6 +98,21 @@ class MissionApiTests(unittest.TestCase):
                 return response.status, json.loads(response.read())
         except HTTPError as error:
             return error.code, json.loads(error.read() or b"{}")
+
+    def test_repair_endpoint_retries_after_a_rollback(self) -> None:
+        provider = SequencedSelfEditProvider()
+        server.COORDINATOR.provider = provider
+        status, body = self.request("/api/dev/repair", {"brief": "Fix the fixture test.", "attempts": 2})
+        self.assertEqual(status, 201, body)
+        self.assertEqual(body["status"], "applied", body)
+        self.assertEqual(body["attempts"], 2)
+        self.assertEqual([item["status"] for item in body["history"]], ["rolled_back", "applied"])
+        self.assertIn("assertEqual(2, 2)", (self.checkout / "tests" / "test_ok.py").read_text())
+        self.assertIn("ROLLED BACK", provider.prompts[1])
+
+    def test_repair_endpoint_rejects_an_empty_brief(self) -> None:
+        status, body = self.request("/api/dev/repair", {"brief": "   "})
+        self.assertEqual(status, 400, body)
 
     def wait_for_mission(self, mission_id: str, timeout: float = 60.0) -> dict:
         deadline = time.monotonic() + timeout

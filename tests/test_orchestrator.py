@@ -119,6 +119,24 @@ class SelfEditProvider:
         return "Contribution: concrete step."
 
 
+class SequencedSelfEditProvider:
+    """Returns a different patch on every self-edit call, in order."""
+
+    def __init__(self, patches: list[dict | str]) -> None:
+        self.patches = list(patches)
+        self.self_edit_calls = 0
+        self.prompts: list[str] = []
+
+    def complete(self, system_prompt: str, user_prompt: str) -> str:
+        if "closing a mission" in system_prompt:
+            index = min(self.self_edit_calls, len(self.patches) - 1)
+            self.self_edit_calls += 1
+            self.prompts.append(user_prompt)
+            patch = self.patches[index]
+            return patch if isinstance(patch, str) else json.dumps(patch)
+        return "Contribution: concrete step."
+
+
 def _make_checkout(root: Path) -> None:
     (root / "src" / "babymind").mkdir(parents=True)
     (root / "tests").mkdir()
@@ -174,6 +192,55 @@ class SelfEditLoopTests(unittest.TestCase):
         )
         self.assertEqual(mission["self_edit"]["status"], "rolled_back", mission["self_edit"])
         self.assertIn("assertEqual(1, 1)", (self.root / "tests" / "test_ok.py").read_text())
+
+    def test_a_rolled_back_patch_is_repaired_on_the_second_attempt(self) -> None:
+        provider = SequencedSelfEditProvider([
+            {"reason": "break it", "edits": [{
+                "path": "tests/test_ok.py",
+                "content": "import unittest\n\n\nclass Ok(unittest.TestCase):\n"
+                           "    def test_ok(self):\n        self.assertEqual(1, 2)\n"}]},
+            {"reason": "fix it", "edits": [{
+                "path": "tests/test_ok.py",
+                "content": "import unittest\n\n\nclass Ok(unittest.TestCase):\n"
+                           "    def test_ok(self):\n        self.assertEqual(2, 2)\n"}]},
+        ])
+        mission = Orchestrator(provider, self.store, max_seconds=180).run_now(
+            "Improve something, and fix it if it fails.", self_edit=True
+        )
+        report = mission["self_edit"]
+        self.assertEqual(report["status"], "applied", report)
+        self.assertEqual(report["attempts"], 2)
+        self.assertEqual([item["status"] for item in report["trail"]], ["rolled_back", "applied"])
+        self.assertEqual(provider.self_edit_calls, 2)
+        self.assertIn("ROLLED BACK", provider.prompts[1])
+        self.assertIn("assertEqual(2, 2)", (self.root / "tests" / "test_ok.py").read_text())
+
+    def test_two_failed_attempts_leave_the_tree_untouched(self) -> None:
+        bad = {"reason": "still broken", "edits": [{
+            "path": "tests/test_ok.py",
+            "content": "import unittest\n\n\nclass Ok(unittest.TestCase):\n"
+                       "    def test_ok(self):\n        self.assertEqual(1, 3)\n"}]}
+        provider = SequencedSelfEditProvider([bad, bad, bad])
+        mission = Orchestrator(provider, self.store, max_seconds=180).run_now(
+            "Try twice and give up.", self_edit=True
+        )
+        report = mission["self_edit"]
+        self.assertEqual(report["status"], "rolled_back", report)
+        self.assertEqual(report["attempts"], 2)
+        self.assertEqual(provider.self_edit_calls, 2)
+        self.assertIn("assertEqual(1, 1)", (self.root / "tests" / "test_ok.py").read_text())
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+
+    def test_a_first_attempt_success_is_not_retried(self) -> None:
+        provider = SequencedSelfEditProvider([
+            {"reason": "good", "edits": [{"path": "src/babymind/mod.py", "content": "VALUE = 5\n"}]},
+        ])
+        mission = Orchestrator(provider, self.store, max_seconds=180).run_now(
+            "Improve the module.", self_edit=True
+        )
+        self.assertEqual(mission["self_edit"]["status"], "applied")
+        self.assertEqual(mission["self_edit"]["attempts"], 1)
+        self.assertEqual(provider.self_edit_calls, 1)
 
     def test_garbage_model_output_changes_nothing(self) -> None:
         provider = SelfEditProvider("I cannot produce JSON today.")

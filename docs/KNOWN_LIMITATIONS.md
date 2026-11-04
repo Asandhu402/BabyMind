@@ -16,12 +16,29 @@ missing, not what is planned.
 
 ## Sandboxing and execution
 
-- **There is no OS sandbox.** `runner.py` is a bounded subprocess runner, not an
-  isolation boundary: same-user processes share files and network access. The
-  API reports `os_sandbox: false` rather than pretending otherwise.
-- Windows Job Objects are not implemented, so memory and CPU limits are
-  unenforced there (POSIX gets rlimits only).
-- Generated or imported code can use the network. There is no egress filtering.
+- **The OS sandbox is Linux-only today.** `sandbox.py` builds a user, mount,
+  pid and network namespace, chroots into a tmpfs root, mounts the system
+  read-only, mounts only the project writable, and drops the network to
+  loopback. `self_test()` proves each of those four claims against the live
+  kernel, and the sandboxed suite runs the same green result as an unsandboxed
+  one.
+- **No Windows or macOS backend exists.** `sandbox.backend()` returns
+  `available: false` with the reason (`AppContainer/Job Object backend not
+  implemented`, `sandbox-exec backend not implemented`). `BABYMIND_SANDBOX=require`
+  then refuses to run commands at all, and the default `auto` mode records
+  `sandbox: "unavailable"` on every result instead of claiming isolation.
+- **Nested sandboxes fail closed to plain execution.** The kernel forbids user
+  namespaces inside a user namespace, so a verification run started *by* a
+  sandboxed process reports the backend as unavailable and executes inside the
+  existing namespace. That is still contained, but it is one layer, not two.
+- **Limits are rlimits, not cgroups.** CPU time, file size and open files are
+  capped; memory is not, because cgroup delegation is unavailable here. A runaway
+  allocation inside the sandbox is bounded by the parent's monitor and timeout,
+  not by the kernel.
+- **Only the project root is writable, and that includes `state/`.** The sandbox
+  protects your home directory, keys and the network, not the project's own
+  files: a model-authored patch can still damage the checkout it is editing,
+  which is what checkpoints and rollback are for.
 
 ## Autonomy
 

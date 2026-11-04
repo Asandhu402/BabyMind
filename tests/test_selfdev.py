@@ -174,6 +174,63 @@ class SelfDevTests(unittest.TestCase):
         self.assertEqual(second["status"], "rolled_back", second)
         self.assertIn("regressed", second["reason"])
 
+    def test_repair_loop_retries_only_after_a_rollback(self) -> None:
+        seen: list[tuple[int, str]] = []
+
+        def propose(attempt: int, failure: str):
+            seen.append((attempt, failure))
+            if attempt == 1:
+                return [{"path": "tests/test_ok.py",
+                         "content": "import unittest\n\n\nclass Ok(unittest.TestCase):\n"
+                                    "    def test_ok(self):\n        self.assertEqual(1, 9)\n"}]
+            return [{"path": "tests/test_ok.py",
+                     "content": "import unittest\n\n\nclass Ok(unittest.TestCase):\n"
+                                "    def test_ok(self):\n        self.assertEqual(4, 4)\n"}]
+
+        outcome = selfdev.apply_with_repair(propose, attempts=2, reason="repair demo")
+        self.assertEqual(outcome["status"], "applied", outcome)
+        self.assertEqual(outcome["attempts"], 2)
+        self.assertEqual([item["status"] for item in outcome["history"]], ["rolled_back", "applied"])
+        self.assertEqual(seen[0][1], "")
+        self.assertIn("assertEqual", seen[1][1])
+        self.assertIn("assertEqual(4, 4)", (self.root / "tests" / "test_ok.py").read_text())
+
+    def test_repair_loop_gives_up_and_restores_the_tree(self) -> None:
+        calls = []
+
+        def propose(attempt: int, failure: str):
+            calls.append(attempt)
+            return [{"path": "src/babymind/mod.py", "content": "def broken(:\n"}]
+
+        outcome = selfdev.apply_with_repair(propose, attempts=3, reason="never works")
+        self.assertEqual(outcome["status"], "unrepaired")
+        self.assertEqual(calls, [1, 2, 3])
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+        self.assertTrue(outcome["last_failure"])
+
+    def test_repair_loop_stops_when_nothing_is_proposed(self) -> None:
+        calls = []
+
+        def propose(attempt: int, failure: str):
+            calls.append(attempt)
+            return []
+
+        outcome = selfdev.apply_with_repair(propose, attempts=3, reason="nothing")
+        self.assertEqual(outcome["status"], "unrepaired")
+        self.assertEqual(calls, [1])
+        self.assertEqual(outcome["history"][-1]["status"], "no_change")
+
+    def test_repair_loop_records_its_outcome_in_the_audit_chain(self) -> None:
+        def propose(attempt: int, failure: str):
+            return [{"path": "src/babymind/mod.py", "content": f"VALUE = {attempt + 1}\n"}]
+
+        outcome = selfdev.apply_with_repair(propose, attempts=1, reason="audited repair")
+        self.assertEqual(outcome["status"], "applied")
+        audit = selfdev.verify_audit_chain()
+        self.assertTrue(audit["valid"], audit)
+        actions = [entry.get("action") for entry in selfdev.audit_entries(50)]
+        self.assertIn("repair_succeeded", actions)
+
 
 if __name__ == "__main__":
     unittest.main()

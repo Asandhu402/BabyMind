@@ -28,6 +28,7 @@ DEFAULT_MAX_SECONDS = 900
 MAX_BRIEF_CHARS = 8_000
 MAX_CONTRIBUTION_CHARS = 1_200
 MAX_DIGEST_CHARS = 6_000
+MAX_SELF_EDIT_ATTEMPTS = 2
 MAX_SUMMARY_CHARS = 4_000
 
 PHASE_GOALS = {
@@ -435,38 +436,63 @@ class Orchestrator:
             ".git, state/, keys, databases, or binaries. If no safe change is possible, return "
             '{"reason": "...", "edits": []}.'
         )
-        try:
-            raw = self.provider.complete(system, f"BRIEF:\n{brief}\n\nMISSION RECORD:\n{digest}")
+        base = f"BRIEF:\n{brief}\n\nMISSION RECORD:\n{digest}"
+        notes: dict[str, str] = {}
+
+        def propose(attempt: int, failure: str):
+            user = base
+            if failure:
+                user += ("\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. The verification output was:\n"
+                         + failure + "\nProduce a corrected patch that fixes exactly this failure.")
+            raw = self.provider.complete(system, user)
             proposal = json.loads(_extract_json(raw))
-        except Exception as error:
-            return {"status": "no_change", "detail": f"the model did not return a usable patch: {error}"}
-        edits = proposal.get("edits") or []
-        if not isinstance(edits, list) or not edits:
-            return {"status": "no_change",
-                    "detail": str(proposal.get("reason") or "the model proposed no edits.")[:300]}
+            edits = proposal.get("edits") or []
+            if not isinstance(edits, list):
+                raise ValueError("edits must be a list")
+            notes["reason"] = str(proposal.get("reason") or brief)[:300]
+            return edits
+
         try:
-            result = selfdev.apply_edits(
-                edits,
-                reason=str(proposal.get("reason") or brief)[:300],
-                agent_id="BM-03",
-                verify=True,
+            outcome = selfdev.apply_with_repair(
+                propose, attempts=MAX_SELF_EDIT_ATTEMPTS, reason=brief[:200], agent_id="BM-03",
             )
         except Exception as error:
             return {"status": "rejected", "detail": str(error)[:400]}
-        if result["status"] == "applied":
+        attempts = outcome.get("history") or []
+        trail = [{"attempt": item.get("attempt"), "status": item.get("status")} for item in attempts]
+        if outcome["status"] == "applied":
+            result = outcome["result"]
             return {
                 "status": "applied",
-                "detail": f"{len(result['files'])} file(s) changed and verified; checkpoint {result['checkpoint_id']}.",
+                "detail": (f"{len(result['files'])} file(s) changed and verified on attempt "
+                           f"{outcome['attempts']}; checkpoint {result['checkpoint_id']}."),
                 "checkpoint_id": result["checkpoint_id"],
                 "files": [item["path"] for item in result["files"]],
                 "tests": (result.get("tests") or {}).get("summary"),
+                "attempts": outcome["attempts"],
+                "trail": trail,
             }
-        return {
-            "status": "rolled_back",
-            "detail": result.get("reason", "verification failed; the change was reverted."),
-            "checkpoint_id": result["checkpoint_id"],
-            "rollback": result.get("rollback"),
-        }
+        last = attempts[-1] if attempts else {}
+        if outcome["status"] == "unrepaired" and last.get("status") in {"proposer_error", "no_change"}:
+            return {"status": "no_change",
+                    "detail": str(notes.get("reason") or last.get("detail")
+                                  or "the model proposed nothing usable")[:300],
+                    "attempts": outcome["attempts"], "trail": trail}
+        if outcome["status"] == "unrepaired" and last.get("status") == "rejected":
+            return {"status": "rejected", "detail": str(last.get("detail"))[:400],
+                    "attempts": outcome["attempts"], "trail": trail}
+        if outcome["status"] == "unrepaired":
+            return {
+                "status": "rolled_back",
+                "detail": (f"all {outcome['attempts']} attempt(s) failed verification and were rolled back"
+                           + (f": {attempts[-1]['reason']}" if attempts and attempts[-1].get("reason") else ".")),
+                "attempts": outcome["attempts"],
+                "trail": trail,
+                "last_failure": (outcome.get("last_failure") or "")[-600:],
+            }
+        return {"status": "no_change",
+                "detail": str(last.get("detail") or last.get("reason") or "the model proposed no edits.")[:300],
+                "attempts": outcome["attempts"], "trail": trail}
 
     def _run_agent(self, agent: AgentSpec, brief: str, recorded: list[AgentRun]) -> AgentRun:
         system, user = _agent_prompt(agent, brief, build_digest(recorded))

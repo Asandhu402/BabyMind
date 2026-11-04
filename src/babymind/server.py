@@ -340,6 +340,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/model/hardware":
             from .hardware import hardware_report
             self.send_json(hardware_report(DATA_HOME))
+        elif path == "/api/sandbox":
+            from .sandbox import status as sandbox_status
+            self.send_json(sandbox_status(probe=False))
         elif path == "/api/dev/status":
             from .selfdev import status as selfdev_status
             self.send_json(selfdev_status())
@@ -727,10 +730,51 @@ class Handler(BaseHTTPRequestHandler):
                     test_timeout=min(int(payload.get("test_timeout", 300) or 300), 600),
                 )
                 self.send_json(result, 201 if result["status"] == "applied" else 200)
+            elif path == "/api/dev/repair":
+                from .orchestrator import _extract_json
+                from .selfdev import apply_with_repair
+
+                brief = str(payload.get("brief", "")).strip()
+                if not brief:
+                    raise ValueError("Describe the change you want the engine to make.")
+                attempts = max(1, min(int(payload.get("attempts", 2) or 2), 3))
+                provider = COORDINATOR.provider
+                system = (
+                    "You are BabyMind's Coding Agent working on its own source tree. Return ONLY JSON: "
+                    '{"reason": "...", "edits": [{"path": "src/babymind/example.py", '
+                    '"content": "full file contents"}]}. Paths are relative to the project; never target '
+                    ".git, state/, keys, databases or binaries. If no safe change is possible return "
+                    '{"reason": "...", "edits": []}.'
+                )
+
+                def propose(attempt: int, failure: str):
+                    user = f"BRIEF:\n{brief}"
+                    if failure:
+                        user += ("\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. The verification output was:\n"
+                                 + failure + "\nReturn a corrected patch that fixes exactly this failure.")
+                    proposal = json.loads(_extract_json(provider.complete(system, user)))
+                    edits = proposal.get("edits") or []
+                    if not isinstance(edits, list):
+                        raise ValueError("the model did not return a list of edits")
+                    return edits
+
+                outcome = apply_with_repair(
+                    propose,
+                    attempts=attempts,
+                    reason=brief[:200],
+                    agent_id="BM-03",
+                    verify=True,
+                    test_timeout=600,
+                )
+                self.send_json(outcome, 201 if outcome["status"] == "applied" else 200)
             elif path == "/api/dev/rollback":
                 from .selfdev import rollback
                 self.send_json(rollback(str(payload.get("checkpoint_id", "")),
                                         agent_id=str(payload.get("agent_id", "BM-47"))))
+            elif path == "/api/sandbox/self-test":
+                from .sandbox import self_test
+                from .selfdev import dev_root
+                self.send_json(self_test(dev_root()))
             elif path == "/api/dev/tests":
                 from .selfdev import run_tests
                 self.send_json(run_tests(timeout=min(int(payload.get("timeout", 300) or 300), 600)))

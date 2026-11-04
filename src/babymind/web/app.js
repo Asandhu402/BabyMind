@@ -227,7 +227,8 @@ async function loadWorkspaceReadiness(){
     const report=await api("/api/workspace/readiness");
     const fileAccess=report.native_workspace.file_actions_enabled;
     const sandbox=report.project_execution.sandbox_available;
-    status.textContent="Not release-ready · workspace access "+(fileAccess?"enabled":"disabled")+" · test sandbox "+(sandbox?"available":"not implemented");
+    const backend=report.project_execution.sandbox_backend||"none";
+    status.textContent="Not release-ready · workspace access "+(fileAccess?"enabled":"disabled")+" · test sandbox "+(sandbox?"available ("+backend+")":"not implemented on this platform");
     details.innerHTML=report.blockers.map(item=>"<li>"+escapeHTML(item)+"</li>").join("");
     details.setAttribute("aria-label","Remaining BabyMind release blockers");
   }catch(error){

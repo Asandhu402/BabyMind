@@ -467,7 +467,8 @@ def apply_edits(
     # change introduces can never be mistaken for a pre-existing one.
     baseline = load_test_baseline()
     if verify and baseline is None:
-        baseline = _record_baseline(root, runner.run_unit_tests(root, timeout=test_timeout)["summary"])
+        baseline = _record_baseline(
+            root, runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())["summary"])
     snapshot = checkpoint(
         label=f"pre-apply: {reason or 'self-development'}",
         reason=reason,
@@ -497,14 +498,14 @@ def apply_edits(
     manifest_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     purge_bytecode(root)
-    compile_result = runner.run_compile_check(root)
+    compile_result = runner.run_compile_check(root, sandbox=sandbox_mode())
     tests_result = None
     failure = ""
     if not compile_result["ok"]:
         failure = "compile check failed"
     elif verify:
         purge_bytecode(root)  # never verify against stale bytecode
-        tests_result = runner.run_unit_tests(root, timeout=test_timeout)
+        tests_result = runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())
         summary = tests_result["summary"]
         # A pre-existing broken test in this environment must not block every
         # change forever; only a *new* problem counts as a regression.
@@ -530,6 +531,7 @@ def apply_edits(
             "checkpoint_id": snapshot["id"],
             "compile": compile_result,
             "tests": tests_result,
+            "sandboxed": bool(tests_result and tests_result.get("sandboxed")),
             "rollback": restore,
             "notice": "The change failed verification and was reverted automatically.",
         }
@@ -548,6 +550,7 @@ def apply_edits(
         "compile": compile_result,
         "tests": tests_result,
         "baseline": load_test_baseline(),
+        "sandboxed": bool(tests_result and tests_result.get("sandboxed")),
         "notice": (
             "Change applied and verified against the project's own test suite baseline. "
             f"Roll back with checkpoint {snapshot['id']} if needed."
@@ -582,7 +585,7 @@ def purge_bytecode(root: Path) -> int:
 
 def run_tests(timeout: int = 300) -> dict:
     root = dev_root()
-    result = runner.run_unit_tests(root, timeout=timeout)
+    result = runner.run_unit_tests(root, timeout=timeout, sandbox=sandbox_mode())
     _append_audit(root, {"action": "run_tests", "passed": result["summary"]["passed"],
                          "ran": result["summary"]["ran"]})
     return result
@@ -609,6 +612,12 @@ def status() -> dict:
         "automatic_rollback": enabled,
         "requires_per_change_approval": False,
         "isolation": runner.isolation_report(),
+        "sandbox": {
+            "mode": sandbox_mode(),
+            **{key: value for key, value in
+               __import__("babymind.sandbox", fromlist=["status"]).status().items()
+               if key in {"backend", "available", "verified", "detail"}},
+        },
         "limits": {
             "files_per_transaction": MAX_FILES_PER_EDIT,
             "file_bytes": MAX_FILE_BYTES,
@@ -650,6 +659,99 @@ def read_file(relative: str) -> dict:
     if b"\x00" in data:
         raise SelfDevError("This looks like a binary file.")
     return {"path": relative, "bytes": size, "content": data.decode("utf-8", errors="replace")}
+
+
+def sandbox_mode() -> str:
+    """off | auto | require, from BABYMIND_SANDBOX (default auto)."""
+    value = os.getenv("BABYMIND_SANDBOX", "auto").strip().lower()
+    return value if value in {"off", "auto", "require"} else "auto"
+
+
+def failure_context(result: dict, limit: int = 2_500) -> str:
+    """Extract the part of a failed verification a repair attempt needs to see."""
+    tests = result.get("tests") or {}
+    output = (tests.get("stderr") or "") + (tests.get("stdout") or "")
+    if not output:
+        compile_result = result.get("compile") or {}
+        output = (compile_result.get("stderr") or "") + (compile_result.get("stdout") or "")
+    return output[-limit:]
+
+
+def apply_with_repair(
+    propose,
+    *,
+    attempts: int = 2,
+    reason: str = "",
+    agent_id: str = "BM-03",
+    verify: bool = True,
+    test_timeout: int = 300,
+) -> dict:
+    """Apply a change, and let the proposer repair it after a rollback.
+
+    ``propose(attempt, failure_output)`` returns a list of edits or falsy to stop.
+    Every attempt still goes through checkpoint -> write -> compile -> test ->
+    keep or automatic rollback. Nothing is applied because a retry was promised;
+    it is applied because verification passed.
+    """
+    root = dev_root()
+    require("repo.write", agent_id)
+    if not selfdev_enabled():
+        raise SelfDevError("Self-development is disabled by configuration.")
+    attempts = max(1, min(int(attempts), 5))
+    history: list[dict] = []
+    context = ""
+    for attempt in range(1, attempts + 1):
+        try:
+            edits = propose(attempt, context)
+        except Exception as error:
+            history.append({"attempt": attempt, "status": "proposer_error",
+                            "detail": str(error)[:400]})
+            _append_audit(root, {"action": "repair_proposer_error", "attempt": attempt,
+                                 "error": str(error)[:400]})
+            break
+        if not edits:
+            history.append({"attempt": attempt, "status": "no_change",
+                            "detail": "the proposer returned no edits"})
+            break
+        try:
+            result = apply_edits(
+                edits,
+                reason=f"{reason} (attempt {attempt}/{attempts})".strip(),
+                agent_id=agent_id,
+                verify=verify,
+                test_timeout=test_timeout,
+            )
+        except SelfDevError as error:
+            history.append({"attempt": attempt, "status": "rejected", "detail": str(error)[:400]})
+            break
+        history.append({
+            "attempt": attempt,
+            "status": result["status"],
+            "checkpoint_id": result.get("checkpoint_id"),
+            "files": [item["path"] for item in result.get("files", [])],
+            "reason": result.get("reason", ""),
+            "sandboxed": result.get("sandboxed", False),
+        })
+        if result["status"] == "applied":
+            _append_audit(root, {"action": "repair_succeeded", "attempts": attempt,
+                                 "checkpoint": result.get("checkpoint_id")})
+            return {
+                "status": "applied",
+                "attempts": attempt,
+                "history": history,
+                "result": result,
+                "notice": f"Applied and verified on attempt {attempt} of {attempts}.",
+            }
+        context = failure_context(result)
+    _append_audit(root, {"action": "repair_unresolved", "attempts": len(history),
+                         "reason": reason[:200]})
+    return {
+        "status": "unrepaired",
+        "attempts": len(history),
+        "history": history,
+        "last_failure": context[-1_000:],
+        "notice": "Every attempt failed verification and was rolled back; the tree is unchanged.",
+    }
 
 
 def timestamp() -> str:

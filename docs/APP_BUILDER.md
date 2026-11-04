@@ -56,7 +56,12 @@ paths, a non-`.py` entry point, and reusing an app name that already exists.
 
 ## What this is not
 
-- **Not a sandbox.** Generated code runs with your user account's privileges. It can read what you
+- **Sandboxed where the platform allows it.** Build steps and test runs go
+  through `runner.py` with `BABYMIND_SANDBOX=auto`: on Linux they execute inside
+  the namespaced chroot, with no network and no access to your home directory. On
+  Windows and macOS there is no backend yet, so they run as ordinary child
+  processes and the result records `sandbox: "unavailable"`.
+- **Not a full sandbox against a hostile model.** Generated code runs with your user account's privileges when no backend exists. It can read what you
   can read and use the network. The containment is the folder, the approval, and the review — not
   an operating-system boundary.
 - **Not a shell.** There is no way to run `cmd`, `powershell`, or an arbitrary program through

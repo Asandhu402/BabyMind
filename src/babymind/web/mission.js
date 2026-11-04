@@ -86,7 +86,9 @@
         ? `Running · ${mission.agents_recorded}/50 roles recorded`
         : `${mission.status.toUpperCase()} · ${mission.summary || ""}`;
       if (mission.self_edit) {
-        line += `\nSelf-edit: ${mission.self_edit.status} — ${mission.self_edit.detail || ""}`;
+        const edit = mission.self_edit;
+        const tries = edit.attempts ? ` after ${edit.attempts} attempt(s)` : "";
+        line += `\nSelf-edit: ${edit.status}${tries} — ${edit.detail || ""}`;
       }
       status.textContent = line;
       if (mission.status !== "running") {
@@ -137,8 +139,12 @@
   async function loadSelfDev() {
     try {
       const report = await api("/api/dev/status");
+      const box = report.sandbox || {};
+      const isolation = box.available
+        ? `Verification runs in the ${box.backend} sandbox (no network, system files read-only).`
+        : `No OS sandbox on this platform (${box.detail || "backend unavailable"}); results say so.`;
       selfdevStatus.textContent = report.enabled
-        ? `Enabled · ${report.root} · changes are checkpointed, compiled, tested and auto-rolled back on failure. Audit log ${report.audit.valid ? "intact" : "BROKEN"}.`
+        ? `Enabled · ${report.root} · changes are checkpointed, compiled, tested and auto-rolled back on failure. ${isolation} Audit log ${report.audit.valid ? "intact" : "BROKEN"}.`
         : `Disabled${report.problem ? " · " + report.problem : ""}. Set BABYMIND_SELF_DEVELOPMENT_ENABLED=true in a source checkout.`;
       checkpointList.innerHTML = (report.checkpoints || []).map((item) =>
         `<div class="checkpoint-row"><span><strong>${escapeHTML(item.label || item.id)}</strong><small>${escapeHTML(item.created_at || "")} · ${item.file_count} files</small></span>

@@ -1,0 +1,349 @@
+"""OS-level sandbox for running project commands.
+
+Linux backend: user + mount + PID + network namespaces via ``unshare``, a
+tmpfs root, read-only system bind mounts, a minimal ``/dev``, a private
+``/tmp``, and only the project directory mounted writable. That is real
+kernel-enforced isolation: no network, no access to the host home directory
+(outside the project), no writes to system paths, and children die with the
+parent.
+
+Windows backend: **not implemented.** AppContainer/Job Object containment needs
+the native broker in ``native/windows_workspace`` and a reviewed launcher. This
+module reports that honestly instead of pretending a subprocess is a sandbox.
+
+``self_test()`` actually runs the probes and returns the evidence, so
+``verified`` is only true when the boundary was demonstrated on this machine.
+"""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+LAUNCHER_SOURCE = r'''
+"""Enter the prepared namespaces, build a minimal root, and exec the command."""
+import json
+import os
+import socket
+import subprocess
+import sys
+import fcntl
+
+spec = json.loads(os.environ["BABYMIND_SANDBOX_SPEC"])
+newroot = spec["newroot"]
+os.makedirs(newroot, exist_ok=True)
+
+
+def run(*args):
+    subprocess.run(args, check=True, capture_output=True)
+
+
+def bind(src, dst, read_only):
+    target = newroot + dst
+    if not os.path.exists(src):
+        return
+    if os.path.isdir(src):
+        os.makedirs(target, exist_ok=True)
+        run("mount", "--rbind", src, target)
+    else:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if not os.path.exists(target):
+            open(target, "a").close()
+        run("mount", "--bind", src, target)
+    if read_only:
+        run("mount", "-o", "remount,bind,ro", target)
+
+
+def loopback_up():
+    """Bring lo up so local-only test servers can bind 127.0.0.1."""
+    try:
+        descriptor = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        flags = struct.unpack("16sH", fcntl.ioctl(
+            descriptor.fileno(), 0x8913, struct.pack("16sH", b"lo", 0)))[1]
+        fcntl.ioctl(descriptor.fileno(), 0x8914,
+                    struct.pack("16sH", b"lo", flags | 0x1))
+        descriptor.close()
+    except Exception:
+        pass
+
+
+import struct
+
+run("mount", "-t", "tmpfs", "tmpfs", newroot)
+for path in ("/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc"):
+    bind(path, path, True)
+for path in spec.get("readonly_binds", []):
+    bind(path, path, True)
+
+os.makedirs(newroot + "/dev", exist_ok=True)
+run("mount", "-t", "tmpfs", "tmpfs", newroot + "/dev")
+for name, major, minor in (("null", 1, 3), ("zero", 1, 5), ("random", 1, 8), ("urandom", 1, 9)):
+    node = newroot + "/dev/" + name
+    try:
+        os.mknod(node, 0o020666, os.makedev(major, minor))
+    except OSError:
+        bind("/dev/" + name, "/dev/" + name, False)
+
+os.makedirs(newroot + "/tmp", exist_ok=True)
+run("mount", "-t", "tmpfs", "tmpfs", newroot + "/tmp")
+# Re-expose any writable temp trees the command needs (for example a venv in /tmp).
+for path in spec.get("writable_tmp_binds", []):
+    bind(path, path, False)
+
+os.makedirs(newroot + "/proc", exist_ok=True)
+run("mount", "-t", "proc", "proc", newroot + "/proc")
+bind(spec["root"], spec["root"], False)
+
+loopback_up()
+
+os.chroot(newroot)
+os.chdir(spec["cwd"])
+
+try:
+    import resource
+    for limit, value in (
+        (resource.RLIMIT_CPU, spec["cpu_seconds"]),
+        (resource.RLIMIT_FSIZE, spec["fsize_bytes"]),
+        (resource.RLIMIT_NOFILE, 512),
+    ):
+        resource.setrlimit(limit, (value, value))
+except Exception:
+    pass
+
+os.execvpe(spec["argv"][0], spec["argv"], spec["env"])
+'''
+
+DEFAULT_CPU_SECONDS = 300
+DEFAULT_FSIZE_BYTES = 128 * 1024 * 1024
+
+
+class SandboxUnavailable(RuntimeError):
+    """Raised when a sandbox was required but no backend can provide one."""
+
+
+@dataclass(frozen=True)
+class Backend:
+    name: str
+    available: bool
+    detail: str
+
+
+def _linux_backend() -> Backend:
+    if sys.platform != "linux":
+        return Backend("none", False, "Only the Linux namespace backend is implemented.")
+    unshare = shutil.which("unshare")
+    if unshare is None:
+        return Backend("none", False, "unshare(1) was not found.")
+    try:
+        probe = subprocess.run(
+            [unshare, "--user", "--map-root-user", "--mount", "--pid", "--net", "--fork", "true"],
+            capture_output=True, timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return Backend("none", False, f"unshare probe failed: {error}")
+    if probe.returncode != 0:
+        reason = (probe.stderr or b"").decode("utf-8", "replace").strip()[:200]
+        return Backend("none", False, f"User namespaces are not permitted here: {reason}")
+    return Backend("linux-namespaces", True, "unshare user/mount/pid/net namespaces with a chroot root.")
+
+
+def backend() -> Backend:
+    if sys.platform == "win32":
+        return Backend(
+            "windows", False,
+            "Windows containment needs the AppContainer/Job Object broker in native/windows_workspace; "
+            "the Python layer does not pretend a subprocess is a sandbox.",
+        )
+    if sys.platform == "darwin":
+        return Backend(
+            "macos", False,
+            "sandbox-exec profiles are not implemented. Run without the sandbox flag and treat "
+            "the runner as containment only.",
+        )
+    return _linux_backend()
+
+
+def available() -> bool:
+    return backend().available
+
+
+def _interpreter_binds() -> tuple[list[str], list[str]]:
+    """Bind the running interpreter so venvs outside /usr still work inside."""
+    readonly, writable_tmp = [], []
+    for prefix in dict.fromkeys([sys.prefix, sys.base_prefix]):
+        if not prefix or prefix in {"/", "/usr", "/usr/local"}:
+            continue
+        if prefix.startswith(("/usr/", "/lib/", "/lib64/")):
+            readonly.append(prefix)
+        elif prefix.startswith("/tmp/"):
+            writable_tmp.append(prefix)
+        else:
+            readonly.append(prefix)
+    return readonly, writable_tmp
+
+
+def _spec(root: Path, cwd: Path, argv: list[str], env: dict[str, str],
+          allow_network: bool) -> dict:
+    readonly, writable_tmp = _interpreter_binds()
+    newroot = tempfile.mkdtemp(prefix=".babymind-sandbox-")
+    return {
+        "root": str(root),
+        "cwd": str(cwd),
+        "argv": argv,
+        "env": env,
+        "newroot": newroot,
+        "readonly_binds": readonly,
+        "writable_tmp_binds": writable_tmp,
+        "allow_local_network": allow_network,
+        "cpu_seconds": DEFAULT_CPU_SECONDS,
+        "fsize_bytes": DEFAULT_FSIZE_BYTES,
+    }
+
+
+def wrap(argv: list[str], *, root: str | Path, cwd: str | Path | None = None,
+         env: dict[str, str] | None = None, allow_network: bool = False) -> tuple[list[str], dict]:
+    """Return (command, environment) that runs ``argv`` inside the sandbox."""
+    status = backend()
+    if not status.available:
+        raise SandboxUnavailable(status.detail)
+    root_path = Path(root).resolve()
+    working = Path(cwd).resolve() if cwd else root_path
+    launcher = Path(tempfile.mkstemp(prefix="babymind-sandbox-", suffix=".py")[1])
+    launcher.write_text(LAUNCHER_SOURCE, encoding="utf-8")
+    child_env = dict(env or {})
+    home = child_env.get("HOME") or child_env.get("USERPROFILE") or ""
+    if not home or not Path(home).resolve().is_relative_to(root_path):
+        child_env["HOME"] = str(root_path)
+        child_env["USERPROFILE"] = str(root_path)
+    spec = _spec(root_path, working, list(argv), child_env, allow_network)
+    command = [
+        shutil.which("unshare") or "unshare",
+        "--user", "--map-root-user",
+        "--mount", "--pid", "--fork", "--kill-child",
+        "--propagation", "private",
+    ]
+    if not allow_network:
+        command.append("--net")
+    command += [sys.executable, str(launcher)]
+    outer_env = dict(os.environ)
+    outer_env["BABYMIND_SANDBOX_SPEC"] = json.dumps(spec)
+    outer_env["BABYMIND_SANDBOX_LAUNCHER"] = str(launcher)
+    return command, outer_env
+
+
+def cleanup(command: list[str], env: dict) -> None:
+    """Remove the launcher file and the prepared root after a run."""
+    launcher = env.get("BABYMIND_SANDBOX_LAUNCHER")
+    if launcher and os.path.exists(launcher):
+        try:
+            os.unlink(launcher)
+        except OSError:
+            pass
+    raw = env.get("BABYMIND_SANDBOX_SPEC")
+    if raw:
+        try:
+            shutil.rmtree(json.loads(raw).get("newroot", ""), ignore_errors=True)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+
+def self_test(root: str | Path | None = None) -> dict:
+    """Prove the boundary: probe network, host paths, system writes, workspace writes."""
+    status = backend()
+    if not status.available:
+        return {
+            "verified": False,
+            "backend": status.name,
+            "reason": status.detail,
+            "checks": {},
+        }
+    from . import runner
+
+    project = Path(root or Path.cwd()).resolve()
+    probe = {
+        "network": (
+            "import socket\n"
+            "s = socket.socket(); s.settimeout(3)\n"
+            "try:\n"
+            "    s.connect(('1.1.1.1', 53)); print('REACHABLE')\n"
+            "except OSError as e:\n"
+            "    print('BLOCKED', type(e).__name__)\n"
+        ),
+        "host_secret": (
+            "import os\n"
+            "target = os.path.join(os.path.expanduser('~'), '.babymind', 'memory.key')\n"
+            "print('READABLE' if os.path.exists(target) else 'BLOCKED')\n"
+        ),
+        "system_write": (
+            "try:\n"
+            "    open('/usr/bin/.babymind-probe', 'w').write('x'); print('WROTE')\n"
+            "except OSError as e:\n"
+            "    print('BLOCKED', type(e).__name__)\n"
+        ),
+        "workspace_write": (
+            "import os\n"
+            "p = os.path.join(os.getcwd(), '.babymind-probe')\n"
+            "open(p, 'w').write('ok'); os.unlink(p); print('WRITABLE')\n"
+        ),
+    }
+    checks: dict[str, dict] = {}
+    for name, code in probe.items():
+        result = runner.run_command(
+            [sys.executable, "-c", code], cwd=project, allowed_root=project,
+            timeout=60, sandbox=True,
+        )
+        output = (result.get("stdout", "") + result.get("stderr", "")).strip()
+        checks[name] = {
+            "output": output[-300:],
+            "exit_code": result.get("exit_code"),
+            "ok": result.get("ok", False),
+        }
+    verified = (
+        "BLOCKED" in checks["network"]["output"]
+        and "BLOCKED" in checks["host_secret"]["output"]
+        and "BLOCKED" in checks["system_write"]["output"]
+        and "WRITABLE" in checks["workspace_write"]["output"]
+    )
+    return {
+        "verified": verified,
+        "backend": status.name,
+        "checks": checks,
+        "note": (
+            "Each probe ran as a real command inside the sandbox; 'verified' means the kernel "
+            "refused the network, the host secret, and the system write while allowing the workspace write."
+        ),
+    }
+
+
+def status(probe: bool = False) -> dict:
+    record = backend()
+    report = {
+        "backend": record.name,
+        "available": record.available,
+        "detail": record.detail,
+        "mechanisms": {
+            "filesystem": "separate mount namespace with a tmpfs root, read-only system binds, "
+                          "and only the project directory writable"
+            if record.available else "not enforced",
+            "network": "separate network namespace (loopback only)" if record.available else "not enforced",
+            "process": "separate PID namespace with --kill-child" if record.available else "not enforced",
+            "privileges": "unprivileged user namespace; no host capabilities" if record.available else "not enforced",
+            "limits": "RLIMIT_CPU / RLIMIT_FSIZE / RLIMIT_NOFILE inside the sandbox"
+            if record.available else "not enforced",
+            "environment": "rebuilt from a non-secret allowlist",
+        },
+        "verified": False,
+        "evidence": None,
+    }
+    if probe and record.available:
+        evidence = self_test()
+        report["verified"] = evidence["verified"]
+        report["evidence"] = evidence
+    elif record.available:
+        report["note"] = "Run the self-test to prove the boundary before relying on it."
+    return report

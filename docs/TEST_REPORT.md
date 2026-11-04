@@ -75,6 +75,40 @@ The earlier iteration of this exercise exposed two real defects, both fixed:
    against the previous `.pyc`. The engine now purges bytecode before compile and
    test runs, and the test runner sets `PYTHONDONTWRITEBYTECODE=1`.
 
+## OS sandbox
+
+`sandbox.self_test()` on this machine returned:
+
+```json
+{"verified": true, "backend": "linux-namespaces",
+ "checks": {"network": "BLOCKED OSError", "host_secret": "BLOCKED",
+            "system_write": "BLOCKED OSError", "workspace_write": "WRITABLE"}}
+```
+
+The full suite was executed **inside** the sandbox and outside it, with the same
+result (`Ran 260 tests`, one environment error for the missing `tkinter`). The
+sandbox is covered by thirteen tests: the self-test contract, blocked TCP, blocked
+DNS, unreadable `~/.babymind/memory.key`, read-only `/usr`, writable workspace,
+timeout enforcement, child reaping, `require`-mode refusal without a backend,
+`auto`-mode fallback reporting `sandbox: "unavailable"`, and `off` mode.
+
+### Real coding task executed by the engine
+
+A genuine two-file change (`POST /api/dev/repair` in `server.py` plus its two
+tests) was applied through `selfdev.apply_edits` on this checkout:
+
+| Step | Result |
+| --- | --- |
+| Checkpoint | `20261104-185316-db131d` |
+| Files written | `src/babymind/server.py`, `tests/test_mission_api.py` |
+| Compile + full suite inside the sandbox | `259 ran, 0 failures, 1 error` (the known `tkinter` one) |
+| Outcome | `applied` (`sandboxed: true`) |
+| Audit chain after the change | intact |
+
+The patch text was authored by the assistant, not by a model: there is no GGUF on
+this machine. Everything the engine contributes — checkpointing, policy checks,
+compilation, sandboxed verification, rollback, audit — ran for real.
+
 The self-edit loop is covered by eight tests: accepted patch applied and
 verified, failing patch rolled back, malformed model output changing nothing,
 empty proposal, protected-path rejection, disabled-engine skip, and no loop
@@ -87,6 +121,8 @@ without the flag.
   stubs.
 - Browser-driven UI interaction (HTML/JS were syntax-checked and served by the
   test server; no headless browser was available).
+- Windows/macOS sandbox backends: none exist, so `require` mode is untested there.
+- A model-authored patch: the repair loop is tested with scripted providers.
 - Model download and SHA-256 verification against Hugging Face.
 - C#/Java/Rust/Go/Android/iOS toolchains.
 

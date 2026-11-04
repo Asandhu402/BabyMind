@@ -13,7 +13,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from babymind import server
+from babymind import sandbox, server
 
 
 class BabyMindWebTests(unittest.TestCase):
@@ -792,7 +792,7 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(report["model_engine"], "llama.cpp")
         self.assertFalse(report["release_ready"])
         self.assertFalse(report["native_workspace"]["file_actions_enabled"])
-        self.assertFalse(report["project_execution"]["sandbox_available"])
+        self.assertEqual(report["project_execution"]["sandbox_available"], sandbox.available())
         self.assertIn("read-only readiness report", report["notice"])
 
 

@@ -61,6 +61,7 @@ def runner_status() -> dict:
         "environment": "scrubbed to a fixed allowlist of non-secret variables",
         "working_directory": "must be inside the caller's allowed root",
         "isolation": isolation_report(),
+        "os_sandbox": __import__("babymind.sandbox", fromlist=["status"]).status(),
     }
 
 
@@ -176,6 +177,13 @@ def _terminate(process: subprocess.Popen) -> None:
         process.kill()
 
 
+def _sandbox_mode(value: bool | str) -> str:
+    if isinstance(value, bool):
+        return "require" if value else "off"
+    text = str(value or "off").strip().lower()
+    return text if text in {"off", "auto", "require"} else "off"
+
+
 def run_command(
     argv: list[str],
     *,
@@ -183,8 +191,14 @@ def run_command(
     allowed_root: str | Path | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     env: dict[str, str] | None = None,
+    sandbox: bool | str = False,
 ) -> dict:
-    """Run one allowlisted command and return a structured result."""
+    """Run one allowlisted command and return a structured result.
+
+    ``sandbox`` is ``off``, ``auto`` (use an OS sandbox when one is available),
+    or ``require`` (fail when it is not). The sandbox wraps the same command; it
+    does not bypass the allowlist, the working-directory boundary, or the timeout.
+    """
     try:
         seconds = int(timeout)
     except (TypeError, ValueError) as error:
@@ -196,12 +210,34 @@ def run_command(
     executable = _resolve_executable(clean)
     working = _resolve_cwd(cwd, allowed_root)
     command = [executable, *clean[1:]]
+    child_env = _scrubbed_environment(env)
+
+    mode = _sandbox_mode(sandbox)
+    sandboxed = False
+    sandbox_cleanup: dict | None = None
+    if mode != "off":
+        from . import sandbox as sandboxing
+
+        if sandboxing.available():
+            command, outer_env = sandboxing.wrap(
+                command, root=allowed_root or working, cwd=working, env=child_env,
+            )
+            child_env = outer_env
+            sandbox_cleanup = outer_env
+            sandboxed = True
+        elif mode == "require":
+            raise CommandRejected(
+                "An OS sandbox is required for this command but no backend is available: "
+                + sandboxing.backend().detail
+            )
+        else:
+            mode = "unavailable"
 
     started = time.monotonic()
     process = subprocess.Popen(
         command,
         cwd=str(working),
-        env=_scrubbed_environment(env),
+        env=child_env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -224,6 +260,10 @@ def run_command(
             stdout, stderr = process.communicate(timeout=10)
         except subprocess.TimeoutExpired:  # pragma: no cover - stubborn child
             stdout, stderr = "", ""
+    finally:
+        if sandbox_cleanup is not None:
+            from . import sandbox as sandboxing
+            sandboxing.cleanup(command, sandbox_cleanup)
     duration = round(time.monotonic() - started, 2)
     return {
         "argv": clean,
@@ -236,6 +276,8 @@ def run_command(
         "stderr": (stderr or "")[-MAX_OUTPUT_CHARS:],
         "truncated": len(stdout or "") > MAX_OUTPUT_CHARS or len(stderr or "") > MAX_OUTPUT_CHARS,
         "ok": (not timed_out) and process.returncode == 0,
+        "sandbox": mode,
+        "sandboxed": sandboxed,
     }
 
 
@@ -244,7 +286,7 @@ def venv_python() -> str:
     return sys.executable
 
 
-def run_unit_tests(root: str | Path, *, timeout: int = 300) -> dict:
+def run_unit_tests(root: str | Path, *, timeout: int = 300, sandbox: bool | str = False) -> dict:
     """Run the repository's unittest suite from a source checkout."""
     root = Path(root).resolve()
     # unittest requires the discovery start directory to be importable when the
@@ -256,16 +298,17 @@ def run_unit_tests(root: str | Path, *, timeout: int = 300) -> dict:
         allowed_root=root,
         timeout=timeout,
         env={"PYTHONPATH": str(root / "src"), "PYTHONDONTWRITEBYTECODE": "1"},
+        sandbox=sandbox,
     )
     result["summary"] = _summarise_unittest(result)
     return result
 
 
-def run_compile_check(root: str | Path, *, timeout: int = 120) -> dict:
+def run_compile_check(root: str | Path, *, timeout: int = 120, sandbox: bool | str = False) -> dict:
     root = Path(root).resolve()
     return run_command(
         [venv_python(), "-m", "compileall", "-q", "src", "tests"],
-        cwd=root, allowed_root=root, timeout=timeout,
+        cwd=root, allowed_root=root, timeout=timeout, sandbox=sandbox,
     )
 
 

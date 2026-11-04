@@ -69,9 +69,28 @@ Every write to BabyMind's own source follows the same path:
 The audit log (`state/dev-audit.jsonl`) is append-only and hash-chained; the UI
 and `babymind selfdev` report whether the chain is intact.
 
+### Repair attempts
+
+A single failed patch used to end the loop. It now gets a bounded second chance.
+`selfdev.apply_with_repair()` keeps calling the proposer with the tail of the
+failed verification output, up to `MAX_SELF_EDIT_ATTEMPTS` (2) attempts. Each
+attempt is a full transaction: checkpoint, write, compile, test, keep or roll
+back. Two failed attempts leave the tree byte-identical and the audit log records
+`repair_unresolved`. The mission's `self_edit` report carries the per-attempt
+trail (`rolled_back`, then `applied`), so a repaired patch is visible as a
+repair rather than as a first-time success.
+
+The same loop is exposed over HTTP as `POST /api/dev/repair` with
+`{"brief": "...", "attempts": 2}`, and it drives the mission's closing
+self-edit. The proposer is always the shared local model; no attempt is applied
+without passing verification.
+
 ### What self-development does not guarantee
 
-- It is not a sandbox. Generated or imported code runs with your privileges.
+- Verification runs inside the OS sandbox described below, so a failed patch
+  cannot reach your keys, the network, or system files while it is being tested.
+  The sandbox is still not a defence against a malicious *model*, only against
+  the code it writes.
 - It does not understand its own architecture magically. The model proposes; the
   test suite decides.
 - It cannot recover a change that passes the tests but is wrong. Tests are
@@ -88,10 +107,33 @@ environment to non-secret variables, caps output at 40,000 characters, and kills
 the process tree on timeout. On POSIX it also sets CPU, file-size, and
 open-file rlimits.
 
-It reports `os_sandbox: false` and `network_isolation: false` because neither is
-true. A same-user subprocess is not a security boundary. Untrusted third-party
-code should not be executed through it; that needs a real sandbox that this
-project has not built.
+Every command, compile check, and test run goes through `sandbox.py` when a
+backend exists (`BABYMIND_SANDBOX=auto` by default, `require` to fail closed,
+`off` to disable). On Linux the backend is real:
+
+- `unshare --user --map-root-user --mount --pid --fork --kill-child --net`, a
+  generated launcher, then `chroot` into a fresh tmpfs root.
+- `/usr`, `/lib`, `/lib64`, `/bin`, `/sbin`, `/etc` and the interpreter prefix are
+  bind-mounted **read-only**; only the project root is writable.
+- A private network namespace with nothing but loopback, so DNS and outbound
+  connections fail with `OSError`.
+- `/proc` is a fresh procfs; `/dev` holds `null`, `zero`, `random`, `urandom`;
+  `/tmp` is an empty tmpfs.
+- RLIMIT_CPU (300 s), RLIMIT_FSIZE (128 MB) and RLIMIT_NOFILE are set, the pid
+  namespace kills leftover children, and the launcher file is removed in a
+  `finally` block.
+
+`GET /api/sandbox` reports the backend and mechanisms; `POST
+/api/sandbox/self-test` runs four live probes (network, host secret, system
+write, workspace write) and returns the raw output. On macOS and Windows the
+backend reports **unavailable** with an explanation instead of pretending: no
+AppContainer/Job Object backend has been written yet, and `require` mode refuses
+to run rather than falling back silently.
+
+Two honest limits. Nested user namespaces are not permitted on this kernel, so a
+test run started from inside the sandbox reports the backend unavailable and
+falls back to a plain child process — still inside the outer namespace, but not a
+second layer of isolation. And the limits are rlimits, not cgroup memory caps.
 
 ## Research and open-source reuse
 

@@ -385,9 +385,10 @@ and runs the generated Python entry point once with no shell, a scrubbed environ
 Limits: 40 files, 64 KB per file, 512 KB total, `.py .txt .md .json .csv .html .css .js .toml .ini
 .cfg .yaml .yml .svg` only, no absolute paths, drive letters, `..`, hidden files, or symlinks.
 
-Generated code runs with your user account's privileges and can use the network; this is folder
-containment and explicit approval, not an OS sandbox. Read what was written before running it
-again. The unrelated workspace file broker in `approval.py` stays disabled. See
+On Linux the generated entry point runs inside the namespace sandbox described below (no network,
+read-only system files, only the project writable). On Windows and macOS no backend exists yet, so
+it runs with your user account's privileges and the result says `sandbox: "unavailable"`. Read what
+was written before running it again. The unrelated workspace file broker in `approval.py` stays disabled. See
 [docs/APP_BUILDER.md](docs/APP_BUILDER.md).
 
 ## Mission control: all 50 roles
@@ -421,7 +422,9 @@ Self-development**, or use the API:
 | `GET /api/dev/status` | Truthful capability report, isolation, audit-chain state |
 | `POST /api/dev/preview` | Unified diff for a proposed transaction, writes nothing |
 | `POST /api/dev/apply` | Checkpoint → write → compile → test → keep or auto-rollback |
+| `POST /api/dev/repair` | Model-proposed patch with up to N repair attempts after a rollback |
 | `POST /api/dev/rollback` | Restore a checkpoint and remove files it created |
+| `GET /api/sandbox`, `POST /api/sandbox/self-test` | Backend/mechanism report and four live isolation probes |
 | `POST /api/dev/tests` | Run the project test suite |
 | `GET /api/dev/tree`, `GET /api/dev/file?path=` | Read-only source inspection |
 
@@ -430,8 +433,19 @@ the repository's own unittest suite, and reverted automatically on failure. The
 audit log (`state/dev-audit.jsonl`) is append-only and hash-chained; `babymind
 selfdev` reports whether the chain is intact.
 
-This engine is **not a sandbox**, and it does not claim to be: it runs with your
-user account's privileges. See [docs/AUTONOMY.md](docs/AUTONOMY.md), [docs/TEST_REPORT.md](docs/TEST_REPORT.md), and
+A failed patch gets a bounded second chance: the proposer sees the failed
+verification output and may resubmit, twice at most, each attempt checkpointed
+and verified independently.
+
+Verification is not a lie about isolation either. On Linux every command,
+compile and test run happens inside `sandbox.py`: user/mount/pid/network
+namespaces, a tmpfs chroot, system paths mounted read-only, only the project
+writable, loopback-only networking, rlimits, and a `finally` cleanup of the
+launcher. `POST /api/sandbox/self-test` proves it in four live probes (network,
+home-directory secret, `/usr` write, workspace write). On Windows and macOS no
+backend is implemented, and the engine says so rather than pretending: the API
+reports `available: false` with the reason, results carry `sandbox:
+"unavailable"`, and `BABYMIND_SANDBOX=require` refuses to run at all. See [docs/AUTONOMY.md](docs/AUTONOMY.md), [docs/TEST_REPORT.md](docs/TEST_REPORT.md), and
 [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
 
 ## Hardware sizing and local models
