@@ -212,7 +212,6 @@ def prepare_local_engine() -> None:
 
     app_dir = _app_directory()
     server = _find_llama_server(app_dir)
-    if server is None and not selected and not getattr(sys, "frozen", False):
     if server is None:
         raise RuntimeError(
             "The llama.cpp runtime is missing. Set BABYMIND_LLAMA_SERVER to a valid "
