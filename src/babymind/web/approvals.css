@@ -2,3 +2,16 @@
 .approval-file-preview{max-height:420px;overflow:auto;margin:10px 0 0;padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--background);color:var(--text-primary);font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}
 
 .approval-file-propose{margin:4px 8px;padding:5px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text-primary);font-size:11px;cursor:pointer}.approval-result li{margin:7px 0;overflow-wrap:anywhere}.approval-result code{font-size:11px}
+
+/* App builder */
+.builder-files { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
+.builder-files li { font-size: 12px; padding: 8px 10px; border: 1px solid var(--line, #2a2f3d); border-radius: 8px; }
+.builder-files li span { color: var(--muted, #8b93a7); margin-left: 8px; }
+.builder-files details { margin-top: 6px; }
+.builder-files pre, .builder-output {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; white-space: pre-wrap; word-break: break-word;
+  background: rgba(0, 0, 0, .28); border-radius: 8px; padding: 10px; margin: 0;
+  max-height: 260px; overflow: auto;
+}
+.builder-output { margin-top: 10px; }

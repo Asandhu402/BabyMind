@@ -11,9 +11,10 @@ import sys
 
 def workspace_readiness() -> dict:
     """Return the currently supported project-workflow capabilities."""
-    from . import approval
+    from . import approval, builder
 
     workspace_enabled = bool(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
+    app_builder = builder.builder_status()
     return {
         "model_engine": "llama.cpp",
         "coding_assistant": {
@@ -35,6 +36,16 @@ def workspace_readiness() -> dict:
             "sandbox_available": False,
             "network_isolation": False,
             "resource_limits_enforced": False,
+        },
+        "local_app_builder": {
+            "status": "opt_in" if app_builder["ready"] else "disabled",
+            "enabled": app_builder["enabled"],
+            "ready": app_builder["ready"],
+            "root": app_builder["root"],
+            "writes_only_inside_apps_folder": True,
+            "runs_shell_commands": False,
+            "os_sandbox": False,
+            "requires_reviewed_plan_hash": True,
         },
         "release_ready": False,
         "blockers": [

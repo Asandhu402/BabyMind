@@ -298,7 +298,7 @@ Both endpoints remain subject to local/LAN authorization and origin checks.
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. The external coding CLI adapter remains disabled until it supports a verified llama.cpp-native connection; BabyMind will not start it through a different model runtime. The packaged model is an aggressively uncensored community fine-tune, but no
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. The external coding CLI adapter remains disabled until it supports a verified llama.cpp-native connection; BabyMind will not start it through a different model runtime. The separate local app builder (above) is the only capability that writes files and runs generated code, and it is off until you enable it. The packaged model is an aggressively uncensored community fine-tune, but no
 model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
@@ -363,6 +363,28 @@ Voicebox runs as a loopback-only local service. Cognee requires explicit per-not
 Check engine availability without starting models:
 
     babymind integrations
+
+## Build a small app locally (opt-in, disabled by default)
+
+BabyMind can turn a short brief into a working app, write it into a dedicated folder, and run its
+entry point once. Set both variables and restart BabyMind:
+
+    $env:BABYMIND_APP_BUILDER_ENABLED = "true"
+    $env:BABYMIND_BUILDER_ROOT = "C:\Users\you\BabyMindApps"
+
+Open **Settings → App builder**, describe the app, then review the exact plan: every path, its
+size, a preview, and a SHA-256 plan hash. Nothing is written before you approve that hash. On
+approval BabyMind creates `<root>\apps\<slug>\`, writes each file without overwriting anything,
+and runs the generated Python entry point once with no shell, a scrubbed environment, and a
+60-second limit.
+
+Limits: 40 files, 64 KB per file, 512 KB total, `.py .txt .md .json .csv .html .css .js .toml .ini
+.cfg .yaml .yml .svg` only, no absolute paths, drive letters, `..`, hidden files, or symlinks.
+
+Generated code runs with your user account's privileges and can use the network; this is folder
+containment and explicit approval, not an OS sandbox. Read what was written before running it
+again. The unrelated workspace file broker in `approval.py` stays disabled. See
+[docs/APP_BUILDER.md](docs/APP_BUILDER.md).
 
 ## Additional optional local integrations
 
