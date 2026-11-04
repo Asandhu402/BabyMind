@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/babymind-demo.gguf
-          key: babymind-model-79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741
+          key: babymind-model-qwen25-05b-q4km-74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
 
       - name: Restore verified llama.cpp archive cache
         id: llama-cache
@@ -59,7 +59,7 @@ jobs:
         shell: pwsh
         run: |
           $model = Join-Path $env:RUNNER_TEMP "babymind-demo.gguf"
-          $url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/55e05aba5a4e1e2d6c4919753a68941c4ad4cb11/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true"
+          $url = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5db79a29953eb74d5343926648285ec7e67/qwen2.5-0.5b-instruct-q4_k_m.gguf?download=true"
           if (Test-Path -LiteralPath $model -PathType Leaf) {
             Write-Host "Found cached model; verifying SHA-256..."
           } else {
@@ -67,7 +67,7 @@ jobs:
             Invoke-WebRequest -Uri $url -OutFile $model -TimeoutSec 1800
           }
           $actual = (Get-FileHash -LiteralPath $model -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne "79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741") {
+          if ($actual -ne "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db") {
             Remove-Item -LiteralPath $model -Force -ErrorAction SilentlyContinue
             throw "Model SHA-256 verification failed: $actual"
           }
@@ -100,7 +100,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/babymind-demo.gguf
-          key: babymind-model-79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741
+          key: babymind-model-qwen25-05b-q4km-74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
 
       - name: Save verified llama.cpp archive cache
         if: success() && steps.llama-cache.outputs.cache-hit != 'true'

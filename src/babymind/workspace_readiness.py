@@ -1,0 +1,50 @@
+"""Truthful capability reporting for the integrated Windows coding workflow.
+
+This module is intentionally descriptive only: it never enables filesystem or
+process access. The release gates stay closed until their security boundaries
+are implemented and independently verified.
+"""
+from __future__ import annotations
+
+import sys
+
+
+def workspace_readiness() -> dict:
+    """Return the currently supported project-workflow capabilities."""
+    from . import approval
+
+    workspace_enabled = bool(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
+    return {
+        "model_engine": "llama.cpp",
+        "coding_assistant": {
+            "status": "drafting_only",
+            "can_read_workspace": False,
+            "can_modify_files": False,
+            "can_run_commands": False,
+        },
+        "native_workspace": {
+            "status": "experimental_primitives" if sys.platform == "win32" else "windows_only",
+            "file_actions_enabled": workspace_enabled,
+            "production_broker": False,
+            "broker_owned_approval": False,
+            "workspace_acl_provisioning": False,
+            "independent_security_review": False,
+        },
+        "project_execution": {
+            "status": "disabled",
+            "sandbox_available": False,
+            "network_isolation": False,
+            "resource_limits_enforced": False,
+        },
+        "release_ready": False,
+        "blockers": [
+            "Production broker launcher, package verification, and workspace ACL provisioning are incomplete.",
+            "Broker-owned, single-use approval and adversarial Windows security tests are incomplete.",
+            "The coding assistant is not yet connected to authorized workspace read/write operations.",
+            "An OS-enforced project execution sandbox has not been implemented or independently reviewed.",
+        ],
+        "notice": (
+            "This is a read-only readiness report. It does not enable workspace "
+            "access, file changes, command execution, or project test execution."
+        ),
+    }

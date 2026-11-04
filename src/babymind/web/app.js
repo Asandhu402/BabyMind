@@ -36,7 +36,7 @@ function setView(name) {
   $("#sidebar").classList.remove("open");
   if(name==="memory") loadMemory();
   if(name==="tasks") loadTasks();
-  if(name==="settings") loadIntegrations();
+  if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); }
 }
 function renderAgentSelect() {
   $("#agentSelect").innerHTML=state.agents.map(agent=>`<option value="${agent.id}">${agent.id} · ${escapeHTML(agent.name)}</option>`).join("");
@@ -218,6 +218,20 @@ async function exportConversation(){
     const url=URL.createObjectURL(blob);const link=document.createElement("a");
     link.href=url;link.download="babymind-conversation.md";link.click();URL.revokeObjectURL(url);
   }catch(error){toast(error.message);}
+}
+async function loadWorkspaceReadiness(){
+  const status=$("#workspaceReadinessStatus"), details=$("#workspaceReadinessDetails");
+  if(!status||!details)return;
+  try{
+    const report=await api("/api/workspace/readiness");
+    const fileAccess=report.native_workspace.file_actions_enabled;
+    const sandbox=report.project_execution.sandbox_available;
+    status.textContent="Not release-ready · workspace access "+(fileAccess?"enabled":"disabled")+" · test sandbox "+(sandbox?"available":"not implemented");
+    details.innerHTML=report.blockers.map(item=>"<li>"+escapeHTML(item)+"</li>").join("");
+    details.setAttribute("aria-label","Remaining BabyMind release blockers");
+  }catch(error){
+    status.textContent="Unable to verify workspace security gates: "+error.message;
+  }
 }
 async function loadIntegrations(){
   try{

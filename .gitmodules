@@ -1,0 +1,24 @@
+[submodule "vendor/upstream/opencode"]
+	path = vendor/upstream/opencode
+	url = https://github.com/anomalyco/opencode.git
+[submodule "vendor/upstream/atomic-agent"]
+	path = vendor/upstream/atomic-agent
+	url = https://github.com/AtomicBot-ai/atomic-agent.git
+[submodule "vendor/upstream/wincage"]
+	path = vendor/upstream/wincage
+	url = https://github.com/rymorrisj/wincage.git
+[submodule "vendor/upstream/sandbox-runtime"]
+	path = vendor/upstream/sandbox-runtime
+	url = https://github.com/anthropics/sandbox-runtime.git
+[submodule "vendor/upstream/ocbox"]
+	path = vendor/upstream/ocbox
+	url = https://github.com/lucatirel/opencode-local-sandbox.git
+[submodule "vendor/upstream/code-symbol-index"]
+	path = vendor/upstream/code-symbol-index
+	url = https://github.com/hit9/code-symbol-index.git
+[submodule "vendor/upstream/sqlcipher3"]
+	path = vendor/upstream/sqlcipher3
+	url = https://github.com/coleifer/sqlcipher3.git
+[submodule "vendor/upstream/flaui"]
+	path = vendor/upstream/flaui
+	url = https://github.com/FlaUI/FlaUI.git
