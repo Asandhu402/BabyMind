@@ -28,6 +28,14 @@ class ProviderSelectionTests(unittest.TestCase):
         self.assertEqual(payload["temperature"], 0.35)
         self.assertEqual(payload["top_p"], 0.92)
         self.assertEqual(payload["max_tokens"], 1536)
+        self.assertNotIn("chat_template_kwargs", payload)
+
+    def test_llama_cpp_disables_hidden_thinking_in_chat_template(self) -> None:
+        provider = LlamaCppProvider.__new__(LlamaCppProvider)
+        self.assertEqual(
+            provider._request_options(),
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        )
 
     def test_invalid_generation_settings_fail_clearly(self) -> None:
         provider = LMStudioProvider(base_url="http://127.0.0.1:1234/v1", model="local")
