@@ -1,4 +1,4 @@
-"""PyInstaller entry point for the BabyMind Windows desktop app."""
+"""PyInstaller entry point for the BabyMind Linux desktop app."""
 
 from babymind.desktop import main
 
