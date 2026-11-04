@@ -12,6 +12,7 @@
 
 namespace {
 constexpr DWORD kExpectedExit = 30; // valid frame parsed; operation deliberately denied
+constexpr DWORD kExpectedTrailingDataExit = 20; // trailing request rejected
 constexpr DWORD kTimeoutMs = 10000;
 
 struct Handle {
@@ -70,7 +71,9 @@ void put_u32(std::array<uint8_t, 36>& frame, size_t offset, uint32_t value) {
 }
 }
 
-int wmain() {
+int wmain(int argc, wchar_t** argv) {
+    const bool inject_trailing_byte = argc == 2 && std::wstring(argv[1]) == L"--trailing-byte";
+    if (argc > 2 || (argc == 2 && !inject_trailing_byte)) return 64;
     PSID appcontainer_sid = get_or_create_profile();
     if (!appcontainer_sid) {
         std::cerr << "FAIL: unable to create or derive dedicated AppContainer profile.\n";
@@ -175,10 +178,15 @@ int wmain() {
     DWORD written = 0;
     const BOOL sent = WriteFile(parent_output.get(), frame.data(),
                                 static_cast<DWORD>(frame.size()), &written, nullptr);
-    parent_output.reset(); // EOF after exactly one request
+    DWORD trailing_written = 0;
+    const uint8_t trailing_byte = 0xA5;
+    const BOOL trailing_sent = !inject_trailing_byte || WriteFile(
+        parent_output.get(), &trailing_byte, 1, &trailing_written, nullptr);
+    parent_output.reset(); // EOF after the request (or deliberate trailing byte)
     child_input.reset();   // parent retains no child-side read handle
 
-    if (!sent || written != frame.size()) {
+    if (!sent || written != frame.size() || !trailing_sent ||
+        (inject_trailing_byte && trailing_written != 1)) {
         TerminateJobObject(job.get(), 7);
         std::cerr << "FAIL: unable to send bounded IPC request.\n";
         return 7;
@@ -196,12 +204,18 @@ int wmain() {
         std::cerr << "FAIL: unable to read broker exit status.\n";
         return 9;
     }
-    if (exit_code != kExpectedExit) {
+    const DWORD expected_exit = inject_trailing_byte ?
+        kExpectedTrailingDataExit : kExpectedExit;
+    if (exit_code != expected_exit) {
         std::cerr << "FAIL: broker did not validate-and-deny the IPC frame; code="
                   << exit_code << "\n";
         return 10;
     }
-    std::cout << "PASS: capability-free AppContainer; explicit three-handle "
-                 "inheritance allowlist; bounded one-request IPC parsed; operation denied.\n";
+    if (inject_trailing_byte) {
+        std::cout << "PASS: broker rejects trailing IPC data and chained requests.\n";
+    } else {
+        std::cout << "PASS: capability-free AppContainer; explicit three-handle "
+                     "inheritance allowlist; bounded one-request IPC parsed; operation denied.\n";
+    }
     return 0;
 }
