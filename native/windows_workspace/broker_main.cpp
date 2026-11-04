@@ -39,10 +39,22 @@ bool running_in_appcontainer_without_capabilities() {
 }
 
 bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes) {
+    constexpr ULONGLONG kReadDeadlineMs = 5000;
+    const ULONGLONG started = GetTickCount64();
     DWORD offset = 0;
     while (offset < bytes) {
+        DWORD available = 0;
+        if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr))
+            return false;
+        if (available == 0) {
+            if (GetTickCount64() - started >= kReadDeadlineMs)
+                return false;
+            Sleep(5);
+            continue;
+        }
+        const DWORD requested = (std::min)(bytes - offset, available);
         DWORD read = 0;
-        if (!ReadFile(input, buffer + offset, bytes - offset, &read, nullptr) || read == 0)
+        if (!ReadFile(input, buffer + offset, requested, &read, nullptr) || read == 0)
             return false;
         offset += read;
     }
