@@ -47,7 +47,7 @@ PROTECTED_PARTS = {
 }
 
 PROTECTED_SUFFIXES = {
-    ".key", ".sqlite3", ".sqlite", ".db", ".bmbak", ".gguf", ".exe", ".dll",
+    ".key", ".sqlite3", ".sqlite", ".db", ".bmbak", ".gguf",
     ".pyd", ".so", ".dylib", ".pem", ".crt", ".pfx", ".p12",
 }
 
