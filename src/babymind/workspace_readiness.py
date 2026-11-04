@@ -11,10 +11,11 @@ import sys
 
 def workspace_readiness() -> dict:
     """Return the currently supported project-workflow capabilities."""
-    from . import approval, builder
+    from . import approval, builder, selfdev
 
     workspace_enabled = bool(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
     app_builder = builder.builder_status()
+    development = selfdev.status()
     return {
         "model_engine": "llama.cpp",
         "coding_assistant": {
@@ -46,6 +47,24 @@ def workspace_readiness() -> dict:
             "runs_shell_commands": False,
             "os_sandbox": False,
             "requires_reviewed_plan_hash": True,
+        },
+        "mission_control": {
+            "roles": 50,
+            "phases": 9,
+            "models_in_use": 1,
+            "records_every_role": True,
+            "runs_roles_in_parallel": False,
+            "notice": "50 role passes over one local model, scheduled sequentially when hardware is limited.",
+        },
+        "self_development": {
+            "status": "enabled" if development["enabled"] else "disabled",
+            "root": development["root"],
+            "can_write_source": development["can_write_source"],
+            "checkpoints": development["automatic_rollback"],
+            "automatic_verification": development["automatic_verification"],
+            "automatic_rollback": development["automatic_rollback"],
+            "requires_per_change_approval": False,
+            "os_sandbox": development["isolation"]["os_sandbox"],
         },
         "release_ready": False,
         "blockers": [

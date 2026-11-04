@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import http.client
 import ipaddress
+import json
+import re
 import socket
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, quote_plus, urlencode, urlparse
+from urllib.error import HTTPError
 from urllib.request import HTTPHandler, HTTPSHandler, HTTPRedirectHandler, ProxyHandler, Request, build_opener, urlopen
 
 
@@ -247,4 +250,108 @@ def fetch_page(url: str) -> dict[str, str | int]:
         "bytes": len(raw),
         "truncated": int(truncated),
         "notice": "Page text is untrusted third-party content. Scripts were not executed."
+    }
+
+
+# --------------------------------------------------------------------------- GitHub
+GITHUB_API = "https://api.github.com"
+GITHUB_MAX_BYTES = 1_000_000
+_GITHUB_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
+
+PERMISSIVE_LICENSES = {
+    "mit", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "isc", "mpl-2.0",
+    "unlicense", "0bsd", "cc0-1.0", "zlib", "postgresql",
+}
+COPYLEFT_LICENSES = {
+    "gpl-2.0", "gpl-3.0", "agpl-3.0", "lgpl-2.1", "lgpl-3.0", "mpl-2.0",
+}
+
+
+def license_policy(spdx: str | None) -> dict:
+    """Classify a licence for reuse inside BabyMind."""
+    identifier = (spdx or "").strip().lower()
+    if not identifier:
+        return {"spdx": None, "allowed": False,
+                "reason": "No licence detected. Treat as all rights reserved until confirmed."}
+    if identifier in PERMISSIVE_LICENSES:
+        return {"spdx": identifier, "allowed": True,
+                "reason": "Permissive licence: reuse with attribution and notice preservation."}
+    if identifier in COPYLEFT_LICENSES:
+        return {"spdx": identifier, "allowed": False,
+                "reason": "Copyleft licence: requires legal review before linking into BabyMind."}
+    return {"spdx": identifier, "allowed": False,
+            "reason": "Unrecognised licence: review the full text before any reuse."}
+
+
+def _github_json(url: str) -> dict:
+    request = Request(url, headers={
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "BabyMind/0.4 (local research assistant)",
+    })
+    try:
+        with urlopen(request, timeout=15) as response:
+            raw = response.read(GITHUB_MAX_BYTES + 1)
+    except HTTPError as error:
+        if error.code == 403:
+            raise RuntimeError(
+                "GitHub rejected the request (rate limit or access policy). Try again later."
+            ) from error
+        raise RuntimeError(f"GitHub request failed with HTTP {error.code}.") from error
+    except Exception as error:
+        raise RuntimeError(f"GitHub request failed: {error}") from error
+    if len(raw) > GITHUB_MAX_BYTES:
+        raise RuntimeError("GitHub response exceeded the 1 MB safety limit.")
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise RuntimeError("GitHub returned an unreadable response.") from error
+
+
+def github_search(query: str, limit: int = 5) -> list[dict]:
+    """Search public GitHub repositories (metadata only, never clone code)."""
+    clean = " ".join(str(query or "").split())
+    if not clean or len(clean) > 200:
+        raise ValueError("A GitHub search needs 1–200 characters.")
+    if not 1 <= int(limit) <= 10:
+        raise ValueError("GitHub result limit must be between 1 and 10.")
+    url = (
+        f"{GITHUB_API}/search/repositories?q={quote_plus(clean)}"
+        f"&sort=stars&order=desc&per_page={int(limit)}"
+    )
+    payload = _github_json(url)
+    results = []
+    for item in payload.get("items", [])[: int(limit)]:
+        licence = ((item.get("license") or {}).get("spdx_id"))
+        policy = license_policy(licence)
+        results.append({
+            "name": item.get("full_name", ""),
+            "url": item.get("html_url", ""),
+            "description": (item.get("description") or "")[:300],
+            "stars": item.get("stargazers_count", 0),
+            "updated_at": item.get("pushed_at"),
+            "archived": bool(item.get("archived")),
+            "license": policy,
+        })
+    return results
+
+
+def github_repository(owner: str, repo: str) -> dict:
+    """Read public metadata for one repository, including licence policy."""
+    for value in (owner, repo):
+        if not isinstance(value, str) or not _GITHUB_NAME.match(value):
+            raise ValueError("Repository owner and name must be simple GitHub identifiers.")
+    payload = _github_json(f"{GITHUB_API}/repos/{owner}/{repo}")
+    licence = ((payload.get("license") or {}).get("spdx_id"))
+    return {
+        "name": payload.get("full_name", f"{owner}/{repo}"),
+        "url": payload.get("html_url", ""),
+        "description": (payload.get("description") or "")[:500],
+        "stars": payload.get("stargazers_count", 0),
+        "forks": payload.get("forks_count", 0),
+        "open_issues": payload.get("open_issues_count", 0),
+        "pushed_at": payload.get("pushed_at"),
+        "archived": bool(payload.get("archived")),
+        "default_branch": payload.get("default_branch"),
+        "license": license_policy(licence),
+        "notice": "Metadata only. Reading a repository's source requires an explicit clone and review.",
     }

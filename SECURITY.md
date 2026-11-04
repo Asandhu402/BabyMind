@@ -23,6 +23,27 @@ Do not publish secrets, access tokens, private conversation data, or a working e
   reviewed plan, and runs only the generated Python entry point (no shell). Generated code still
   runs with the current user's privileges and may use the network; it is not an OS sandbox.
 
+## Autonomy, self-development, and command execution
+
+- BabyMind can modify its own source only in a detected source checkout (or the
+  folder in `BABYMIND_DEV_ROOT`). Every transaction is checkpointed first, then
+  compiled and tested; a failing transaction is rolled back automatically and
+  recorded in a hash-chained audit log at `state/dev-audit.jsonl`.
+- Protected paths are never edited: `.git`, `state/`, encryption keys,
+  databases, binaries, and model files.
+- The execution runner is **not a sandbox**. It enforces an executable
+  allowlist, a working-directory boundary, a scrubbed environment, output caps,
+  a timeout, and process-tree termination. Same-user code still shares your
+  files and your network. The API and CLI report `os_sandbox: false` rather than
+  implying containment.
+- `BABYMIND_RUNNER_UNRESTRICTED=true` removes the executable allowlist and is
+  equivalent to giving the engine a shell. Leave it off unless you intend that.
+- Mission contributions are written to an encrypted local SQLite database. They
+  are model output, not verified facts; a mission can be wrong and still look
+  authoritative. Read the recorded contributions before acting on them.
+- BabyMind does not conceal actions: every apply, rollback, compile, and test run
+  is appended to the audit log, and `babymind selfdev` reports chain integrity.
+
 A passing automated test suite is not a security certification or penetration test.
 
 
