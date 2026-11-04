@@ -79,7 +79,7 @@ def read_core_source(relative: str) -> tuple[Path, str]:
 def collect_local_code_context() -> str:
     """Read complete, bounded core files; never silently present partial files as complete."""
     source_paths = ["src/babymind/providers.py"]
-    total_limit = 10_000
+    total_limit = 12_000
     sections: list[str] = []
     total_chars = 0
     omitted: list[str] = []
