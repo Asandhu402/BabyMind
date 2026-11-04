@@ -8,7 +8,8 @@ This is an experimental MSVC/CMake native component. It is **not connected to Ba
 - Root admission for a fixed local NTFS drive, walking each path component relative to the previous directory handle.
 - Handle-relative intermediate and final opens using NtCreateFile with OBJECT_ATTRIBUTES.RootDirectory.
 - Reparse-point inspection on opened handles; reparse components are rejected.
-- Handle-based, non-recursive directory listing (maximum 200 entries; reparse points are identified but never followed).\n- Bounded reads from the opened file handle (maximum 16 MiB).
+- Handle-based, non-recursive directory listing (maximum 200 entries; reparse points are identified but never followed).
+- Bounded reads from the opened file handle (maximum 16 MiB).
 - Exclusive new-file creation (maximum 1 MiB); existing names are not overwritten.
 - Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory and file symlink escape rejection, read-size enforcement, and concurrent exclusive-create behavior.
 - Windows CI build and CTest steps.
