@@ -21,8 +21,8 @@ class ProviderError(RuntimeError):
     """Raised when a model provider cannot complete a request."""
 
 
-class LMStudioProvider:
-    """OpenAI-compatible client for a model served locally by LM Studio."""
+class LocalOpenAICompatibleClient:
+    """OpenAI-compatible HTTP client used by BabyMind's local llama.cpp server."""
 
     def __init__(
         self,
@@ -32,7 +32,7 @@ class LMStudioProvider:
         timeout: int = 120,
     ) -> None:
         self.base_url = (base_url or os.getenv(
-            "BABYMIND_BASE_URL", "http://127.0.0.1:1234/v1"
+            "BABYMIND_BASE_URL", "http://127.0.0.1:1235/v1"
         )).rstrip("/")
         self.model = model or os.getenv("BABYMIND_MODEL")
         self.api_key = api_key or os.getenv("BABYMIND_API_KEY")
@@ -123,7 +123,7 @@ class LMStudioProvider:
         except ValueError as error:
             raise ProviderError(str(error)) from error
 
-class LlamaCppProvider(LMStudioProvider):
+class LlamaCppProvider(LocalOpenAICompatibleClient):
     """Launch and use a local llama.cpp server with a user-supplied GGUF model.
 
     No model is downloaded automatically. The executable and model remain
@@ -215,7 +215,7 @@ class LlamaCppProvider(LMStudioProvider):
             raise ProviderError(f"BabyMind local llama.cpp engine: {error}") from error
 
 
-class UnconfiguredLlamaCppProvider(LMStudioProvider):
+class UnconfiguredLlamaCppProvider(LocalOpenAICompatibleClient):
     """Keep the app importable until first-run setup supplies local runtime paths."""
 
     def __init__(self) -> None:
@@ -237,8 +237,6 @@ def create_provider() -> ChatProvider:
         if not os.getenv("BABYMIND_LLAMA_SERVER", "").strip() or not os.getenv("BABYMIND_GGUF_MODEL", "").strip():
             return UnconfiguredLlamaCppProvider()
         return LlamaCppProvider()
-    if engine in {"lm-studio", "lmstudio"}:
-        return LMStudioProvider()
     raise ProviderError(
-        f"Unknown BABYMIND_ENGINE '{engine}'. Use 'llama.cpp' or 'lm-studio'."
+        f"Unknown BABYMIND_ENGINE '{engine}'. Use 'llama.cpp'."
     )
