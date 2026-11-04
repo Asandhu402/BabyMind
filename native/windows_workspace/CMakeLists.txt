@@ -14,6 +14,11 @@ if(MSVC)
  target_compile_options(babymind_workspace PRIVATE /W4 /WX /permissive- /sdl)
 endif()
 add_executable(workspace_broker_tests tests.cpp broker_protocol.cpp)
+
+# Fail-closed broker host. It validates AppContainer identity and IPC framing,
+# but intentionally dispatches no filesystem operations.
+add_executable(babymind_workspace_broker broker_main.cpp broker_protocol.cpp)
+target_link_libraries(babymind_workspace_broker PRIVATE babymind_workspace)
 target_link_libraries(workspace_broker_tests PRIVATE babymind_workspace)
 if(MSVC)
  target_compile_options(workspace_broker_tests PRIVATE /W4 /WX /permissive- /sdl)

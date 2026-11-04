@@ -14,6 +14,10 @@ This is an experimental MSVC/CMake native component with a versioned C ABI and a
 - Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory and file symlink escape rejection, read-size enforcement, and concurrent exclusive-create behavior.
 - Windows CI build and CTest steps.
 
+## Fail-closed broker executable
+
+`babymind_workspace_broker.exe` is now built as a separate process host. It refuses to run unless its process token is an AppContainer token, reads one bounded frame from its inherited standard-input pipe, validates it with the strict parser, and then denies the request. It intentionally has no filesystem dispatch, no network code, and no shell/process-launch feature. There is not yet an AppContainer launcher, workspace ACL provisioning, broker-owned approval dialog, or response protocol; therefore this executable is a fail-closed scaffold, not usable workspace access.
+
 ## IPC frame parser
 
 `broker_protocol.cpp` implements a bounded, versioned little-endian parser for the proposed operation codes. It checks exact frame lengths, operation-specific payload rules, UTF-16 validity, relative paths and the 32 KiB create payload limit. Tests cover truncation, trailing bytes, unknown operations/versions, traversal and invalid payload combinations. Parsing does not authorize filesystem access or user approval.
