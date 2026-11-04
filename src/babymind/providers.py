@@ -21,7 +21,7 @@ class ProviderError(RuntimeError):
     """Raised when a model provider cannot complete a request."""
 
 
-class LocalOpenAICompatibleClient:
+class LlamaCppHTTPClient:
     """OpenAI-compatible HTTP client used by BabyMind's local llama.cpp server."""
 
     def __init__(
@@ -31,11 +31,10 @@ class LocalOpenAICompatibleClient:
         api_key: str | None = None,
         timeout: int = 120,
     ) -> None:
-        self.base_url = (base_url or os.getenv(
-            "BABYMIND_BASE_URL", "http://127.0.0.1:1235/v1"
-        )).rstrip("/")
+        port = os.getenv("BABYMIND_LLAMA_PORT", "1235")
+        self.base_url = (base_url or f"http://127.0.0.1:{port}/v1").rstrip("/")
         self.model = model or os.getenv("BABYMIND_MODEL")
-        self.api_key = api_key or os.getenv("BABYMIND_API_KEY")
+        self.api_key = api_key
         self.timeout = timeout
 
     def _request_json(self, url: str, payload: dict | None = None) -> dict:
@@ -123,7 +122,7 @@ class LocalOpenAICompatibleClient:
         except ValueError as error:
             raise ProviderError(str(error)) from error
 
-class LlamaCppProvider(LocalOpenAICompatibleClient):
+class LlamaCppProvider(LlamaCppHTTPClient):
     """Launch and use a local llama.cpp server with a user-supplied GGUF model.
 
     No model is downloaded automatically. The executable and model remain
@@ -215,7 +214,7 @@ class LlamaCppProvider(LocalOpenAICompatibleClient):
             raise ProviderError(f"BabyMind local llama.cpp engine: {error}") from error
 
 
-class UnconfiguredLlamaCppProvider(LocalOpenAICompatibleClient):
+class UnconfiguredLlamaCppProvider(LlamaCppHTTPClient):
     """Keep the app importable until first-run setup supplies local runtime paths."""
 
     def __init__(self) -> None:
