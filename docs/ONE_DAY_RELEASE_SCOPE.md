@@ -17,7 +17,7 @@ Primary device: Windows 11 laptop. Secondary device: iPhone on the same trusted 
 | Feature | Current state | Release requirement |
 |---|---|---|
 | Unified identity and 50 specialist roles | Implemented foundation | Keep one personality; roles are expertise profiles |
-| Local model support | LM Studio and llama.cpp adapters | Model picker, connection test, context/model settings, clear errors |
+| Local model support | llama.cpp-only local inference | Model picker, connection test, context/model settings, clear errors |
 | Chat and conversation history | Implemented foundation | Search, rename, delete, export, resume |
 | Encrypted local memory | Implemented foundation; lexical retrieval | User-controlled remember/use switches, inspect/search/delete/export, memory backup |
 | Task queue | Implemented foundation | Task details, status, pause/resume/cancel, durable run history |
@@ -80,7 +80,7 @@ Reference: https://github.com/OpenHands/OpenHands
 
 1. **BabyMind UI and identity:** existing app remains the only user-facing home.
 2. **Coordinator:** routes a request to one of the 50 roles using the one configured model.
-3. **Model adapter:** LM Studio or llama.cpp; no hidden cloud fallback.
+3. **Model adapter:** llama.cpp only; no alternate runtime or hidden cloud fallback.
 4. **Memory service:** existing encrypted SQLite store; explicit remember/use/delete controls.
 5. **Tool registry:** each tool declares input schema, risk class, required permissions, timeout, network access and audit fields.
 6. **Policy/approval gateway:** validates exact action, target, content hash, scope, expiry and one-time approval. Approval is not inferred from conversation text or model output.
