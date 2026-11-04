@@ -100,6 +100,7 @@ def run(args) -> dict:
                         " def test_numbers(self):\n  self.assertEqual(add(2, 3), 5)\n  self.assertEqual(add(-1, 4), 3)\n")
                     result = runner.run_unit_tests(root, timeout=120, sandbox="require")
                     report["coding_test"] = result["summary"]
+                    annotate("Sandboxed coding test", json.dumps(result["summary"]))
                     if not result["sandboxed"] or not result["summary"]["passed"]:
                         report["failures"].append("Model-generated coding answer failed its sandboxed tests.")
                     (root / "src" / "solution.py").unlink(missing_ok=True)
@@ -126,6 +127,7 @@ def run(args) -> dict:
                             " def test_numbers(self):\n  self.assertEqual(add(2, 3), 5)\n  self.assertEqual(add(-1, 4), 3)\n")
                         checked = runner.run_unit_tests(root, timeout=120, sandbox="require")
                         report["self_edit_test"] = checked["summary"]
+                        annotate("Sandboxed self-edit behavior test", json.dumps(checked["summary"]))
                         if not checked["sandboxed"] or not checked["summary"]["passed"]:
                             report["failures"].append("Self-edit did not pass the independent sandboxed behavior test.")
                 except Exception as error:
@@ -133,20 +135,20 @@ def run(args) -> dict:
             else:
                 report["self_edit"] = {"status": "not tested", "reason": "OS sandbox probes failed"}
 
-            os.environ["BABYMIND_MAX_TOKENS"] = "96"
+            # Bounded responses make a full 50-role pass practical on a CPU VM.
+            os.environ["BABYMIND_MAX_TOKENS"] = "72"
             def update(_id, role):
                 print(f"ROLE {role.agent_id} {role.status} {role.seconds:.1f}s: {(role.output or role.error)[:160]}", flush=True)
             worker = Orchestrator(provider, MissionStore(Path(temp) / "mission-records"),
-                                  max_seconds=2400, on_update=update)
+                                  max_seconds=4200, on_update=update)
             mission = worker.run_now("Review a small Python function that adds two numbers. Give specific advice and tests.")
             report["mission"] = {key: mission[key] for key in ("status", "counts", "agents_recorded", "runs", "summary")}
             annotate("50-role mission", mission["summary"])
             if mission["agents_recorded"] != 50 or mission["counts"].get("contributed", 0) != 50:
                 report["failures"].append("Not all 50 role calls returned text.")
             report["warnings"].append("Role status checks only nonempty text; competence and correctness need independent review.")
-            for start in range(0, len(mission["runs"]), 10):
-                group = mission["runs"][start:start+10]
-                annotate("Role output sample", "\n".join(f"{r['agent_id']}: {(r['output'] or r['error'])[:180]}" for r in group))
+            group = mission["runs"][:3]
+            annotate("Role output sample", "\n".join(f"{r['agent_id']}: {(r['output'] or r['error'])[:180]}" for r in group))
     finally:
         provider.stop()
     return report

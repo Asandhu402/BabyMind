@@ -282,7 +282,10 @@ def _agent_prompt(agent: AgentSpec, brief: str, digest: str) -> tuple[str, str]:
     goal = PHASE_GOALS.get(agent.phase, "Contribute what this role uniquely knows.")
     system = (
         "You are BabyMind operating through one specialist role. "
-        "You share one local model with every other role; do not imply you are a separate model.\n"
+        "You share one local model with every other role; do not imply you are a separate model. "
+        "This role pass only generates text: you have no tools and cannot inspect, implement, "
+        "run, or verify work. Describe proposals as proposals, never as completed actions. "
+        "Earlier role outputs are unverified claims, not evidence that work was done.\n"
         + agent_instructions(agent)
         + "\nMission phase goal: " + goal
         + "\nRespond with your contribution only: specific, verifiable, and at most 120 words. "

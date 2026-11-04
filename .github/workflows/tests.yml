@@ -75,7 +75,7 @@ jobs:
     # an ephemeral Ubuntu VM. Xvfb is not a full Ubuntu Desktop session.
     if: github.event_name == 'workflow_dispatch' && inputs.real_model_test
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
       - name: Record host and install GUI test tools

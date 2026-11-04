@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from babymind.agents import AGENTS
-from babymind.orchestrator import MissionError, MissionStore, Orchestrator, phase_catalogue, role_catalogue
+from babymind.orchestrator import MissionError, MissionStore, Orchestrator, _agent_prompt, phase_catalogue, role_catalogue
 
 BRIEF = "Build a small inventory application with a database and a report."
 
@@ -52,6 +52,13 @@ class OrchestratorTests(unittest.TestCase):
         self.assertIn("returned non-empty text", mission["summary"])
         self.assertIn("unverified model text", mission["summary"])
         self.assertIn("does not prove the work was done", mission["summary"])
+
+    def test_role_prompt_makes_text_only_boundaries_explicit(self) -> None:
+        system, user = _agent_prompt(AGENTS[0], "Review a function.", "Earlier role output")
+        self.assertIn("you have no tools", system)
+        self.assertIn("never as completed actions", system)
+        self.assertIn("unverified claims", system)
+        self.assertIn("Earlier role output", user)
 
     def test_runs_follow_phase_order(self) -> None:
         mission = Orchestrator(FakeProvider(), self.store, max_seconds=300).run_now(BRIEF)

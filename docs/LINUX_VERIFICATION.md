@@ -389,3 +389,27 @@ After the follow-up check for changes made to an edited path during verification
 26 self-development tests passed in the isolated Ubuntu Base environment. The
 Debian source suite then ran **330 tests, OK, 2 skipped**. These are not a new
 hosted production-model result.
+
+## Hosted production-model role and coding follow-up
+
+[Run 41926959221](https://github.com/Asandhu402/BabyMind/actions/runs/41926959221)
+on commit `a0a83fb1dfd21648cb4b07352e8fc1a9ac477a1d` passed the actual
+installer and installed GUI arithmetic test again. Source-mode production-model
+chat returned `4`, `Blue`, and a relevant one-sentence explanation of backups.
+The coding response was `def add(a, b): return a + b` (formatted as a Python
+code block). A sandboxed disposable source-fixture edit was recorded as applied,
+and its baseline test passed. The report with independent behavioral test results
+was uploaded as an artifact, but this environment could not download it because
+GitHub's artifact storage host is inaccessible; do not assume those additional
+tests passed from the annotation alone. The edited fixture is not the packaged
+desktop or the real BabyMind core.
+
+The run **failed overall**: its 50-role mission recorded nonempty output from 38
+roles and deferred 12 after the 2,400-second time budget. Several role outputs
+asserted implementation actions even though role passes had no tools and did
+not perform those actions. The prompt has since been clarified to say that
+roles can only propose work and prior text is unverified; this is an instruction,
+not a guarantee against false claims. The next opt-in test was configured with
+a 4,200-second mission budget and shorter responses, but it has not yet run.
+The actual desktop default remains bounded and may also defer roles. All-role
+competence and packaged self-upgrade remain unverified or unavailable.

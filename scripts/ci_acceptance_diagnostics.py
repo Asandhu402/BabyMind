@@ -7,7 +7,7 @@ from pathlib import Path
 def annotation(path: Path, label: str, status: str) -> str:
     if path.is_file():
         with path.open(encoding="utf-8", errors="replace", newline="") as log:
-            text = log.read()[-8000:]
+            text = log.read()[-2400:]
     else:
         text = "Log unavailable."
     # GitHub workflow-command data must escape these three characters.
