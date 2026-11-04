@@ -1,6 +1,8 @@
 # BabyMind autonomy roadmap
 
-This roadmap targets **Windows 10/11 only**. The product goal remains one BabyMind identity, one configured local language model, and 50 specialist role prompts sharing that same model. No Linux backend or Linux CI target is planned.
+**Platform target: Linux only.** Windows and macOS are unsupported and are not future build, CI, packaging, or release targets. See [the Linux-only platform mission](PLATFORM_MISSION.md) for migration phases and acceptance criteria.
+
+The product goal remains one BabyMind identity, one configured local language model, and 50 specialist role configurations sharing that model. The 50 roles are not 50 independent models.
 
 ## Phase 1 — bounded web research
 
@@ -11,7 +13,7 @@ This roadmap targets **Windows 10/11 only**. The product goal remains one BabyMi
 - Treat search results and snippets as untrusted content. They are evidence to evaluate, never instructions to follow.
 - Show source links to the user; do not claim a fact is verified merely because it appeared in a search result.
 
-## Phase 1.1 — optional bounded source-page reading (implemented foundation)
+## Phase 1.1 — optional bounded source-page reading
 
 - Optionally read up to two search-result pages per chat request.
 - Accept only HTTP(S) on standard ports; reject private, local, reserved, credential-bearing, and unsafe redirect targets.
@@ -19,65 +21,65 @@ This roadmap targets **Windows 10/11 only**. The product goal remains one BabyMi
 - Extract bounded text, omit scripts/styles/navigation/forms, and never execute page code.
 - Treat all extracted page text as untrusted instructions and evidence. Reading a page does not verify its claims.
 
-## Phase 2A — visible task queue (implemented foundation)
-
-- Persist up to 100 user-created tasks in the local encrypted SQLite database.
-- Provide queued, active, paused, completed, cancelled, and terminated states.
-- Enforce valid state transitions on the server; the browser cannot set arbitrary statuses.
-- Provide Start, Pause, Resume, Complete, Cancel, and Terminate controls.
-- The task tracker remains separate from execution. Workspace file actions and project test execution remain disabled until Windows-native filesystem protections and a real Windows OS-level execution sandbox are implemented and tested.
-
-## Phase 1.2 — relevance-ranked encrypted local memory (implemented foundation)
+## Phase 1.2 — relevance-ranked encrypted local memory
 
 - Keep memory opt-in for saving and using prior notes.
 - Rank recent encrypted records by local lexical relevance and recency.
 - Provide a local search field for saved memories.
 - Do not generate embeddings, call a second model, or send memory content to a cloud service.
+- Linux key protection must follow the Linux-only platform mission. Do not rely on Windows DPAPI for new installations.
 
-## Phase 2B — controlled task execution (security-blocked)
+## Phase 2A — visible task queue
 
-- The task queue exists, but it does not currently authorize workspace file access or project-code execution.
-- Workspace listing, filename search, text preview, file creation, and text editing are disabled in the application and API.
-- Project test execution is disabled until a real Windows OS-level sandbox is available.
-- Do not re-enable these features by changing a flag or adding more string/path checks.
+- Persist up to 100 user-created tasks in the local encrypted SQLite database.
+- Provide queued, active, paused, completed, cancelled, and terminated states.
+- Enforce valid state transitions on the server; the browser cannot set arbitrary statuses.
+- Provide Start, Pause, Resume, Complete, Cancel, and Terminate controls.
+- Keep task tracking separate from execution authorization.
 
-### Required Windows security work before re-enabling workspace file actions
+## Phase 2B — Linux-native controlled workspace access (security-blocked)
 
-See [the Windows filesystem security design gate](WORKSPACE_FILESYSTEM_SECURITY.md) and the [native Windows workspace security design](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md). The native design has experimental C++ primitives for fixed-local-NTFS root admission, handle-relative bounded reads, and exclusive new-file creation; they are not connected to Python or approved for enablement. The Windows handle-relative/no-reparse contract, secure root admission, and same-user concurrent-writer guarantees require implementation and independent review. Do not implement against an assumed Windows guarantee.
+- Workspace listing, filename search, text preview, file creation, and text editing must remain disabled until the Linux-native broker is implemented, tested, and independently reviewed.
+- Use descriptor-relative filesystem operations and defend against symlink traversal, mount-boundary escapes, path replacement races, and unsafe concurrent writes.
+- Bind narrowly scoped, single-use approvals to the exact operation, selected workspace, and target.
+- Do not re-enable file actions through a feature flag or additional path-string checks.
+- Start with bounded listing, bounded reads, and exclusive new-file creation. Expand capabilities only after security evidence supports them.
 
-- Complete and independently review the C++ prototype in [WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md](WINDOWS_NATIVE_WORKSPACE_SECURITY_DESIGN.md), then expose it behind a narrow versioned ABI; Python must not fall back to path-based operations.
-- Start with directory listing, bounded text reads, and exclusive creation only. Editing, deletion, recursive search, and execution are out of scope for the first release.
-- Add directory enumeration through pinned directory handles.
-- Complete deterministic race-focused tests that swap path components and targets during each operation on Windows.
-- Add approval-token binding and define the supported concurrent-writer threat model.
-- Add a restricted broker identity/ACL boundary before claiming protection against hostile same-user processes.
-- Keep the feature disabled until security review and Windows CI pass.
+## Phase 2C — Linux OS-enforced project execution (security-blocked)
 
-## Phase 3 — reviewed code changes
+- Project commands and tests remain disabled until a real Linux sandbox is implemented and independently reviewed.
+- Enforce filesystem, network, process, and resource restrictions using an appropriate Linux isolation design.
+- Include process-tree termination, timeouts, output limits, environment scrubbing, and explicit workspace boundaries.
+- Verify sandbox behavior with adversarial tests; do not describe a subprocess, container, or path check alone as a security sandbox.
 
-- Restrict code-editing to a user-selected project folder.
-- Generate diffs first; never silently replace files.
-- Do not execute project tests until a real Windows OS-level sandbox with filesystem, network, process, and resource restrictions is implemented and reviewed.
-- Require approval before applying changes and before any Git push or merge.
+## Phase 3 — reviewed code changes and self-development
+
+- Restrict code editing to a user-selected project folder or a separately protected BabyMind source workspace.
+- Generate reviewable diffs before applying changes; preserve checkpoints and support automatic rollback.
 - Keep secrets, model files, databases, and encryption keys outside generated patches.
+- Require clear approval for consequential changes, Git pushes, merges, releases, and external side effects.
+- Record changes and tool activity in a tamper-evident audit trail.
+- Self-modification must not be able to disable its own security gates or erase its audit history.
+
+## Phase 4 — optional local capability adapters
+
+- Keep document parsing, speech transcription, local speech synthesis, browser automation, and knowledge retrieval optional and lazy-loaded.
+- Use local engines where practical; clearly disclose any network requests.
+- Browser automation remains visible, supervised, and explicitly approved.
+- Treat converted documents, transcripts, browser content, and retrieved knowledge as untrusted data, never system instructions.
+- Do not claim an adapter is wired into the chat UI or independently sandboxed unless integration and security tests prove it.
 
 ## Security and privacy boundaries
 
-- Local inference remains on the user's Windows computer.
+- Local inference and conversation storage remain on the user's Linux computer by default.
 - Web research necessarily sends the search query to the configured public search provider; this is not offline operation.
-- Search results are untrusted. Prompt-injection text in pages/results must not override BabyMind's system instructions or authorize tools.
-- No public-internet server exposure. LAN access remains opt-in, TLS-protected, and intended only for trusted private Wi-Fi.
-- The Windows DPAPI key and database key files must be backed up together according to the existing recovery guidance.
+- Search results and page contents are untrusted. Prompt-injection text must not override system instructions or authorize tools.
+- LAN access remains opt-in, authenticated, TLS-protected, and intended only for trusted private networks. Do not expose the service to the public internet by default.
+- Linux file permissions and key-storage behavior must be documented accurately. Do not claim encrypted storage is protected from malware running as the same user or from data access while the app is running.
+- Preserve existing user data and provide a tested migration path for data created by legacy Windows builds.
 
-**Security gate:** Do not re-enable workspace file operations by flipping a Python flag or adding more path checks. Implement Windows handle-relative operations with reparse-point protections, then add race-focused Windows tests before enabling any API or UI path. Project-code execution additionally requires a real Windows OS-level sandbox.
+## Platform migration gate
 
+The repository currently contains Windows-specific documentation, workflows, packaging, desktop assumptions, and DPAPI handling. These are legacy implementation details and must be migrated or retired. A documentation change alone does not make the application Linux-ready.
 
-## Phase 1.3 — optional local capability adapters (integration foundation)
-
-- Add Docling as an optional local-file-to-Markdown conversion adapter with a 100 MB input limit and bounded output; persistent indexing/RAG remains future work.
-- Add faster-whisper as optional CPU/INT8 transcription for user-selected local audio.
-- Add Browser Use as an optional local-browser adapter. Require explicit approval and a separate opt-in environment flag; do not select hosted browser services.
-- Add Open Interpreter as an external CLI launched read-only only. Do not expose workspace writes, shell escalation, project execution, or approval bypass.
-- Keep all four integrations out of core dependencies and lazy-load heavy packages.
-- Treat converted documents, audio transcripts, and browser content as untrusted user/data content, never system instructions.
-- Do not claim the adapters are wired into the chat UI or independently sandboxed. Add a central per-action approval broker and finish the Windows security gate before any write-capable computer control.
+**Do not enable workspace writes or project execution until their Linux-native security boundaries and tests pass.** Follow [PLATFORM_MISSION.md](PLATFORM_MISSION.md) and its acceptance criteria.
