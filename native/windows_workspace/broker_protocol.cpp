@@ -25,6 +25,9 @@ bool utf16(const uint8_t* p,size_t n,std::wstring* out){out->clear();out->reserv
 }
 ParseStatus parse_request(const uint8_t* p,size_t n,Request* out){
  if(!p||!out)return ParseStatus::InvalidArgument;
+ // Never leave a previously parsed request visible after a failed parse.
+ // Callers must not accidentally dispatch stale operation data.
+ *out = Request{};
  if(n<36)return ParseStatus::Truncated;if(n>kMaxFrameBytes)return ParseStatus::InvalidLength;
  size_t o=0;uint32_t v=0,op=0,total=0;
  if(!u32(p,n,&o,&v)||!u32(p,n,&o,&op)||!u32(p,n,&o,&total))return ParseStatus::Truncated;
