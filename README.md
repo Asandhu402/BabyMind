@@ -1,489 +1,100 @@
 # BabyMind
 
-> **Platform direction update: Linux only.** Windows is no longer a supported target; macOS is not a target either. The Linux port and Linux-only release gates are tracked in [docs/PLATFORM_MISSION.md](docs/PLATFORM_MISSION.md). Existing Windows instructions and artifacts elsewhere in this README are legacy material and must not be treated as current support guidance until migrated.
+BabyMind is a local-first AI development workspace for Linux, built around one assistant identity, one local language model, and 50 specialist role configurations.
 
+## Product scope
 
-BabyMind is a local-first AI development platform with exactly **50 specialist roles**, one consistent assistant identity, a browser-based interface, optional shared memory, and one integrated local inference runtime: llama.cpp.
+**Linux is the only supported host platform.** Build scripts, runtime assumptions, CI, packaging, documentation, and release artifacts must target Linux. Do not add platform-specific compatibility layers for other desktop operating systems.
 
-The 50 roles are the development team defined in [docs/AUTONOMY.md](docs/AUTONOMY.md): architect, language specialists, testers, security reviewers, recovery, research, and release acceptance. They replaced the earlier general-purpose role set. They are configurations over one underlying model — not 50 separately trained or separately running models — and a "50-agent mission" is 50 role-guided passes over the same weights.
+The 50 roles are specialist configurations over one shared model, not 50 independent models.
 
-## What is included
+## Current capabilities
 
-- **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, dark/light themes, and Markdown conversation export.
-- **Local text attachments:** attach small TXT, Markdown, CSV, JSON, source-code, or config files (up to 12 KB) for model context.
-- **50-agent directory:** searchable and filterable BM-01 through BM-50 development roles, each with a mission phase, capability set, and required evidence.
-- **Mission control:** run one brief through all 50 roles — planning, research, design, architecture, implementation, verification, review, delivery, acceptance — with every contribution recorded, timed, and encrypted at rest.
-- **Self-development engine:** checkpoint, edit, compile, test, and keep or automatically roll back changes to BabyMind's own source, with a hash-chained audit log.
-- **Bounded command runner:** allowlisted executables, working-directory boundary, scrubbed environment, output caps, timeout, and process-tree termination.
-- **Open-source research:** public GitHub metadata and licence classification, without cloning or auto-importing anything.
-- **Unified coordinator:** one BabyMind identity with role-specific instructions.
-- **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
-- **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows. When enabled, BabyMind ranks relevant notes locally using lightweight text matching; no embeddings or extra AI model are used. The Memory workspace also supports local search.
-- **Encrypted conversation storage:** local SQLite history on the computer running BabyMind; message text and titles are encrypted at rest with AES-256-GCM.
-- **Local model runtime:** BabyMind-managed llama.cpp server using a local GGUF model.
-- **CLI:** health, list, ask, route, and memory commands.
-- **Lightweight runtime:** core server, storage, and HTTP client use the Python standard library; the desktop window uses pywebview.
+- Browser-based chat workspace and local conversation history.
+- 50 specialist roles and mission orchestration.
+- Local llama.cpp inference using a GGUF model.
+- Optional encrypted local memory.
+- Bounded public-web research.
+- Task queue, approvals, audit trail, and checkpointed self-development.
+- Linux namespace/chroot sandbox foundation, subject to kernel and host policy constraints.
 
-## Platform support and migration
-
-BabyMind's product target is now **Linux only**. Windows and macOS are unsupported. The existing Windows-specific build, launcher, DPAPI, and desktop instructions below are retained temporarily as migration history and are not supported installation instructions. Do not use them to infer Linux readiness. Follow [docs/PLATFORM_MISSION.md](docs/PLATFORM_MISSION.md) for the Linux port and release acceptance requirements.
+Workspace file operations and general project command execution remain disabled until the Linux-native security broker and OS-enforced sandbox pass independent review and adversarial tests. A documentation or CI change does not count as implementation.
 
 ## Requirements
 
-The Linux support matrix, runtime dependencies, desktop requirements, and installation procedure must be established and verified as part of the Linux migration. Until that work is complete, this repository must not claim a production-ready Linux release.
+- 64-bit Linux.
+- Python 3.10 or newer.
+- A compatible local llama.cpp build providing `llama-server`.
+- A compatible GGUF model.
+- Node.js only for browser JavaScript checks in development CI.
 
-## Install
+Desktop-window integration through pywebview may require the GTK and WebKit2 system packages supplied by the chosen Linux distribution. The browser interface can also be opened directly in a local browser.
 
-Open PowerShell in the repository folder:
+## Install from source
 
-    py -m pip install -e .
+```bash
+git clone https://github.com/Asandhu402/BabyMind.git
+cd BabyMind
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-## Local model runtime
+## Configure the local model
 
-BabyMind uses llama.cpp as its only model runtime. It starts the local
-llama-server process, loads the pinned GGUF model, and sends inference requests
-to the loopback API. No separate model-manager application or API account is
-part of the architecture.
+Set the absolute Linux paths to the llama.cpp server and your GGUF model:
 
-For source/developer launches, set these paths in PowerShell:
+```bash
+export BABYMIND_ENGINE=llama.cpp
+export BABYMIND_LLAMA_SERVER="$HOME/.local/bin/llama-server"
+export BABYMIND_GGUF_MODEL="$HOME/.local/share/models/model.gguf"
+export BABYMIND_CONTEXT_SIZE=4096
+```
 
-    $env:BABYMIND_ENGINE = "llama.cpp"
-    $env:BABYMIND_LLAMA_SERVER = "C:\BabyMind\llama.cpp\llama-server.exe"
-    $env:BABYMIND_GGUF_MODEL = "C:\BabyMind\models\your-model.gguf"
+The server listens on `127.0.0.1:1235` by default. Optional settings include `BABYMIND_LLAMA_PORT`, `BABYMIND_TEMPERATURE`, `BABYMIND_TOP_P`, `BABYMIND_MAX_TOKENS`, and `BABYMIND_HOME`.
 
-The default local endpoint is `http://127.0.0.1:1235/v1`. Optional settings:
-`BABYMIND_MODEL`, `BABYMIND_LLAMA_PORT`, `BABYMIND_CONTEXT_SIZE`,
-`BABYMIND_TEMPERATURE`, `BABYMIND_TOP_P`, `BABYMIND_MAX_TOKENS`, and
-`BABYMIND_HOME`.
+Start the web interface:
 
-## llama.cpp setup
+```bash
+babymind-web
+```
 
-There is no engine selector: llama.cpp is the sole supported runtime. The
-portable Windows desktop package bundles the CPU runtime and offers a verified
-first-run model download. For source/developer launches, provide the runtime
-and GGUF model paths yourself.
-
-### llama.cpp setup on Windows
-
-1. Download the official Windows **x64 CPU** release from
-   [ggml-org/llama.cpp Releases](https://github.com/ggml-org/llama.cpp/releases).
-   Extract it to a folder such as `C:\BabyMind\llama.cpp\`.
-2. Obtain a compatible `.gguf` model and save it in a folder such as
-   `C:\BabyMind\models\`.
-3. Set `BABYMIND_LLAMA_SERVER` and `BABYMIND_GGUF_MODEL` as shown above.
-4. Start BabyMind with `babymind-desktop` or the desktop launcher.
-
-BabyMind starts `llama-server.exe` on `127.0.0.1:1235`, waits for the model
-to load, sends chat requests to its local OpenAI-compatible API, and stops the
-server process it started when BabyMind exits. The default context size is
-4096 tokens; override it with `BABYMIND_CONTEXT_SIZE`. Set
-`BABYMIND_LLAMA_PORT` to change the local port. This initial engine mode uses
-the CPU build by default; acceleration depends on the llama.cpp build you
-download and its compatible runtime libraries.
-
-### Fixed local model and answer quality
-
-BabyMind uses one bundled, SHA-256-pinned local model. Its model identity is
-fixed: configuration, updates, and specialist roles must never silently switch
-to another model. A relocated copy is accepted only when its contents match the
-pinned SHA-256. All 50 specialist roles share this same model; adding roles does
-not create separate models or increase its underlying reasoning capability.
-
-Answer quality is improved in BabyMind's core orchestration, bounded context,
-retrieval, safety checks, and evaluation—not by changing the model. The model
-runs locally through the bundled llama.cpp CPU runtime.
-
-Generation defaults are configurable for the local llama.cpp runtime:
-- `BABYMIND_TEMPERATURE` (default `0.4`)
-- `BABYMIND_TOP_P` (default `0.9`)
-- `BABYMIND_MAX_TOKENS` (default `2048`)
-
-Conversation history is limited to the most recent 10 messages and approximately
-10,000 characters so older dialogue does not consume the entire context window.
-For llama.cpp, set `BABYMIND_CONTEXT_SIZE` to a value supported by the model and
-available memory (for example, `8192`); a larger context also consumes more RAM.
-
-## Start the BabyMind interface
-
-    babymind-web
-
-Then open [http://127.0.0.1:8765](http://127.0.0.1:8765).
-
-On Windows, you can double-click `Start-BabyMind.bat` to install and launch the local app. For iPhone access on the same trusted Wi-Fi network, double-click `Start-BabyMind-iPhone.bat` or run:
-
-    babymind-web --lan
-
-The terminal prints an HTTPS address, a one-time access token, and the public local CA certificate path. Before opening the address on your iPhone, transfer the public `lan-ca.crt` file from Windows to your own iCloud Drive or OneDrive (or email it to yourself as an attachment), then open it on the iPhone. On iPhone, go to **Settings > General > VPN & Device Management**, select the downloaded BabyMind certificate profile, and install it. Next enable full trust under **Settings > General > About > Certificate Trust Settings**. Open the printed HTTPS address in Safari and enter the token. Since Windows cannot use AirDrop, use a transfer method tied to your own account and do not use a public file-sharing link. The certificate's private key stays on the computer and is encrypted at rest. Use only on a trusted private Wi-Fi network; this is not intended for public internet exposure.
-
-
-## Windows desktop application
-
-### Portable Windows desktop package
-
-The GitHub Actions workflow builds a portable Windows package containing
-BabyMind, its Python runtime, and the official llama.cpp Windows CPU runtime.
-Download the complete `BabyMind-Windows-Portable` artifact from the latest
-successful Windows build, extract it, and double-click `BabyMind.exe`.
-
-On first launch, BabyMind asks permission to download the Qwen3.5-4B
-Uncensored HauhauCS Aggressive Q4_K_M fine-tune (approximately 2.71 GB).
-It displays download progress, verifies the file against the SHA-256 checksum
-published in the Hugging Face file metadata, and stores the model
-under `%USERPROFILE%\.babymind\models`. Later launches reuse that model
-locally; the download is not repeated. The first download requires internet
-access and at least 4.5 GB of free disk space.
-
-### iPhone companion included in the portable package
-
-The portable ZIP also includes `BabyMind-iPhone.exe` and
-`Start-BabyMind-iPhone.bat`. Choose one launcher at a time: close
-`BabyMind.exe` before starting the iPhone companion, and close the companion
-before reopening the desktop app. Each launcher runs its own local model
-server, while both reuse the same verified model file and data folder. If the
-model is not already installed, the first launch downloads it (about 2.71 GB),
-so keep the PC online and allow at least 4.5 GB of free disk space.
-
-1. Extract the **entire** ZIP to a normal folder (not inside the ZIP).
-2. Connect the iPhone and Windows PC to the same trusted private Wi-Fi network.
-   Avoid guest Wi-Fi or networks that isolate connected devices.
-3. Double-click `Start-BabyMind-iPhone.bat`. If Windows Firewall asks, allow
-   access on **Private networks only**; never enable Public network access.
-4. Keep the Windows console open and prevent the PC from sleeping. It prints
-   the HTTPS address, a fresh one-time access token, and the path to the public
-   `lan-ca.crt` certificate.
-5. Transfer **only** the public `lan-ca.crt` file from Windows to your own
-   iCloud Drive or OneDrive (or email it to yourself as an attachment). On the
-   iPhone, open the file. Windows cannot use AirDrop, so do not follow AirDrop
-   instructions. Never transfer a private-key file or use a public file-sharing
-   link for the certificate.
-6. On iPhone, open **Settings → General → VPN & Device Management**, select
-   the downloaded BabyMind certificate profile, and install it. Then go to
-   **Settings → General → About → Certificate Trust Settings** and enable
-   full trust for the BabyMind certificate.
-7. Open the exact HTTPS address printed by BabyMind in iPhone Safari. Enter the
-   one-time token when prompted. Keep the token private.
-
-A note about certificate trust: installing this profile makes your iPhone trust
-certificates issued by this BabyMind CA. Install it only when you intentionally
-want to use your own PC's iPhone companion. When you no longer need iPhone access,
-remove the BabyMind profile under **Settings → General → VPN & Device Management**;
-this removes that trust. You will need to reinstall the profile and enable full
-trust again before connecting from the iPhone later.
-
-The companion uses the same local model, encrypted data directory, and
-token-protected HTTPS server as BabyMind. In LAN mode it binds to the detected
-local network address rather than every network interface. It does not create
-a cloud account or intentionally expose the service to the public internet.
-Do not configure router port forwarding. The certificate authority is generated locally and
-its private key stays on the PC. The public CA certificate normally remains
-the same between starts on this Windows installation; the server certificate
-is renewed when the companion starts. A fresh access token is generated on
-every server start.
-
-**Recovery and common issues**
-
-- If Safari cannot connect, confirm both devices are on the same non-guest
-  Wi-Fi, the PC is awake, the console is still running, and Windows Firewall
-  permits BabyMind on Private networks.
-- If the saved token stops working after restarting the companion, reload the
-  page and enter the new token printed in the console.
-- If port 8765 is already in use, run
-  `BabyMind-iPhone.exe --port 8766` from PowerShell in the extracted folder,
-  then use the new address printed by the app.
-- If iOS reports an untrusted certificate, check both that the profile was
-  installed under **VPN & Device Management** and that full trust is enabled
-  under **Certificate Trust Settings**. Only install the public certificate
-  file you transferred from your own PC using your own account.
-- To stop LAN access, close the companion console. No router rule or cloud
-  service should be left running.
-- When you no longer need iPhone access, remove the BabyMind certificate profile
-  under **Settings → General → VPN & Device Management**. This removes the
-  additional CA trust from the iPhone; reinstall and re-enable full trust if you
-  want to connect again later.
-
-**Model and data recovery**
-
-- If the first model download is interrupted, close BabyMind and start either
-  launcher again. An incomplete download is discarded; setup can be retried.
-  BabyMind checks the model's SHA-256 on startup and will replace a damaged
-  model with a fresh download.
-- Conversations and the default encrypted memory stay in
-  `%USERPROFILE%\\.babymind` on the Windows PC. The iPhone is a browser
-  companion; the PC must remain on and awake while you use it.
-- To back up, open BabyMind **Settings → Backup**, choose a destination on the
-  PC outside the live `.babymind` folder, and use a strong password of at
-  least 12 characters. Store the backup and password separately.
-- Restore replaces the current BabyMind data, requires typing
-  `RESTORE BABYMIND`, and should only be done after making a backup of the
-  current data. Restart BabyMind after a restore.
-- Important Windows limitation: the backup is password-encrypted, but the
-  database encryption keys are also protected by Windows DPAPI. Restore is
-  supported only under the **same Windows user account on the same PC**; this
-  backup is not a migration method to a different computer or Windows account.
-- The backup contains BabyMind's encrypted databases and their key files; it
-  does not include the downloaded AI model or the LAN certificate. After a
-  fresh install, the model can be downloaded again. If the `.babymind/certs`
-  folder is lost or recreated, transfer the new `lan-ca.crt` to the iPhone
-  and repeat the iOS certificate-trust step.
-
-This feature still needs a real iPhone/Windows device test before it can be
-described as fully verified.
-
-A permanent, versioned Windows release is published by the **BabyMind
-Windows release** workflow. Run it from GitHub Actions with a tag matching
-`pyproject.toml` (currently `v0.4.0`), or push that tag. The workflow repeats
-the Windows tests and build, then attaches a versioned ZIP and SHA-256 checksum
-to the GitHub Release. The package is portable but currently unsigned.
-
-The packaged desktop app selects its bundled llama.cpp engine automatically
-and does not require Python or an API key. Inference and chat
-storage remain on the user's computer. The desktop window requires Microsoft
-Edge WebView2 Runtime, which is normally present on current Windows 11 systems.
-If WebView2 is missing, install Microsoft's official Evergreen Runtime.
-
-For developers building from source, install Python 3.10 or newer and run:
-
-    .\build-windows.ps1
-
-The output is `dist\BabyMind\BabyMind.exe`; copy the entire
-`dist\BabyMind` folder, not just the EXE. The build is not code-signed and
-is not a traditional installer yet. The packaged default is the community
-fine-tuned Qwen3.5-4B Uncensored HauhauCS Aggressive Q4_K_M model, pinned to a
-specific Hugging Face revision and verified against its published SHA-256
-checksum. It is a third-party fine-tune, not an official Alibaba release.
-Its publisher describes it as aggressively uncensored; actual behaviour and
-quality must still be tested.
-
-## Use the command line
-
-    babymind health
-    babymind list
-    babymind run BM-01 "Route this task without calling a model"
-    babymind ask BM-02 "Research this question using the local model"
-    babymind ask BM-01 "Remember this preference" --remember
-    babymind ask BM-02 "Use relevant context from before" --use-memory
-    babymind memory list
-    babymind memory clear
-
-- `run` checks role routing and does not call a model.
-- `ask` sends the request to the selected local model engine with the selected role instructions.
-- Memory is opt-in. Use `--remember` to save and `--use-memory` to include relevant recent notes.
-- In the web UI, the **Remember** and **Use memory** controls are separate.
-
-## Developer checks
-
-Run the automated test suite from the repository root:
-
-    py -m unittest discover -s tests
-
-## Privacy and data
-
-- The default web server listens only on `127.0.0.1`.
-- Conversations and memory are stored under `~/.babymind/` by default (or `BABYMIND_HOME`). Message text, conversation titles, and saved memory content are encrypted at rest with AES-256-GCM. On Windows, the encryption key is protected by Windows DPAPI for the current Windows user; do not delete or move the `.key` files independently of their databases.
-- Memory is not automatically written unless the user enables **Remember** for that request.
-- Encryption protects stored text when BabyMind is closed. It does not protect data while the app is running, from malware running as the same Windows user, or from someone who can unlock that Windows account.
-- No analytics, account service, or cloud model is included in the application.
-- The model runner is local; the model's own behavior and resource requirements depend on the selected model and runtime.
-
-## Public web research (opt-in)
-
-The chat composer includes a **Web research** toggle. When enabled, BabyMind
-sends the current question to DuckDuckGo's public HTML search endpoint and
-passes up to five result titles, URLs, and short snippets to the same local
-model for synthesis. An additional **Read source pages** toggle optionally
-fetches the first two results as plain text. Page reading is limited to public
-HTTP(S) hosts on standard ports, blocks private/local/reserved addresses and
-unsafe redirects, accepts HTML/plain text only, caps each response at 1 MB and
-12 seconds, and passes at most 5,000 characters per page into the prompt.
-Scripts are never executed. Search queries and requested public pages leave
-the computer; model inference and conversation storage remain local. Search
-snippets and page text are unverified third-party content. Review original
-sources before relying on claims.
-
-The search API is `POST /api/research` with JSON
-`{"query":"your research question","limit":5}`; the limit is 1–10 and query
-length is capped at 500 characters. The optional page API is
-`POST /api/research/page` with JSON `{"url":"https://example.com/article"}`.
-Both endpoints remain subject to local/LAN authorization and origin checks.
-
-
-## Current capability boundaries
-
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously, and a mission does not by itself edit source code — self-development is a separate, checkpointed transaction. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. The external coding CLI adapter remains disabled until it supports a verified llama.cpp-native connection; BabyMind will not start it through a different model runtime. The separate local app builder (above) is the only capability that writes files and runs generated code, and it is off until you enable it. The packaged model is an aggressively uncensored community fine-tune, but no
-model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
-
-## Fixed invariant
-
-BabyMind validates that the canonical registry contains exactly 50 unique, sequential IDs from BM-01 through BM-50.
-
-**Security status:** The external coding CLI adapter is disabled until a verified llama.cpp-native integration and OS-enforced workspace sandbox are available. BabyMind's separate in-app workspace file broker also remains disabled pending native race-resistant filesystem protections.
-
-
-## Installation diagnostics
-
-Run the non-destructive diagnostic command from PowerShell:
-
-    babymind doctor
-
-It checks the Python version, 50-role registry, local storage permissions,
-existing encrypted memory database/key availability, local model connection,
-and the current workspace/execution security gates. It never starts a model,
-executes project code, or creates a replacement encryption key. A disconnected
-model is reported as a warning so you can start BabyMind's llama.cpp runtime and run the command
-again. A missing memory key is a failure: do not delete or replace it.
-
-
-## Encrypted backup and restore
-
-Open **Settings → Encrypted backup** to create a password-protected `.bmbak`
-file or restore one. BabyMind snapshots its encrypted conversation/task
-database and encrypted memory database without exporting plaintext chat or
-memory. The archive is authenticated with AES-256-GCM and a key derived from
-your backup password using scrypt. Use a strong password of at least 12
-characters and keep it separately; BabyMind cannot recover a forgotten
-password.
-
-On Windows, the database encryption keys are protected by DPAPI and remain
-bound to the same Windows user on the same computer. This backup is intended
-for disaster recovery on that installation, not migration to another device
-or Windows account. Restoring replaces the current local databases, requires
-typing `RESTORE BABYMIND`, validates the archive, database integrity and
-encryption keys before replacing files, and should be followed by restarting
-BabyMind. Keep a separate copy of the backup outside `~/.babymind/`.
-
-## Integrated capabilities
-
-Open **Settings → Connected tools** in BabyMind. These are product capabilities routed through the same BabyMind coordinator, identity, local model and encrypted conversation history; they are not separate assistants.
-
-- **Document understanding:** Docling extracts local documents and sends their content to the shared coordinator.
-- **Speech:** faster-whisper and Voicebox transcription feed the same coordinator; Voicebox speech output uses the same BabyMind identity.
-- **Knowledge retrieval:** Cognee search is answered by the shared coordinator and can use BabyMind's encrypted memory. Only individually approved notes are indexed. Cognee's separate graph/vector store is not encrypted by BabyMind, so do not index secrets.
-- **Browser automation:** supervised local browser tasks require explicit approval before launch.
-- **Coding:** The external coding CLI adapter is disabled because it does not currently provide a verified llama.cpp-native connection. BabyMind refuses to start a coding runtime that would require a different model backend.
-- **Quality and security:** Promptfoo is part of the repository's developer/CI quality workflow and tests BabyMind through its loopback API; it is not another runtime assistant.
-
-Some capabilities need their local engine installed or running because large speech/document models and browser runtimes should not be forced into every lightweight install. They are still integrated BabyMind capabilities, not separate AI products. Install or start only the local engine needed by a capability:
-
-    py -m pip install -e ".[documents]"
-    py -m pip install -e ".[voice]"
-    py -m pip install -e ".[browser]"
-    py -m pip install -e ".[knowledge-graph]"
-
-Voicebox runs as a loopback-only local service. Cognee requires explicit per-note approval and a separate local storage review. See [capability setup and safety](docs/OPTIONAL_INTEGRATIONS.md) and [quality checks](quality/README.md).
-
-Check engine availability without starting models:
-
-    babymind integrations
-
-## Build a small app locally (opt-in, disabled by default)
-
-BabyMind can turn a short brief into a working app, write it into a dedicated folder, and run its
-entry point once. Set both variables and restart BabyMind:
-
-    $env:BABYMIND_APP_BUILDER_ENABLED = "true"
-    $env:BABYMIND_BUILDER_ROOT = "C:\Users\you\BabyMindApps"
-
-Open **Settings → App builder**, describe the app, then review the exact plan: every path, its
-size, a preview, and a SHA-256 plan hash. Nothing is written before you approve that hash. On
-approval BabyMind creates `<root>\apps\<slug>\`, writes each file without overwriting anything,
-and runs the generated Python entry point once with no shell, a scrubbed environment, and a
-60-second limit.
-
-Limits: 40 files, 64 KB per file, 512 KB total, `.py .txt .md .json .csv .html .css .js .toml .ini
-.cfg .yaml .yml .svg` only, no absolute paths, drive letters, `..`, hidden files, or symlinks.
-
-On Linux the generated entry point runs inside the namespace sandbox described below (no network,
-read-only system files, only the project writable). On Windows and macOS no backend exists yet, so
-it runs with your user account's privileges and the result says `sandbox: "unavailable"`. Read what
-was written before running it again. The unrelated workspace file broker in `approval.py` stays disabled. See
-[docs/APP_BUILDER.md](docs/APP_BUILDER.md).
-
-## Mission control: all 50 roles
-
-Open **Mission control** in the sidebar. Write a brief and press **Start mission**.
-BabyMind walks every phase and records each role's contribution with its agent
-ID, phase, timing, and output. The API is `POST /api/missions` (202 + mission id),
-`GET /api/missions/<id>` for progress, and `POST /api/missions/<id>/cancel`.
-
-Roles run sequentially because there is one local model; a mission is not 50
-parallel models. Set `BABYMIND_MISSION_MAX_SECONDS` (default 900) to bound the
-run. Roles that do not fit the budget are recorded as `deferred` with a reason —
-they are never silently dropped. Contributions are encrypted in
-`~/.babymind/missions.sqlite3`.
-
-    babymind roles
-    babymind mission "Add a CSV export to the inventory application"
-
-Start a mission with **Also apply one verified self-edit** (or `"self_edit":
-true`) and BabyMind additionally proposes one patch to its own source, then
-checkpoints, compiles, and tests it — keeping it only if the suite accepts it,
-and rolling it back automatically if it does not.
-
-## Self-development engine
-
-BabyMind can edit its own source in a source checkout. Open **Mission control →
-Self-development**, or use the API:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/dev/status` | Truthful capability report, isolation, audit-chain state |
-| `POST /api/dev/preview` | Unified diff for a proposed transaction, writes nothing |
-| `POST /api/dev/apply` | Checkpoint → write → compile → test → keep or auto-rollback |
-| `POST /api/dev/repair` | Model-proposed patch with up to N repair attempts after a rollback |
-| `POST /api/dev/rollback` | Restore a checkpoint and remove files it created |
-| `GET /api/sandbox`, `POST /api/sandbox/self-test` | Backend/mechanism report and four live isolation probes |
-| `POST /api/dev/tests` | Run the project test suite |
-| `GET /api/dev/tree`, `GET /api/dev/file?path=` | Read-only source inspection |
-
-Every applied transaction is checkpointed first, verified by `compileall` and
-the repository's own unittest suite, and reverted automatically on failure. The
-audit log (`state/dev-audit.jsonl`) is append-only and hash-chained; `babymind
-selfdev` reports whether the chain is intact.
-
-A failed patch gets a bounded second chance: the proposer sees the failed
-verification output and may resubmit, twice at most, each attempt checkpointed
-and verified independently.
-
-Verification is not a lie about isolation either. On Linux every command,
-compile and test run happens inside `sandbox.py`: user/mount/pid/network
-namespaces, a tmpfs chroot, system paths mounted read-only, only the project
-writable, loopback-only networking, rlimits, and a `finally` cleanup of the
-launcher. `POST /api/sandbox/self-test` proves it in four live probes (network,
-home-directory secret, `/usr` write, workspace write). On Windows and macOS no
-backend is implemented, and the engine says so rather than pretending: the API
-reports `available: false` with the reason, results carry `sandbox:
-"unavailable"`, and `BABYMIND_SANDBOX=require` refuses to run at all. See [docs/AUTONOMY.md](docs/AUTONOMY.md), [docs/TEST_REPORT.md](docs/TEST_REPORT.md), and
-[docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
-
-## Hardware sizing and local models
-
-`babymind hardware` (or `GET /api/model/hardware`) reports CPU, RAM, free disk,
-GPU tooling, and a conservative model class with context size and llama.cpp
-flags. On a 24 GB machine it recommends a 4B–7B Q4 model at 8192 context; reduce
-the context if memory pressure appears. Detection is an estimate from reported
-memory, never a promise of speed.
-
-## Additional optional local integrations
-
-BabyMind can connect to three additional open-source projects without creating new assistant identities:
-
-- **Cognee** adds an opt-in local knowledge graph. Only individually approved notes are indexed; BabyMind never copies all encrypted conversation history. Cognee's separate local graph/vector files are not encrypted by BabyMind. Install with `py -m pip install -e ".[knowledge-graph]"` and set `BABYMIND_COGNEE_ENABLED=true` after reviewing the privacy warning.
-- **Voicebox** adds local speech output and an alternative speech-to-text server. Run its Docker service on 127.0.0.1:8790; CPU Piper is the recommended starting point for integrated-graphics laptops.
-- **Promptfoo** adds developer-only local evaluation in quality/. It targets BabyMind's loopback API and uses no hosted grader in the included smoke suite.
-
-See Optional integrations (docs/OPTIONAL_INTEGRATIONS.md) and Quality checks (quality/README.md) for setup and privacy boundaries.
-
-
-## Local self-inspection and public GitHub research demo
-
-The Windows UI demo reads a strict allowlist of BabyMind source files from the
-same local checkout used to launch the app. It separately searches public
-GitHub for unrelated projects, excludes BabyMind's own private repository, and
-reads a small number of public project pages. BabyMind's fixed local model
-compares those public capabilities against its actual local source and produces
-one prioritized core-code improvement with exact files, tests, and measurable
-acceptance criteria. Only the public search query and requests for public pages
-leave the device; the local BabyMind source snapshot is sent only to the local
-model. The local snapshot excludes environment files, credentials, user
-databases, memory stores, certificates, model weights, and arbitrary workspace
-files. Public page text is treated as untrusted input.
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765).
+
+For an optional authenticated HTTPS session on a trusted private LAN:
+
+```bash
+babymind-web --lan
+```
+
+Keep LAN access opt-in. Do not expose the service directly to the public internet.
+
+## Desktop window
+
+Install the distribution's GTK and WebKit2 development/runtime dependencies required by pywebview, then run:
+
+```bash
+babymind-desktop
+```
+
+The desktop launcher and browser interface use the same local BabyMind server and data directory.
+
+## Local data and encryption
+
+BabyMind stores its local databases and key files under `~/.babymind` by default. Override this with `BABYMIND_HOME`. Encryption keys are separate owner-only files with mode `0600`; protect the account and device. Encryption at rest does not protect against malware running as the same user or access while BabyMind is unlocked.
+
+Back up the complete BabyMind data directory securely. Losing a key file makes its corresponding encrypted data unrecoverable. Do not manually replace or delete key files.
+
+## Development checks
+
+```bash
+python -m compileall -q src tests
+node --check src/babymind/web/app.js
+node --check src/babymind/web/approvals.js
+python -m unittest discover -s tests -v
+```
+
+See [docs/PLATFORM_MISSION.md](docs/PLATFORM_MISSION.md), [docs/AUTONOMY_ROADMAP.md](docs/AUTONOMY_ROADMAP.md), and [SECURITY.md](SECURITY.md) for implementation gates and security boundaries.
+
+BabyMind can make mistakes. Verify important results and inspect proposed code changes before using them.
