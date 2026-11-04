@@ -533,18 +533,10 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self.send_json({"conversation_id": conversation_id, "user_message": user_message, "result": result, "notice": notice})
             elif path == "/api/integrations/coding":
-                if payload.get("user_approved") is not True:
-                    raise PermissionError("Confirm the workspace-write coding session explicitly before it can launch.")
-                workspace = str(payload.get("workspace", "")).strip()
-                if not workspace or len(workspace) > 2048:
-                    raise ValueError("Enter a local workspace directory path.")
-                pid = COORDINATOR.launch_coding_session(workspace, user_approved=True)
-                notice = f"Open Interpreter started with workspace-write access (process {pid}). It can edit files and run commands inside the selected project; network access is disabled and it must ask before actions requiring broader permissions. Its OS sandbox must enforce the workspace boundary."
-                user_message = "Launch the workspace-write coding assistant in: " + workspace
-                conversation_id = persist_integration_exchange(
-                    str(payload.get("conversation_id", "")), user_message, notice, "BM-01"
+                raise PermissionError(
+                    "The coding CLI is disabled until a verified llama.cpp-native "
+                    "adapter and OS-enforced workspace sandbox are available."
                 )
-                self.send_json({"conversation_id": conversation_id, "user_message": user_message, "pid": pid, "mode": "workspace-write", "notice": notice}, 201)
             elif path == "/api/tasks":
                 title = str(payload.get("title", "")).strip()
                 details = str(payload.get("details", "")).strip()
