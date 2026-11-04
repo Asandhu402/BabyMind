@@ -4,6 +4,7 @@ Serves the actual BabyMind web assets from a local fixture HTTP server.
 It does not start a model, the backend API, or production inference.
 """
 import os
+import sys
 import threading
 import time
 import unittest
@@ -16,6 +17,9 @@ class LinuxGuiTests(unittest.TestCase):
     def test_qt_window_loads_local_app_and_blocks_external_navigation(self):
         from PySide6.QtCore import QUrl
         from PySide6.QtWebEngineCore import QWebEnginePage
+        # Match the real desktop startup: load WebEngineWidgets before creating
+        # QApplication. Some Qt/OpenGL configurations require early setup.
+        from PySide6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
         from PySide6.QtWidgets import QApplication
         from babymind.desktop import _create_window
 
@@ -50,7 +54,8 @@ class LinuxGuiTests(unittest.TestCase):
             def log_message(self, *_args):
                 pass
 
-        app = QApplication.instance() or QApplication([])
+        # Qt WebEngine needs an application name in its command line.
+        app = QApplication.instance() or QApplication([sys.argv[0] or "babymind-gui-test"])
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         view = _create_window(server.server_address[1])

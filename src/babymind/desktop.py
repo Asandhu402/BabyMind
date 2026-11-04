@@ -133,6 +133,9 @@ def main() -> None:
         view.show()
         app.exec()
     except Exception as error:
+        # The dialog is useful on a desktop; stderr also makes failures
+        # diagnosable when the application was started from a terminal.
+        print(f"BabyMind could not start: {error}", file=sys.stderr, flush=True)
         QMessageBox.critical(None, "BabyMind could not start", str(error))
         raise SystemExit(1) from error
     finally:

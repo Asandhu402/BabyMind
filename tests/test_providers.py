@@ -1,6 +1,8 @@
 """Tests for BabyMind's llama.cpp local model engine."""
 
 import os
+import socket
+import subprocess
 import tempfile
 from pathlib import Path
 import unittest
@@ -73,20 +75,67 @@ class ProviderSelectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ProviderError, "executable not found"):
                 LlamaCppProvider()
 
-    def test_refuses_reuse_of_unverified_local_server(self) -> None:
-        with tempfile.TemporaryDirectory() as folder:
+    def test_refuses_any_occupied_port_without_launching(self) -> None:
+        # The listener need not speak HTTP or return a successful /health.
+        with tempfile.TemporaryDirectory() as folder, socket.socket() as listener:
             executable = Path(folder) / "llama-server"
             model = Path(folder) / "model.gguf"
             executable.write_bytes(b"fixture")
             model.write_bytes(b"fixture")
-            env = {"BABYMIND_LLAMA_SERVER": str(executable), "BABYMIND_GGUF_MODEL": str(model)}
-            response = MagicMock()
-            with patch.dict(os.environ, env, clear=True), \
-                 patch("babymind.providers.urlopen", return_value=response), \
-                 patch("subprocess.Popen") as popen:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            env = {"BABYMIND_LLAMA_SERVER": str(executable), "BABYMIND_GGUF_MODEL": str(model),
+                   "BABYMIND_LLAMA_PORT": str(listener.getsockname()[1])}
+            with patch.dict(os.environ, env, clear=True), patch("subprocess.Popen") as popen:
                 with self.assertRaisesRegex(ProviderError, "will not reuse"):
                     LlamaCppProvider()
                 popen.assert_not_called()
+
+    def test_managed_server_uses_one_slot_for_the_full_context(self) -> None:
+        with tempfile.TemporaryDirectory() as folder, socket.socket() as probe:
+            executable = Path(folder) / "llama-server"
+            model = Path(folder) / "model.gguf"
+            executable.touch()
+            model.touch()
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+            probe.close()
+            env = {"BABYMIND_LLAMA_SERVER": str(executable), "BABYMIND_GGUF_MODEL": str(model),
+                   "BABYMIND_LLAMA_PORT": str(port), "BABYMIND_CONTEXT_SIZE": "4096"}
+            process = MagicMock()
+            process.poll.return_value = None
+            with patch.dict(os.environ, env, clear=True), \
+                 patch("subprocess.Popen", return_value=process) as popen, \
+                 patch("babymind.providers.urlopen"), patch("atexit.register"):
+                LlamaCppProvider()
+            command = popen.call_args.args[0]
+            self.assertEqual(command[command.index("--parallel") + 1], "1")
+            self.assertEqual(command[command.index("--ctx-size") + 1], "4096")
+
+    def test_invalid_port_is_reported_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            executable = Path(folder) / "llama-server"
+            model = Path(folder) / "model.gguf"
+            executable.touch()
+            model.touch()
+            for port in ("abc", "0", "65536", "-1"):
+                with self.subTest(port=port), patch.dict(os.environ, {
+                    "BABYMIND_LLAMA_SERVER": str(executable), "BABYMIND_GGUF_MODEL": str(model),
+                    "BABYMIND_LLAMA_PORT": port,
+                }, clear=True), patch("subprocess.Popen") as popen:
+                    with self.assertRaisesRegex(ProviderError, "between 1 and 65535"):
+                        LlamaCppProvider()
+                    popen.assert_not_called()
+
+    def test_stop_reaps_process_after_forced_kill(self) -> None:
+        provider = LlamaCppProvider.__new__(LlamaCppProvider)
+        provider._process = MagicMock()
+        provider._process.poll.return_value = None
+        provider._process.wait.side_effect = [subprocess.TimeoutExpired("llama-server", 5), 0]
+        provider.stop()
+        provider._process.terminate.assert_called_once()
+        provider._process.kill.assert_called_once()
+        self.assertEqual(provider._process.wait.call_count, 2)
 
 
 if __name__ == "__main__":

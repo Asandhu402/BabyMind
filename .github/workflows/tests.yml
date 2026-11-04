@@ -19,7 +19,7 @@ jobs:
       - name: Install Linux desktop test libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xauth libnss3 libgl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libasound2 libegl1 libgbm1
+          sudo apt-get install -y xvfb xauth libnss3 libgl1 libegl1 libgbm1 libdrm2 libasound2 libdbus-1-3 libfontconfig1 libfreetype6 libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrender1 libxrandr2 libxtst6 libxi6 libxss1 libxshmfence1 libxkbfile1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1
       - name: Build Linux portable directory
         run: ./build-linux.sh
       - name: Test source
@@ -27,11 +27,27 @@ jobs:
           .venv/bin/python -m compileall -q src tests
           .venv/bin/python -m unittest discover -s tests -q
           for file in src/babymind/web/*.js; do node --check "$file"; done
+      - name: Exercise llama.cpp with an untrained test fixture
+        run: |
+          .venv/bin/python -m pip install 'numpy==2.2.6' 'PyYAML==6.0.3'
+          PYTHONPATH=build/llama-source/gguf-py .venv/bin/python tests/fixtures/create_random_gguf.py build/random-test.gguf
+          BABYMIND_TEST_LLAMA_SERVER="$PWD/dist/BabyMind/llama.cpp/llama-server" BABYMIND_TEST_GGUF_MODEL="$PWD/build/random-test.gguf" .venv/bin/python -m unittest discover -s tests -p test_llama_integration.py -v
       - name: Exercise real Qt window with a local fixture
         env:
           BABYMIND_GUI_TEST: '1'
           QTWEBENGINE_DISABLE_SANDBOX: '1' # CI smoke test only; not an app default.
-        run: xvfb-run -a .venv/bin/python -m unittest discover -s tests -p test_gui_linux.py -v
+          QT_DEBUG_PLUGINS: '1'
+          PYTHONFAULTHANDLER: '1'
+        run: |
+          log="$RUNNER_TEMP/babymind-qt-smoke.log"
+          if xvfb-run -a .venv/bin/python -m unittest discover -s tests -p test_gui_linux.py -v >"$log" 2>&1; then
+            cat "$log"
+          else
+            status=$?
+            cat "$log"
+            .venv/bin/python scripts/ci_gui_diagnostics.py "$log" "$status"
+            exit "$status"
+          fi
       - name: Check runtime and packaged assets
         run: |
           test -x dist/BabyMind/BabyMind
@@ -39,6 +55,7 @@ jobs:
           test -f dist/BabyMind/_internal/babymind/web/index.html
           dist/BabyMind/llama.cpp/llama-server --version
           dist/BabyMind/BabyMind --check-package
+          dist/BabyMind/BabyMind --check-desktop-deps
       - name: Archive without losing executable permissions
         run: tar -C dist -czf dist/BabyMind-Linux-x86_64.tar.gz BabyMind
       - uses: actions/upload-artifact@v4

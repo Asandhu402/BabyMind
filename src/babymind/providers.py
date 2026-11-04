@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -137,7 +138,7 @@ class LlamaCppProvider(LlamaCppHTTPClient):
 
     def __init__(self, timeout: int = 600) -> None:
         import atexit
-        import subprocess
+        import socket
         import time
         from pathlib import Path
 
@@ -155,7 +156,12 @@ class LlamaCppProvider(LlamaCppHTTPClient):
             raise ProviderError(f"llama-server executable not found: {exe}")
         if not model.is_file() or model.suffix.lower() != ".gguf":
             raise ProviderError(f"GGUF model file not found: {model}")
-        port = int(os.getenv("BABYMIND_LLAMA_PORT", "1235"))
+        try:
+            port = int(os.getenv("BABYMIND_LLAMA_PORT", "1235"))
+            if not 1 <= port <= 65535:
+                raise ValueError("out of range")
+        except ValueError as error:
+            raise ProviderError("BABYMIND_LLAMA_PORT must be a port number between 1 and 65535.") from error
         super().__init__(
             base_url=f"http://127.0.0.1:{port}/v1",
             model=os.getenv("BABYMIND_MODEL"),
@@ -163,18 +169,24 @@ class LlamaCppProvider(LlamaCppHTTPClient):
             timeout=timeout,
         )
         self._process = None
+        # A service returning 404 or 503 (or a non-HTTP service) still owns
+        # the port. An HTTP health probe alone treats those as a free port.
+        # There remains a race between releasing this probe and llama binding.
         try:
-            with urlopen(f"http://127.0.0.1:{port}/health", timeout=1):
-                raise ProviderError(
-                    f"Port {port} is already serving a model; BabyMind will not reuse "
-                    "an unverified server. Choose a free BABYMIND_LLAMA_PORT."
-                )
-        except (URLError, TimeoutError, OSError):
-            pass
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.bind(("127.0.0.1", port))
+        except OSError as error:
+            raise ProviderError(
+                f"Port {port} is unavailable; BabyMind will not reuse an unverified "
+                "server. Choose a free BABYMIND_LLAMA_PORT."
+            ) from error
         command = [
             str(exe), "--model", str(model), "--host", "127.0.0.1",
             "--port", str(port), "--ctx-size",
             os.getenv("BABYMIND_CONTEXT_SIZE", "4096"),
+            # BabyMind serializes inference. Auto-selected multiple llama
+            # slots divide the configured context and can reject normal chats.
+            "--parallel", "1",
             "--reasoning-format", "none",
         ]
         # PyInstaller adjusts LD_LIBRARY_PATH for the frozen app; do not pass
@@ -205,7 +217,7 @@ class LlamaCppProvider(LlamaCppHTTPClient):
             except (URLError, TimeoutError, OSError):
                 time.sleep(0.5)
         else:
-            self._process.terminate()
+            self.stop()
             raise ProviderError("Timed out while loading the local GGUF model.")
 
     def stop(self) -> None:
@@ -214,8 +226,9 @@ class LlamaCppProvider(LlamaCppHTTPClient):
             self._process.terminate()
             try:
                 self._process.wait(timeout=5)
-            except Exception:
+            except subprocess.TimeoutExpired:
                 self._process.kill()
+                self._process.wait()
 
     def _request_json(self, url: str, payload: dict | None = None) -> dict:
         try:

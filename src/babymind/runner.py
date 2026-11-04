@@ -92,14 +92,24 @@ def _validate_arguments(argv: list[str]) -> list[str]:
 def _resolve_executable(argv: list[str]) -> str:
     program = argv[0]
     name = Path(program).name.lower()
-    if not unrestricted() and name not in allowlist():
-        raise CommandRejected(
-            f"'{Path(program).name}' is not in the executable allowlist. "
-            "Add it to BABYMIND_RUNNER_ALLOWLIST if this is intentional."
-        )
     resolved = shutil.which(program)
     if resolved is None and os.path.isfile(program):
         resolved = os.path.abspath(program)
+    if not unrestricted() and name not in allowlist():
+        # Some Ubuntu/Python builds expose the active interpreter as
+        # python3.10, python3.12, etc. Allow only the actual running interpreter,
+        # not arbitrary executables that merely have a versioned Python name.
+        same_interpreter = False
+        if resolved and not getattr(sys, "frozen", False):
+            try:
+                same_interpreter = os.path.samefile(resolved, sys.executable)
+            except OSError:
+                pass
+        if not same_interpreter:
+            raise CommandRejected(
+                f"'{Path(program).name}' is not in the executable allowlist. "
+                "Add it to BABYMIND_RUNNER_ALLOWLIST if this is intentional."
+            )
     if resolved is None:
         raise CommandRejected(f"Executable not found: {program}")
     return resolved

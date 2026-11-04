@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from unittest.mock import patch
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -47,6 +48,25 @@ class RunnerTests(unittest.TestCase):
     def test_disallowed_executable_is_rejected(self) -> None:
         with self.assertRaises(runner.CommandRejected):
             runner.run_command(["/bin/sh", "-c", "echo nope"], cwd=self.root, timeout=10)
+
+    def test_versioned_active_interpreter_is_allowed_but_not_impostors(self) -> None:
+        actual = self.root / "python3.10"
+        actual.symlink_to(sys.executable)
+        result = runner.run_command([str(actual), "-c", "print('interpreter works')"],
+                                    cwd=self.root, timeout=30)
+        self.assertTrue(result["ok"], result)
+        self.assertIn("interpreter works", result["stdout"])
+        impostor = self.root / "python3.12"
+        impostor.write_text("#!/bin/sh\necho not-python\n")
+        impostor.chmod(0o755)
+        with self.assertRaises(runner.CommandRejected):
+            runner.run_command([str(impostor)], cwd=self.root, timeout=30)
+
+    def test_frozen_executable_is_not_accepted_as_interpreter(self) -> None:
+        alias = self.root / "python3.10"
+        alias.symlink_to(sys.executable)
+        with patch.object(sys, "frozen", True, create=True), self.assertRaises(runner.CommandRejected):
+            runner._resolve_executable([str(alias)])
 
     def test_working_directory_must_stay_inside_the_root(self) -> None:
         outside = Path(self.temp.name).parent
