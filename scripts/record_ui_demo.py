@@ -104,13 +104,12 @@ def collect_local_code_context() -> str:
         total_chars += len(content)
     if not sections:
         raise RuntimeError(
+        details = "; ".join(omitted)
+        raise RuntimeError(
             "No complete BabyMind core source files were available for inspection. "
             f"Checkout root: {ROOT}; package file: {babymind.__file__}; "
-            f"providers module: {providers_module.__file__}; "
-            f"details: {"; ".join(omitted)}"
+            f"providers module: {providers_module.__file__}; details: {details}"
         )
-    manifest = (
-        "SOURCE-COVERAGE MANIFEST: Every file below is included in full, from first byte "
         "to last byte. No file contents were clipped. Files not listed were not inspected; "
         "never infer defects from their absence.\n"
         + ("Files deliberately omitted: " + "; ".join(omitted) + "\n" if omitted else "")
