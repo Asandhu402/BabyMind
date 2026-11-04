@@ -75,6 +75,10 @@ class LMStudioProvider:
             )
         return str(models[0]["id"])
 
+    def _request_options(self) -> dict:
+        """Return backend-specific OpenAI-compatible request options."""
+        return {}
+
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         # Configurable conservative defaults for local inference.
         try:
@@ -102,6 +106,7 @@ class LMStudioProvider:
             "top_p": top_p,
             "max_tokens": max_tokens,
         }
+        payload.update(self._request_options())
         response = self._request_json(
             f"{self.base_url}/chat/completions", payload
         )
@@ -124,6 +129,11 @@ class LlamaCppProvider(LMStudioProvider):
     No model is downloaded automatically. The executable and model remain
     under the user's control and inference runs on this computer.
     """
+
+    def _request_options(self) -> dict:
+        # Qwen-family instruct templates can spend the entire token budget in
+        # hidden reasoning unless the template is explicitly told to disable it.
+        return {"chat_template_kwargs": {"enable_thinking": False}}
 
     def __init__(self, timeout: int = 600) -> None:
         import atexit
