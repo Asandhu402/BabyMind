@@ -45,7 +45,7 @@ The default local endpoint is `http://127.0.0.1:1235/v1`. Optional settings:
 `BABYMIND_TEMPERATURE`, `BABYMIND_TOP_P`, `BABYMIND_MAX_TOKENS`, and
 `BABYMIND_HOME`.
 
-## Choose BabyMind's local model engine
+## llama.cpp setup
 
 There is no engine selector: llama.cpp is the sole supported runtime. The
 portable Windows desktop package bundles the CPU runtime and offers a verified
@@ -69,6 +69,28 @@ server process it started when BabyMind exits. The default context size is
 `BABYMIND_LLAMA_PORT` to change the local port. This initial engine mode uses
 the CPU build by default; acceleration depends on the llama.cpp build you
 download and its compatible runtime libraries.
+
+### Fixed local model and answer quality
+
+BabyMind uses one bundled, SHA-256-pinned local model. Its model identity is
+fixed: configuration, updates, and specialist roles must never silently switch
+to another model. A relocated copy is accepted only when its contents match the
+pinned SHA-256. All 50 specialist roles share this same model; adding roles does
+not create separate models or increase its underlying reasoning capability.
+
+Answer quality is improved in BabyMind's core orchestration, bounded context,
+retrieval, safety checks, and evaluation—not by changing the model. The model
+runs locally through the bundled llama.cpp CPU runtime.
+
+Generation defaults are configurable for the local llama.cpp runtime:
+- `BABYMIND_TEMPERATURE` (default `0.4`)
+- `BABYMIND_TOP_P` (default `0.9`)
+- `BABYMIND_MAX_TOKENS` (default `2048`)
+
+Conversation history is limited to the most recent 10 messages and approximately
+10,000 characters so older dialogue does not consume the entire context window.
+For llama.cpp, set `BABYMIND_CONTEXT_SIZE` to a value supported by the model and
+available memory (for example, `8192`); a larger context also consumes more RAM.
 
 ## Start the BabyMind interface
 
