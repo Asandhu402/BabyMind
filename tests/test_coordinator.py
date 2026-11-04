@@ -47,6 +47,15 @@ class CoordinatorTests(unittest.TestCase):
         self.assertIn("Researcher", second_prompt)
         self.assertIn("QUALITY STANDARD", second_prompt)
 
+    def test_coding_assistant_uses_the_same_shared_provider(self) -> None:
+        response = self.coordinator.coding_assist(
+            "Fix this function", context="def f(): return 1"
+        )
+        self.assertEqual(response, "A tested response.")
+        self.assertIn("integrated coding assistant", self.provider.system_prompt)
+        self.assertIn("Fix this function", self.provider.user_prompt)
+        self.assertIn("def f(): return 1", self.provider.user_prompt)
+
     def test_document_pipeline_routes_extracted_text_through_shared_coordinator(self) -> None:
         from unittest.mock import patch
         with patch("babymind.integrations.documents.convert_document", return_value="# Local report\\nRevenue increased.") as convert:
