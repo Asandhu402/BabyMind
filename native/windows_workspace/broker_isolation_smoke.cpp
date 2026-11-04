@@ -153,6 +153,21 @@ int wmain() {
     child_stdin_read = Handle{};
     child_stdout_write = Handle{};
 
+    // Queue the complete request and close the parent's write end while the
+    // child is still suspended. This removes startup/read races and guarantees
+    // EOF after the single frame.
+    std::array<uint8_t, 36> request{};
+    make_request(&request);
+    DWORD written = 0;
+    if (!WriteFile(parent_stdin_write.get(), request.data(),
+                   static_cast<DWORD>(request.size()), &written, nullptr) ||
+        written != request.size()) {
+        TerminateProcess(process_handle.get(), 7);
+        std::cerr << "FAIL: unable to queue one bounded request.\n";
+        return 7;
+    }
+    parent_stdin_write = Handle{};
+
     Handle job(CreateJobObjectW(nullptr, nullptr));
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
     limits.BasicLimitInformation.LimitFlags =
@@ -170,18 +185,6 @@ int wmain() {
         std::cerr << "FAIL: unable to apply process job limits.\n";
         return 6;
     }
-
-    std::array<uint8_t, 36> request{};
-    make_request(&request);
-    DWORD written = 0;
-    if (!WriteFile(parent_stdin_write.get(), request.data(),
-                   static_cast<DWORD>(request.size()), &written, nullptr) ||
-        written != request.size()) {
-        TerminateJobObject(job.get(), 7);
-        std::cerr << "FAIL: unable to send one bounded request.\n";
-        return 7;
-    }
-    parent_stdin_write = Handle{};
 
     const DWORD wait = WaitForSingleObject(process_handle.get(), kTimeoutMs);
     if (wait != WAIT_OBJECT_0) {
