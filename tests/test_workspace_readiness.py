@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from babymind import approval
+from babymind import approval, sandbox
 from babymind.workspace_readiness import workspace_readiness
 
 
@@ -19,8 +19,17 @@ class WorkspaceReadinessTests(unittest.TestCase):
         self.assertFalse(report["coding_assistant"]["can_run_commands"])
         self.assertFalse(report["native_workspace"]["production_broker"])
         self.assertFalse(report["native_workspace"]["broker_owned_approval"])
-        self.assertFalse(report["project_execution"]["sandbox_available"])
+        self.assertEqual(report["project_execution"]["sandbox_available"], sandbox.available())
         self.assertEqual(len(report["blockers"]), 4)
+
+    def test_sandbox_report_is_not_hard_coded(self) -> None:
+        report = workspace_readiness()
+        execution = report["project_execution"]
+        self.assertIn(execution["status"], {"sandboxed", "unsandboxed"})
+        self.assertEqual(execution["status"] == "sandboxed", execution["sandbox_available"])
+        self.assertTrue(execution["sandbox_detail"])
+        self.assertIn("environment", execution["sandbox_mechanisms"])
+        self.assertEqual(report["local_app_builder"]["os_sandbox"], execution["sandbox_available"])
 
     def test_report_reflects_closed_production_file_action_gate(self) -> None:
         with patch.object(approval, "WORKSPACE_FILE_ACTIONS_ENABLED", False):

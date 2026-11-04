@@ -38,13 +38,13 @@ class CoordinatorTests(unittest.TestCase):
         second = self.coordinator.ask("BM-02", "Research this")
         second_prompt = self.provider.system_prompt
         self.assertEqual(first.response, "A tested response.")
-        self.assertIn("Coordinator", first_prompt)
+        self.assertIn("Chief Architect", first_prompt)
         self.assertIn("QUALITY STANDARD", first_prompt)
         self.assertIn("Verify arithmetic", first_prompt)
         self.assertIn("single best-supported course of action", first_prompt)
         self.assertIn("do not present menus of alternatives", first_prompt)
         self.assertEqual(second.agent_id, "BM-02")
-        self.assertIn("Researcher", second_prompt)
+        self.assertIn("Autonomous Development Manager", second_prompt)
         self.assertIn("QUALITY STANDARD", second_prompt)
 
     def test_coding_assistant_uses_the_same_shared_provider(self) -> None:
@@ -188,7 +188,7 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(result.response, "A tested response.")
         self.assertIn("A grounded local note.", self.provider.user_prompt)
         self.assertIn("untrusted reference material", self.provider.user_prompt)
-        self.assertIn("Researcher", self.provider.system_prompt)
+        self.assertIn("Autonomous Development Manager", self.provider.system_prompt)
 
     def test_knowledge_search_without_results_still_uses_shared_coordinator(self) -> None:
         from unittest.mock import patch

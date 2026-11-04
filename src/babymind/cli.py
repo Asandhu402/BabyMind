@@ -14,6 +14,18 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("doctor", help="Run non-destructive installation and security diagnostics")
     subparsers.add_parser("list", help="List all registered agents")
     subparsers.add_parser("integrations", help="Show availability of optional integrations")
+    subparsers.add_parser("roles", help="List the 50 development roles and their mission phase")
+    subparsers.add_parser("hardware", help="Detect hardware and recommend local model settings")
+    subparsers.add_parser("selfdev", help="Report the self-development engine's real state")
+
+    mission_parser = subparsers.add_parser("mission", help="Run a mission across all 50 roles")
+    mission_parser.add_argument("brief", help="Mission brief")
+    mission_parser.add_argument("--max-seconds", type=int, default=900,
+                               help="Time budget for the whole mission (default 900)")
+
+    github_parser = subparsers.add_parser("github", help="Search public GitHub repositories")
+    github_parser.add_argument("query", help="Search text")
+    github_parser.add_argument("--limit", type=int, default=5)
 
     run_parser = subparsers.add_parser("run", help="Route a task without model inference")
     run_parser.add_argument("agent_id", help="Agent ID, for example BM-01")
@@ -51,6 +63,42 @@ def main() -> None:
             print(f"{state}: {item['name']} — {item['purpose']}")
             if not item["available"]:
                 print(f"  Install: {item['install_hint']}")
+    elif args.command == "roles":
+        from .agents import AGENTS
+        for agent in AGENTS:
+            print(f"{agent.agent_id}  {agent.name:38} {agent.phase:15} {agent.purpose}")
+    elif args.command == "hardware":
+        from .hardware import hardware_report
+        report = hardware_report()
+        print(f"cpu: {report['cpu']}")
+        print(f"logical cores: {report['logical_cores']}  ram: {report['ram_gb']} GB  free disk: {report['free_disk_gb']} GB")
+        print(f"recommended: {report['recommended']['parameter_class']} @ {report['recommended']['context_size']} context")
+        print(f"flags: {' '.join(report['llama_cpp_flags'])}")
+        print(f"gpu: {report['gpu']}")
+    elif args.command == "selfdev":
+        from .selfdev import status
+        report = status()
+        print(f"enabled: {report['enabled']}  root: {report['root']}")
+        print(f"can write source: {report['can_write_source']}  auto-verify: {report['automatic_verification']}  auto-rollback: {report['automatic_rollback']}")
+        print(f"audit log valid: {report['audit']['valid']}  checkpoints: {len(report['checkpoints'])}")
+        if report["problem"]:
+            print(f"problem: {report['problem']}")
+    elif args.command == "mission":
+        from .coordinator import BabyMindCoordinator
+        from .orchestrator import MissionStore, Orchestrator
+        from .server import DATA_HOME
+        store = MissionStore(DATA_HOME)
+        orchestrator = Orchestrator(BabyMindCoordinator().provider, store,
+                                    max_seconds=args.max_seconds)
+        mission = orchestrator.run_now(args.brief)
+        for run in mission["runs"]:
+            print(f"[{run['status']:11}] {run['agent_id']} {run['agent_name']:38} {run['phase']}")
+        print(f"\n{mission['summary']}")
+    elif args.command == "github":
+        from .research import github_search
+        for item in github_search(args.query, limit=args.limit):
+            licence = item["license"]["spdx"] or "no licence"
+            print(f"{item['name']}  ★{item['stars']}  {licence}  {item['url']}")
     elif args.command == "list":
         for agent in BabyMindRuntime().agents:
             print(f"{agent.agent_id}  {agent.name} [{agent.domain}] — {agent.purpose}")

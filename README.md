@@ -1,18 +1,22 @@
 # BabyMind
 
-BabyMind is a local-first personal AI application with exactly **50 specialist roles**, one consistent assistant identity, a browser-based interface, optional shared memory, and one integrated local inference runtime: llama.cpp.
+BabyMind is a local-first AI development platform with exactly **50 specialist roles**, one consistent assistant identity, a browser-based interface, optional shared memory, and one integrated local inference runtime: llama.cpp.
 
-The 50 agents are specialist configurations that share one underlying language model. They are not 50 separately trained or separately running models. The optional collaboration mode performs a specialist pass, a quality-review pass, and a final synthesis pass using that same model.
+The 50 roles are the development team defined in [docs/AUTONOMY.md](docs/AUTONOMY.md): architect, language specialists, testers, security reviewers, recovery, research, and release acceptance. They replaced the earlier general-purpose role set. They are configurations over one underlying model — not 50 separately trained or separately running models — and a "50-agent mission" is 50 role-guided passes over the same weights.
 
-**Autonomous development status:** The full self-developing platform is not implemented. Workspace file actions and project execution remain disabled pending Windows security work. See the [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md) for implemented capabilities, test results, and outstanding acceptance gates.
+**Autonomous development status:** The full self-developing platform is not implemented. The experimental native workspace broker is not enabled, and Windows has no verified execution sandbox. The self-development runner can execute commands without isolation in its default `auto` mode when no sandbox is available; use `BABYMIND_SANDBOX=require` to refuse such execution. See the [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md) for implemented capabilities, test results, and outstanding acceptance gates.
 
 ## What is included
 
 - **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, dark/light themes, and Markdown conversation export.
 - **Local text attachments:** attach small TXT, Markdown, CSV, JSON, source-code, or config files (up to 12 KB) for model context.
-- **50-agent directory:** searchable and filterable BM-01 through BM-50 role catalogue, each with a focused domain playbook and responsibility.
+- **50-agent directory:** searchable and filterable BM-01 through BM-50 development roles, each with a mission phase, capability set, and required evidence.
+- **Mission control:** run one brief through all 50 roles — planning, research, design, architecture, implementation, verification, review, delivery, acceptance — with every contribution recorded, timed, and encrypted at rest.
+- **Self-development engine:** checkpoint, edit, compile, test, and keep or automatically roll back changes to BabyMind's own source, with a hash-chained audit log.
+- **Bounded command runner:** allowlisted executables, working-directory boundary, scrubbed environment, output caps, timeout, and process-tree termination.
+- **Open-source research:** public GitHub metadata and licence classification, without cloning or auto-importing anything.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
-- **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
+- **Collaboration mode:** selected specialist, Independent Verification Agent (BM-49), then Chief Architect (BM-01).
 - **Development review:** a separate desktop view runs the 50 requested development specialist roles sequentially on the same local model, recording their reports and attempts in the encrypted app database. This is an advisory review of text you supply, not autonomous development, file access, testing, or independent verification.
 - **GitHub research:** anonymous, read-only search and commit-pinned inspection of public repository trees and UTF-8 source files; files can be supplied as excerpts to the development-review workflow. Nothing is cloned, executed, or automatically integrated. License metadata requires independent review.
 - **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows. When enabled, BabyMind ranks relevant notes locally using lightweight text matching; no embeddings or extra AI model are used. The Memory workspace also supports local search.
@@ -25,7 +29,7 @@ The 50 agents are specialist configurations that share one underlying language m
 
 Open **Development review**, enter a task and optional context, and start a review. Each role gets a separate model call; the first two reports provide limited context to later roles, and the last two receive excerpts of earlier reports. All reports are unverified model output. The review does not inspect your project, make changes, run commands, or verify acceptance criteria.
 
-The model is occupied for the review and it may take a long time on CPU. Cancel stops after the current model request returns, not immediately. Failed or interrupted reviews can be resumed; dependent final reviews are rerun where necessary, and previous attempts remain in history. An interrupted review is marked on the next startup; it is not resumed automatically. Review contents are included in BabyMind's encrypted database backups. Do not paste credentials into the supplied context. Use one BabyMind instance for normal operation; the review worker also uses a cooperative process lock to prevent overlapping review workers.
+The review holds the web application's inference slot and may take a long time on CPU. Mission control has separate scheduling and can still compete for model resources. Cancel stops after the current model request returns, not immediately. Failed or interrupted reviews can be resumed; dependent final reviews are rerun where necessary, and previous attempts remain in history. An interrupted review is marked on the next startup; it is not resumed automatically. Review contents are included in BabyMind's encrypted database backups. Do not paste credentials into the supplied context. Use one BabyMind instance for normal operation; the review worker also uses a cooperative process lock to prevent overlapping review workers.
 
 ## Requirements
 
@@ -230,7 +234,7 @@ described as fully verified.
 
 A permanent, versioned Windows release is published by the **BabyMind
 Windows release** workflow. Run it from GitHub Actions with a tag matching
-`pyproject.toml` (currently `v0.3.0`), or push that tag. The workflow repeats
+`pyproject.toml` (currently `v0.4.0`), or push that tag. The workflow repeats
 the Windows tests and build, then attaches a versioned ZIP and SHA-256 checksum
 to the GitHub Release. The package is portable but currently unsigned.
 
@@ -308,7 +312,7 @@ Both endpoints remain subject to local/LAN authorization and origin checks.
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. The external coding CLI adapter remains disabled until it supports a verified llama.cpp-native connection; BabyMind will not start it through a different model runtime. The packaged model is an aggressively uncensored community fine-tune, but no
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously, and a mission does not by itself edit source code — self-development is a separate, checkpointed transaction. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. The external coding CLI adapter remains disabled until it supports a verified llama.cpp-native connection; BabyMind will not start it through a different model runtime. The separate local app builder (above) is the only capability that writes files and runs generated code, and it is off until you enable it. The packaged model is an aggressively uncensored community fine-tune, but no
 model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
@@ -373,6 +377,94 @@ Voicebox runs as a loopback-only local service. Cognee requires explicit per-not
 Check engine availability without starting models:
 
     babymind integrations
+
+## Build a small app locally (opt-in, disabled by default)
+
+BabyMind can turn a short brief into a working app, write it into a dedicated folder, and run its
+entry point once. Set both variables and restart BabyMind:
+
+    $env:BABYMIND_APP_BUILDER_ENABLED = "true"
+    $env:BABYMIND_BUILDER_ROOT = "C:\Users\you\BabyMindApps"
+
+Open **Settings → App builder**, describe the app, then review the exact plan: every path, its
+size, a preview, and a SHA-256 plan hash. Nothing is written before you approve that hash. On
+approval BabyMind creates `<root>\apps\<slug>\`, writes each file without overwriting anything,
+and runs the generated Python entry point once with no shell, a scrubbed environment, and a
+60-second limit.
+
+Limits: 40 files, 64 KB per file, 512 KB total, `.py .txt .md .json .csv .html .css .js .toml .ini
+.cfg .yaml .yml .svg` only, no absolute paths, drive letters, `..`, hidden files, or symlinks.
+
+On Linux the generated entry point runs inside the namespace sandbox described below (no network,
+read-only system files, only the project writable). On Windows and macOS no backend exists yet, so
+it runs with your user account's privileges and the result says `sandbox: "unavailable"`. Read what
+was written before running it again. The unrelated workspace file broker in `approval.py` stays disabled. See
+[docs/APP_BUILDER.md](docs/APP_BUILDER.md).
+
+## Mission control: all 50 roles
+
+Open **Mission control** in the sidebar. Write a brief and press **Start mission**.
+BabyMind walks every phase and records each role's contribution with its agent
+ID, phase, timing, and output. The API is `POST /api/missions` (202 + mission id),
+`GET /api/missions/<id>` for progress, and `POST /api/missions/<id>/cancel`.
+
+Roles run sequentially because there is one local model; a mission is not 50
+parallel models. Set `BABYMIND_MISSION_MAX_SECONDS` (default 900) to bound the
+run. Roles that do not fit the budget are recorded as `deferred` with a reason —
+they are never silently dropped. Contributions are encrypted in
+`~/.babymind/missions.sqlite3`.
+
+    babymind roles
+    babymind mission "Add a CSV export to the inventory application"
+
+Start a mission with **Also apply one verified self-edit** (or `"self_edit":
+true`) and BabyMind additionally proposes one patch to its own source, then
+checkpoints, compiles, and tests it — keeping it only if the suite accepts it,
+and rolling it back automatically if it does not.
+
+## Self-development engine
+
+BabyMind can edit its own source in a source checkout. Open **Mission control →
+Self-development**, or use the API:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/dev/status` | Truthful capability report, isolation, audit-chain state |
+| `POST /api/dev/preview` | Unified diff for a proposed transaction, writes nothing |
+| `POST /api/dev/apply` | Checkpoint → write → compile → test → keep or auto-rollback |
+| `POST /api/dev/repair` | Model-proposed patch with up to N repair attempts after a rollback |
+| `POST /api/dev/rollback` | Restore a checkpoint and remove files it created |
+| `GET /api/sandbox`, `POST /api/sandbox/self-test` | Backend/mechanism report and four live isolation probes |
+| `POST /api/dev/tests` | Run the project test suite |
+| `GET /api/dev/tree`, `GET /api/dev/file?path=` | Read-only source inspection |
+
+Every applied transaction is checkpointed first, verified by `compileall` and
+the repository's own unittest suite, and reverted automatically on failure. The
+audit log (`state/dev-audit.jsonl`) is append-only and hash-chained; `babymind
+selfdev` reports whether the chain is intact.
+
+A failed patch gets a bounded second chance: the proposer sees the failed
+verification output and may resubmit, twice at most, each attempt checkpointed
+and verified independently.
+
+Verification is not a lie about isolation either. On Linux every command,
+compile and test run happens inside `sandbox.py`: user/mount/pid/network
+namespaces, a tmpfs chroot, system paths mounted read-only, only the project
+writable, loopback-only networking, rlimits, and a `finally` cleanup of the
+launcher. `POST /api/sandbox/self-test` proves it in four live probes (network,
+home-directory secret, `/usr` write, workspace write). On Windows and macOS no
+backend is implemented, and the engine says so rather than pretending: the API
+reports `available: false` with the reason, results carry `sandbox:
+"unavailable"`, and `BABYMIND_SANDBOX=require` refuses to run at all. See [docs/AUTONOMY.md](docs/AUTONOMY.md), [docs/TEST_REPORT.md](docs/TEST_REPORT.md), and
+[docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+
+## Hardware sizing and local models
+
+`babymind hardware` (or `GET /api/model/hardware`) reports CPU, RAM, free disk,
+GPU tooling, and a conservative model class with context size and llama.cpp
+flags. On a 24 GB machine it recommends a 4B–7B Q4 model at 8192 context; reduce
+the context if memory pressure appears. Detection is an estimate from reported
+memory, never a promise of speed.
 
 ## Additional optional local integrations
 

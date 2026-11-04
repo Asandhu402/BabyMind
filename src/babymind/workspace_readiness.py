@@ -11,9 +11,12 @@ import sys
 
 def workspace_readiness() -> dict:
     """Return the currently supported project-workflow capabilities."""
-    from . import approval
+    from . import approval, builder, sandbox as sandboxing, selfdev
 
     workspace_enabled = bool(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
+    app_builder = builder.builder_status()
+    development = selfdev.status()
+    isolation = sandboxing.status()
     return {
         "model_engine": "llama.cpp",
         "coding_assistant": {
@@ -31,17 +34,51 @@ def workspace_readiness() -> dict:
             "independent_security_review": False,
         },
         "project_execution": {
-            "status": "disabled",
-            "sandbox_available": False,
-            "network_isolation": False,
-            "resource_limits_enforced": False,
+            "status": "sandboxed" if isolation["available"] else "unsandboxed",
+            "sandbox_available": isolation["available"],
+            "sandbox_backend": isolation["backend"],
+            "sandbox_detail": isolation["detail"],
+            "sandbox_mechanisms": isolation["mechanisms"],
+            "network_isolation": bool(isolation["available"]) and
+            "not enforced" not in isolation["mechanisms"].get("network", ""),
+            "resource_limits_enforced": isolation["available"],
+        },
+        "local_app_builder": {
+            "status": "opt_in" if app_builder["ready"] else "disabled",
+            "enabled": app_builder["enabled"],
+            "ready": app_builder["ready"],
+            "root": app_builder["root"],
+            "writes_only_inside_apps_folder": True,
+            "runs_shell_commands": False,
+            "os_sandbox": isolation["available"],
+            "requires_reviewed_plan_hash": True,
+        },
+        "mission_control": {
+            "roles": 50,
+            "phases": 9,
+            "models_in_use": 1,
+            "records_every_role": True,
+            "runs_roles_in_parallel": False,
+            "notice": "50 role passes over one local model, scheduled sequentially when hardware is limited.",
+        },
+        "self_development": {
+            "status": "enabled" if development["enabled"] else "disabled",
+            "root": development["root"],
+            "can_write_source": development["can_write_source"],
+            "checkpoints": development["automatic_rollback"],
+            "automatic_verification": development["automatic_verification"],
+            "automatic_rollback": development["automatic_rollback"],
+            "requires_per_change_approval": False,
+            "os_sandbox": development["isolation"]["os_sandbox"],
         },
         "release_ready": False,
         "blockers": [
             "Production broker launcher, package verification, and workspace ACL provisioning are incomplete.",
             "Broker-owned, single-use approval and adversarial Windows security tests are incomplete.",
             "The coding assistant is not yet connected to authorized workspace read/write operations.",
-            "An OS-enforced project execution sandbox has not been implemented or independently reviewed.",
+            ("No Windows or macOS execution sandbox backend exists yet; commands are only "
+             "isolated on Linux.") if isolation["available"] else
+            "No OS-enforced project execution sandbox is available on this platform.",
         ],
         "notice": (
             "This is a read-only readiness report. It does not enable workspace "

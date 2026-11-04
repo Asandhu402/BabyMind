@@ -3,6 +3,9 @@ from io import BytesIO
 from unittest.mock import patch
 
 from babymind.research import (
+    github_repository,
+    github_search,
+    license_policy,
     _PinnedHTTPSHandler,
     _SafeRedirectHandler,
     _destination,
@@ -114,6 +117,59 @@ class ResearchTests(unittest.TestCase):
         build.return_value = Opener()
         with self.assertRaisesRegex(ValueError, "HTML and plain-text"):
             fetch_page("https://example.com/image.png")
+
+
+class GitHubResearchTests(unittest.TestCase):
+    def test_licence_policy_classifies_common_licences(self) -> None:
+        self.assertTrue(license_policy("MIT")["allowed"])
+        self.assertTrue(license_policy("Apache-2.0")["allowed"])
+        self.assertFalse(license_policy("GPL-3.0")["allowed"])
+        self.assertFalse(license_policy(None)["allowed"])
+        self.assertFalse(license_policy("Weird-1.0")["allowed"])
+
+    def test_search_summarises_results_with_licence_policy(self) -> None:
+        payload = {"items": [{
+            "full_name": "example/tool", "html_url": "https://github.com/example/tool",
+            "description": "A tool", "stargazers_count": 42, "pushed_at": "2026-01-01T00:00:00Z",
+            "archived": False, "license": {"spdx_id": "MIT"},
+        }]}
+        with patch("babymind.research._github_json", return_value=payload) as mocked:
+            results = github_search("local llm", limit=3)
+        self.assertIn("search/repositories", mocked.call_args[0][0])
+        self.assertEqual(results[0]["name"], "example/tool")
+        self.assertTrue(results[0]["license"]["allowed"])
+
+    def test_search_limits_are_enforced(self) -> None:
+        with self.assertRaises(ValueError):
+            github_search("x", limit=50)
+        with self.assertRaises(ValueError):
+            github_search("   ", limit=3)
+
+    def test_repository_metadata_is_read_only(self) -> None:
+        payload = {
+            "full_name": "example/tool", "html_url": "https://github.com/example/tool",
+            "description": "A tool", "stargazers_count": 10, "forks_count": 2,
+            "open_issues_count": 3, "pushed_at": "2026-01-01T00:00:00Z", "archived": False,
+            "default_branch": "main", "license": {"spdx_id": "GPL-3.0"},
+        }
+        with patch("babymind.research._github_json", return_value=payload):
+            repo = github_repository("example", "tool")
+        self.assertEqual(repo["default_branch"], "main")
+        self.assertFalse(repo["license"]["allowed"])
+        self.assertIn("Metadata only", repo["notice"])
+
+    def test_repository_names_are_validated(self) -> None:
+        for owner, repo in (("../../etc", "passwd"), ("ok", "bad name"), ("", "x")):
+            with self.subTest(owner=owner, repo=repo), self.assertRaises(ValueError):
+                github_repository(owner, repo)
+
+    def test_github_rate_limit_is_reported_clearly(self) -> None:
+        from urllib.error import HTTPError
+
+        error = HTTPError("https://api.github.com", 403, "Forbidden", {}, None)
+        with patch("babymind.research.urlopen", side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, "rate limit"):
+                github_repository("example", "tool")
 
 
 if __name__ == "__main__":

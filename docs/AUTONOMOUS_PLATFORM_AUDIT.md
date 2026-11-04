@@ -1,47 +1,37 @@
 # Autonomous platform audit
 
-Audit of repository baseline `50291f753b5f1ed34274a12ef141dbf0d426cc68` and the changes in this working branch. This is an engineering status report, **not a release acceptance report**. The autonomous Windows platform requested in the mission is not complete.
+Status of the branch after incorporating GitHub `main` at `f3a51e8871de0b088e2f2527fb13a2eea6c4ca1e` (PR #43) and this branch's changes. **This is not a release acceptance report.** BabyMind is not yet the complete autonomous Windows platform described in the mission.
 
-## Current implementation and gaps
-
-| Area | Repository evidence | Status against mission |
+| Area | Evidence | Current scope and limitations |
 | --- | --- | --- |
-| Desktop and UI | `desktop.py`, `server.py`, `web/`, `build-windows.ps1` | Existing desktop/web assistant and portable build script. The requested end-to-end autonomous development workspace is not present. A Windows package was not built or run in this environment. |
-| Agents | `agents.py`, `coordinator.py`, `development_review.py` | The general-purpose catalogue remains separate. The development-review view now makes a model call for each of the requested 50 development roles, sequentially, and records reports and attempts. These are advisory reviews of supplied text: they have no development tools, verified completion, independent verification, parallel scheduling, or autonomous task execution. |
-| Coding | `integrations/coding.py`, `integrations/coding_agent.py` | Coding assistance drafts responses. The bounded agent loop supports injected handlers but provides no real workspace or shell handlers. This is not an autonomous coding engine. |
-| Workspace | `approval.py`, `workspace_readiness.py`, `native/windows_workspace/` | Workspace actions remain disabled. The Windows C++ component is a prototype; its broker executable deliberately denies requests. It lacks production ACL provisioning, a working authorization/dispatch path, editing and deletion, and independent security review. |
-| Sandboxed execution | `workspace_readiness.py`, native broker documentation | Project execution is disabled. There is no verified general-purpose Windows execution sandbox, including the requested isolation, network, resource and cleanup guarantees. Do not substitute a same-user subprocess. |
-| Self-upgrade/recovery | `backup.py`, `build-windows.ps1` | Password-protected local database backup/restore exists. Source checkpoints, transactional source patches, tested rollback, and a separate installation update supervisor do not. Database backup is not a source-code rollback. |
-| Local inference | `providers.py`, `first_run.py` | llama.cpp provider, CPU packaging path and pinned default model with SHA-256 verification exist. Hardware-aware model selection, management of multiple models, and proven real-world performance on the target laptop are not established. |
-| Memory | `memory.py`, `backup.py` | Opt-in encrypted SQLite task/response memory and lexical retrieval exist. The required comprehensive development history, versioned project memory, and automatic recovery are not complete. |
-| Research and integration | `research.py`, `github_research.py`, `integrations/upstream_components.py`, `.gitmodules` | Bounded web search/page reading and anonymous, read-only GitHub repository/commit/file inspection are available. There is no autonomous license/security-reviewed component integration pipeline. Submodule references alone are not integrations. |
-| Testing and delivery | `tests/`, `.github/workflows/tests.yml` | Existing Python tests and a Windows native test/build workflow exist. Neither a Windows release installation nor the required real-model coding/self-modification acceptance scenarios were run here. |
+| Agents | `agents.py`, `orchestrator.py` | The mission orchestrator schedules 50 development roles over one shared model and records outcomes, including errors and deferred roles. Roles are sequential; model text alone is not independent verification. |
+| Development reviews | `development_review.py`, `web/development.js` | A separate advisory workflow calls 50 role prompts sequentially on supplied text, persists reports and attempts encrypted, and supports cancel/retry. It does not read projects, apply changes or verify tests. It and mission control are distinct workflows with separate scheduling. |
+| Self-development | `selfdev.py`, `runner.py` | A source-checkout engine implements checkpoints, edits, compile/test verification, rollback and a bounded repair loop. It is not an independently secured workspace broker and can run verification without an OS sandbox in `auto` mode. Crash recovery and acceptance are not complete. |
+| Workspace broker | `native/windows_workspace/`, `workspace_readiness.py` | Experimental Windows primitives and an AppContainer IPC smoke test exist. The broker deliberately denies requests and is not a production, reviewed authorization and dispatch path. |
+| Sandboxed execution | `sandbox.py`, `runner.py` | A Linux namespace backend is implemented. Windows and macOS backends are not. `BABYMIND_SANDBOX=auto` can execute without isolation if no backend is available; `require` refuses instead. Do not treat a same-user subprocess as a security sandbox. |
+| Application builder | `builder.py` | Opt-in generation of small Python/HTML/CSS/JS applications under its configured apps directory. Not general multi-platform delivery; see `docs/KNOWN_LIMITATIONS.md`. |
+| Local inference | `providers.py`, `first_run.py`, `hardware.py` | llama.cpp support, a pinned default model with SHA-256 verification, and hardware recommendations exist. Neither real model inference nor target-hardware performance was tested in this environment. |
+| Memory and recovery | `memory.py`, `backup.py` | Encrypted opt-in task/response memory and password-protected database backup/restore exist. These backups are not source-code or installation rollback, nor a complete versioned project memory. |
+| Research | `research.py`, `github_research.py` | Web and GitHub metadata research, plus anonymous commit-pinned inspection of public source files. License metadata and matching Git blob IDs do not establish safety or compatibility. No automatic reviewed integration pipeline exists. |
+| Windows delivery | `desktop.py`, `build-windows.ps1` | Desktop launcher and portable-build script exist. Windows package build, install, startup, recovery, native isolation and end-to-end coding acceptance have not been tested here. There is no separate installation-recovery supervisor. |
 
-## Changes made during this audit
+For more detail on the main-branch implementation, including its own prior test results and limitations, see `docs/AUTONOMY.md`, `docs/KNOWN_LIMITATIONS.md`, and `docs/TEST_REPORT.md`. Those documents describe their original test runs, not this branch's test run below.
 
-- Fixed new user text beginning with `bmenc:v1:` being mistaken for already encrypted data. New values are now always encrypted; only the explicitly named legacy migration path treats the old marker as evidence of an existing encrypted record. Added unit and database-restart regression tests for memory and conversations.
-- Existing legacy records that already begin with the marker are intrinsically ambiguous: the old format has no separate flag to distinguish marker-prefixed plaintext from damaged ciphertext. Migration preserves them rather than silently treating damaged encrypted data as plaintext. Do not delete the key or database if such a record cannot be read; preserve a backup for investigation.
-- Deferred the Tk import for already-verified models, so checking an existing model does not unnecessarily require the GUI toolkit.
-- Added a separate development-review screen and backend. Each of the requested 50 roles receives a shared-model inference call; reports and attempt statuses are encrypted and saved. The review is resumable and supports cancellation between calls. It does not execute development tasks or verify claims. The existing general-purpose catalogue is unchanged.
-- Added a GitHub research screen and backend. Anonymous queries go to the fixed GitHub API host. Public files are read at a pinned commit and checked against the reported Git blob ID; tree and response limits apply. Users can add an excerpt to review context. This does not install code, validate licenses, verify safety, or integrate external components.
+## Changes from this branch
 
-## Verification performed in this environment
+- New user text beginning with `bmenc:v1:` is always encrypted instead of being mistaken for ciphertext. Only the explicitly named legacy migration path preserves the old marker. Legacy marker-prefixed plaintext is intrinsically ambiguous; preserve backups and keys if such data cannot be read.
+- First-run setup verifies an existing model without importing Tkinter. If a model download is needed but Tkinter is missing, the error explains the requirement. The dialog still requires Tkinter.
+- The separate development-review workflow records 50 shared-model advisory reports and their attempts. It does not replace or verify mission execution.
+- The GitHub research view searches public repositories, lists a pinned commit's regular files, and reads bounded UTF-8 blobs with an integrity check. It does not clone, execute, install, license-clear or integrate upstream code.
 
-- Linux x86-64, Python 3.11.2; isolated environment with `cryptography` 50.0.2.
-- `PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -q`: **175 tests passed** on this branch. These are repository unit/integration tests, many with fakes; the 50-role review was tested with fake providers and a local HTTP test server, not a real local model. They do not prove real-model autonomy or Windows isolation.
-- Tested an isolated archive of GitHub `main` at `f3a51e8871de0b088e2f2527fb13a2eea6c4ca1e` with this branch's `first_run.py` and its regression tests overlaid: **262 tests passed** on Linux (exit code 0). This was a compatibility check only; these changes were not merged into `main`.
-- Real GitHub API smoke test: searched for `octocat/Hello-World`, inspected commit `7fd1a60b01f91b314f59955a4e4d4e80d8edf11d`, and read its `README` through the pinned tree/blob integrity path. This does not verify arbitrary upstream content or the desktop UI.
-- `.venv/bin/python -m compileall -q src tests`: passed.
-- `node --check` on `app.js`, `development.js`, `github-research.js` and `approvals.js`: passed.
-- `git diff --check`: passed.
-- No GitHub Actions were triggered. Windows 11, MSVC, the target hardware, a configured llama.cpp server/GGUF model, and a Windows desktop session were not available here. Windows native tests, Windows packaging/install/startup, model inference, sandbox escape tests, real coding tasks, self-upgrades, and upgrade rollback/restart remain **not run**.
+## Verification on the combined branch
 
-## Critical path to the requested acceptance
+- Linux x86-64, Python 3.11.2, isolated environment with `cryptography` 50.0.2.
+- `PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -q`: **282 tests passed**. Many use fakes; these results do not demonstrate real-model autonomy or Windows isolation.
+- Python compilation and `node --check` on the web JavaScript files passed.
+- The GitHub research backend was also smoke-tested against the public `octocat/Hello-World` repository at commit `7fd1a60b01f91b314f59955a4e4d4e80d8edf11d`. This is not a desktop UI or supply-chain security test.
+- No Windows runtime, MSVC, target hardware, real GGUF model, or browser-driven UI test was available. No Windows installation, native sandbox escape test, model-authored coding task, installation upgrade or rollback was executed. Do not mark those acceptance requirements as passed.
 
-1. Design, implement and independently review a broker with scoped ACL provisioning, handle-relative reads and transactional changes, crash-safe checkpoints, auditable operations and Windows race/escape tests. Keep the current gate closed until verified.
-2. Implement a separately isolated Windows execution service with enforceable filesystem/network restrictions, resource limits, cancellation and cleanup; test adversarial code and protected-data access on Windows 11 Home. No untrusted project execution until this gate passes.
-3. Build an evidence-based development orchestrator: the exact 50 requested roles, persisted assignments and results, resource-aware scheduling, failure/retry handling, tool permissions and a verifier that records actual build/test evidence. Shared-model role outputs are not independent models or proof of completed work.
-4. Connect planning, research, workspace transactions, sandboxed build/test/debug cycles, durable project memory, diff/history controls and recovery into the desktop UI. Add a separate recoverable updater before attempting self-updates.
-5. Run the mission's acceptance scenarios with a real local model on the target Windows hardware, including clean install, crash/restart, malicious project isolation, and failed-upgrade rollback. Record commands, outcomes, artifacts and remaining limitations without substituting unit tests for those scenarios.
+## Remaining release gates
 
-These dependencies are substantial engineering and validation work; this audit and its fixes do not complete them.
+A reviewed Windows broker and OS-enforced execution sandbox, secure update supervisor, evidence-driven development and repair workflow, real-model tests, and Windows 11 installation/upgrade/recovery acceptance remain necessary. This branch does not claim those are finished.
