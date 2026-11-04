@@ -7,12 +7,12 @@ from babymind.integrations.upstream_components import upstream_component_report
 
 
 class UpstreamComponentTests(unittest.TestCase):
-    def test_all_five_upstreams_are_mapped_without_enabling_them(self):
+    def test_all_six_upstreams_are_mapped_without_enabling_them(self):
         report = upstream_component_report()
         components = report["components"]
         self.assertEqual(
             set(components),
-            {"opencode", "atomic_agent", "wincage", "sandbox_runtime", "ocbox"},
+            {"code_symbol_index", "opencode", "atomic_agent", "wincage", "sandbox_runtime", "ocbox"},
         )
         self.assertEqual(report["policy"]["model_engine"], "llama.cpp")
         self.assertFalse(report["policy"]["cloud_inference_allowed"])
@@ -28,7 +28,7 @@ class UpstreamComponentTests(unittest.TestCase):
             self.assertTrue(component["constraints"])
             self.assertIn(
                 component["integration"],
-                {"reference_only", "security_evaluation", "workflow_reference"},
+                {"reference_only", "security_evaluation", "workflow_reference", "experimental_evaluation"},
             )
 
     def test_report_is_defensive_copy(self):

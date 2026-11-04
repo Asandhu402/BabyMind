@@ -178,3 +178,32 @@ The current Python project does not automatically build or install these Node/Ty
 ## Model policy
 
 BabyMind supports llama.cpp only. Do not add LM Studio or mandatory cloud inference while adapting these projects. Configure each adapter to use the user's local llama.cpp endpoint and validate model/API compatibility before launch.
+
+
+## Experimental code intelligence source
+
+| Component | Local path | Upstream | Pinned commit | License | Status |
+|---|---|---|---|---|---|
+| code-symbol-index | `vendor/upstream/code-symbol-index` | https://github.com/hit9/code-symbol-index | `5c40a98d71341e00f9008782e97a2357e1487f34` | MIT | Experimental evaluation only |
+
+This small, AI-maintained Python project provides a Tree-sitter-backed,
+SQLite-persisted symbol index, ignore-aware discovery, symbol inspection,
+syntactic references/callers/callees, file outlines, and bounded text/JSON
+results. It is a candidate for repository indexing and context retrieval
+(findings 1, 2 and 4), with partial help for language discovery (finding 3).
+It is not a semantic language server: reference/call edges are syntactic and
+may be ambiguous. It has a small public footprint, so BabyMind must independently
+review source, dependencies, performance, malformed repositories, symlinks,
+resource limits, and Windows path behavior before enabling it.
+
+The source is pinned as a submodule for reproducible review. It is **not**
+imported or launched by BabyMind, is not a required install dependency, and
+does not enable workspace access. A future adapter must run indexing within
+the selected workspace boundary, apply file-size/depth/count limits, exclude
+secrets and generated/vendor directories, and treat all indexed content as
+untrusted prompt data. Do not use its reference results as proof of safe rename
+or semantic correctness.
+
+Tree-sitter is already a transitive dependency of this project; BabyMind does
+not add a second Tree-sitter submodule. The code-symbol-index project itself
+pins its parser dependencies separately in its own lockfile.

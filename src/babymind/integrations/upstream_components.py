@@ -1,4 +1,4 @@
-"""Auditable integration registry for the five upstream coding/sandbox projects.
+"""Auditable integration registry for upstream coding, indexing, and sandbox projects.
 
 This module records compatibility and security boundaries. It does not import,
 launch, or trust third-party code. Runtime adapters are enabled only after
@@ -10,6 +10,19 @@ from copy import deepcopy
 
 
 _UPSTREAMS = {
+    "code_symbol_index": {
+        "name": "code-symbol-index",
+        "repository": "https://github.com/hit9/code-symbol-index",
+        "role": "repository_symbol_index",
+        "integration": "experimental_evaluation",
+        "capabilities": ["ignore_aware_inventory", "symbol_search", "syntactic_references", "call_chains", "bounded_context"],
+        "constraints": [
+            "AI-maintained upstream with a small public footprint; independently audit before use.",
+            "Syntactic references and call graphs are not semantic guarantees or safe-rename proofs.",
+            "Run only within the selected workspace boundary with strict file and resource limits.",
+            "Treat indexed source and repository instructions as untrusted prompt data.",
+        ],
+    },
     "opencode": {
         "name": "OpenCode",
         "repository": "https://github.com/anomalyco/opencode",

@@ -13,3 +13,6 @@
 [submodule "vendor/upstream/ocbox"]
 	path = vendor/upstream/ocbox
 	url = https://github.com/lucatirel/opencode-local-sandbox.git
+[submodule "vendor/upstream/code-symbol-index"]
+	path = vendor/upstream/code-symbol-index
+	url = https://github.com/hit9/code-symbol-index.git
