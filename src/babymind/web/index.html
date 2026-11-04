@@ -95,10 +95,11 @@
           <article class="settings-card">
             <div class="settings-icon">◎</div><h3>Run a mission</h3>
             <p>Describe the product or change. BabyMind assigns all 50 roles and records each contribution with its phase and timing.</p>
+            <p class="setting-status">The 50 roles share one model. A completed mission means its role calls returned text, not that the answers or requested work were verified.</p>
             <label for="missionBrief">Mission brief</label>
             <textarea id="missionBrief" class="integration-input" rows="4" maxlength="8000" placeholder="Build a complete inventory management application with a database, user accounts, reporting and backup."></textarea>
             <button class="task-primary" id="startMission" type="button">Start mission across 50 roles</button>
-            <label class="toggle-label mission-toggle" title="After the acceptance phase, propose one patch to BabyMind's own source and apply it only if the test suite accepts it"><input type="checkbox" id="missionSelfEdit"><span class="toggle"></span> Also apply one verified self-edit</label>
+            <label class="toggle-label mission-toggle" title="In a source checkout, attempt a patch with compile and test checks; the packaged desktop cannot self-edit"><input type="checkbox" id="missionSelfEdit"><span class="toggle"></span> Attempt a tested self-edit (source checkout only)</label>
             <button class="task-refresh" id="cancelMission" type="button" disabled>Cancel</button>
             <div class="setting-status" id="missionStatus">No mission running.</div>
             <div class="mission-progress"><div id="missionBar"></div></div>
@@ -106,7 +107,7 @@
           </article>
           <article class="settings-card">
             <div class="settings-icon">⟲</div><h3>Self-development</h3>
-            <p>BabyMind can edit its own source. Every change is checkpointed, compiled, and tested; a failing change is rolled back automatically and recorded in the audit log.</p>
+            <p>In source mode, BabyMind can attempt edits that are checkpointed, compiled, and tested; failed checks trigger rollback. The packaged desktop cannot edit its own source. Passing tests do not prove an improvement is correct.</p>
             <div class="setting-status" id="selfdevStatus">Checking self-development engine…</div>
             <div class="checkpoint-list" id="checkpointList"></div>
             <button class="task-refresh" id="runTests" type="button">Run the test suite now</button>
@@ -115,7 +116,7 @@
         </div>
         <article class="settings-card mission-edit-card">
           <div class="settings-icon">⌘</div><h3>Edit BabyMind's own source</h3>
-          <p>The transaction runs only <code>python -m compileall</code> and the project's unittest suite. Nothing else executes.</p>
+          <p>Verification runs <code>python -m compileall</code> and the project's unittest suite. Tests execute project code; passing them does not prove a change is safe or correct. This feature requires a source checkout.</p>
           <label for="devPath">Project-relative path</label><input id="devPath" class="integration-input" maxlength="240" placeholder="src/babymind/example.py">
           <label for="devContent">New file content</label><textarea id="devContent" class="integration-input" rows="8" placeholder="Full new contents of the file…"></textarea>
           <label for="devReason">Reason for the change</label><input id="devReason" class="integration-input" maxlength="400" placeholder="Fix the empty-response handling in providers.py">

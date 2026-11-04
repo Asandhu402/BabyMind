@@ -23,10 +23,9 @@ It may prompt for your sudo password. Open **BabyMind** from Applications when
 finished, or run `~/.local/bin/babymind`.
 
 The single-command installer has **not been validated end to end** on a clean
-Ubuntu desktop or against the real model host in this environment. The previous
-Linux CI run failed at the Qt GUI test; see [verification](docs/LINUX_VERIFICATION.md).
-The command above uses the repository's default branch and will include this
-installer only after its changes are merged there.
+Ubuntu desktop or against the real model host in this environment. The merged
+Linux CI passed its Qt GUI fixture, but that is not a real desktop installation
+or production-model test; see [verification](docs/LINUX_VERIFICATION.md).
 
 ## Portable desktop
 

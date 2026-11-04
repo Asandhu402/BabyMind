@@ -236,5 +236,106 @@ reported the same missing library and aborted. Restoring the library made the
 GUI test pass again. The isolated test used Python 3.11 and mixed third-party
 libraries; it is not the GitHub runner. The earlier CI runs' log messages are
 still inaccessible, so their exact root cause cannot be conclusively established
-from the matching exit codes alone. No second GitHub run was initiated; the
-corrected workflow is not yet confirmed on GitHub.
+from the matching exit codes alone. At the time of this investigation no
+second GitHub run had yet confirmed the corrected workflow; see the later
+verification below.
+
+## Post-merge verification (2026-11-04)
+
+GitHub Actions run [41920452582](https://github.com/Asandhu402/BabyMind/actions/runs/41920452582)
+completed successfully on merge commit `0870e66b20441a283c0f97f1ca403bd79e4678a3`.
+It installed Linux test libraries on an Ubuntu 22.04 hosted runner, built the
+portable package, passed the source suite, ran llama.cpp with an untrained
+synthetic model, passed the Qt/Xvfb local-fixture test, checked package files
+and desktop imports, and uploaded a build artifact. The PR run
+[41919151229](https://github.com/Asandhu402/BabyMind/actions/runs/41919151229)
+also passed. These runs did not execute `install-linux.sh` on a fresh Ubuntu
+Desktop, download the production model, or test production inference.
+
+The model publisher's [revision metadata](https://huggingface.co/api/models/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/revision/c09cdbcdb1fefad6d335809d445621b5f5ba0c6e?blobs=true)
+was retrieved through the page-fetch service. It lists the pinned Q4_K_M filename,
+size 2,707,513,696 bytes and LFS SHA-256
+`79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741`, matching
+the application's pinned digest. The publisher's model card lists Apache-2.0.
+This verifies metadata against the publisher, not the bytes or inference.
+
+The current execution environment is headless Debian 12, not Ubuntu Desktop.
+Its shell cannot connect to `huggingface.co` or `archive.ubuntu.com`
+(`SSL_ERROR_SYSCALL`), and no installed graphical desktop or VM runtime was
+available. It therefore could not download the real model, install real Ubuntu
+packages, or perform the requested fresh-desktop end-to-end test. No new CI run,
+model-inference result or 50-role contribution is claimed.
+
+## Virtual-test attempt (2026-11-04)
+
+For the follow-up request, the current environment was checked again: it has
+no QEMU, Docker, Podman, Xvfb, `/dev/kvm`, Ubuntu desktop image or GGUF model.
+A direct request to the installer's exact model URL failed with curl exit 35
+(`SSL_ERROR_SYSCALL`); an Ubuntu archive request also failed. Running the
+unmodified installer on the Debian host stopped at its Ubuntu version guard
+with exit 1, before installing packages or changing user data. This is the
+expected behavior on Debian, not an Ubuntu installation test. A virtual
+Ubuntu Desktop, production-model download, actual GUI conversation, and the
+requested fix-and-retest acceptance loop remain blocked. The earlier augmented
+Ubuntu Base and synthetic model tests described above are not substitutes.
+
+## Trained-model source-path test in isolated Ubuntu filesystem (2026-11-04)
+
+This was a network-isolated Ubuntu 22.04 **Base chroot**, not a virtual machine,
+Ubuntu Desktop, installed/frozen app, production model, or visual GUI test. It
+used the third-party Base archive and Python described above (Canonical did not
+sign or verify this copy), PyPI cryptography 50.0.2, cffi 2.1.1 and pycparser
+3.11, the CPU llama-server built from the SHA-pinned b11960 source on Debian,
+and a Debian libgomp copied into the disposable root. Network namespace allowed
+loopback only; no host project, user data, or credentials were mounted. The
+chroot and downloads are test artifacts and are not distributed.
+
+A small **trained but not instruction-tuned** story model was taken from
+`jayeshmahapatra/llama2.npy` commit `0687144b5483c1170a03e45639da8db0406c7a27`.
+Its original `stories15M.bin` was 60,816,028 bytes with SHA-256
+`cd590644d963867a2b6e5a1107f51fad663c41d79c149fbecbbb1f95fa81f49a`, matching
+the [model author's metadata](https://huggingface.co/api/models/karpathy/tinyllamas/revision/0bd21da7698eaf29a0d7de3992de8a46ef624add?blobs=true).
+The mirror's tokenizer had SHA-256
+`50a52ef822ee9e83de5ce9d0be0a025a773d019437f58b5ff9dcafb063ece361`.
+Llama.cpp's converter created a GGUF with SHA-256
+`a4a429f2a6527275de0d53ffa5e3e8eabe320f618004120d51e1b1faae8bb567`.
+
+The first source-provider run failed all three chat requests, one coding
+request and all 50 mission roles with HTTP 400 because llama-server capped
+requests at this converted model's declared 128-token context. For a separate
+experimental run **only**, the GGUF's declared context metadata was changed
+from 128 to 4096 (resulting SHA-256
+`b40a0b2f0335c990c2fbb4044fe3197aacfc6e34e7e94bc5e9b308002fb20087`). This
+model was not trained for this length; changing metadata does not increase its
+trained context or make it an instruction model. BabyMind's production model
+and hash were not changed, and the desktop's pinned-model check was not bypassed
+or tested: this invoked the source provider directly.
+
+With that experimental model, the real source backend `/api/chat` and coding
+endpoint returned HTTP 200 but failed the content check. For example, “What is
+2 plus 2?” returned repeated fragments including “The consequences”; the coding
+request returned story fragments, not a Python function. In a separate live
+mission all 50 role calls returned non-empty text, but the output was repetitive
+and unusable, not evidence that the roles performed their jobs. This exposed a
+misleading display: the backend counted any nonempty text as a contribution and
+called the mission completed. The mission summary and UI now explicitly state
+that completion is not verification, and the same live mission was rerun with
+that warning present. The underlying classification still checks nonempty text,
+not semantic quality. All roles use one model, not 50 independent agents.
+
+A real-model self-edit request against a disposable project produced no JSON
+patch, was recorded `no_change`, and left the file unchanged; it did not prove
+model-driven code modification. Separately, 19 orchestration tests using fake
+providers passed inside the Ubuntu filesystem, including a real disposable-file
+patch, compile/test verification, rollback, and a second repair attempt. In
+that isolated test, sandbox `auto` could fall back to execution inside the
+existing chroot; no nested OS sandbox is claimed. The frozen desktop disables
+self-edit and cannot presently satisfy the requested packaged self-upgrade.
+
+After the display fix, the source unittest suite ran **321 tests, OK, 17
+skipped** in this augmented Ubuntu Base environment. These tests use mocks and
+fixtures extensively and do not prove production inference, visible desktop
+operation, all-role competence, or autonomous self-upgrade. The 50 requested
+specialist contributions were not independently verified and were not used to
+claim this change was reviewed. A real Ubuntu Desktop installation and the
+pinned Qwen model remain necessary before acceptance.

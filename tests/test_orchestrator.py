@@ -49,6 +49,9 @@ class OrchestratorTests(unittest.TestCase):
         recorded = {run["agent_id"] for run in mission["runs"]}
         self.assertEqual(recorded, {agent.agent_id for agent in AGENTS})
         self.assertEqual(provider.calls, 50)
+        self.assertIn("returned non-empty text", mission["summary"])
+        self.assertIn("unverified model text", mission["summary"])
+        self.assertIn("does not prove the work was done", mission["summary"])
 
     def test_runs_follow_phase_order(self) -> None:
         mission = Orchestrator(FakeProvider(), self.store, max_seconds=300).run_now(BRIEF)

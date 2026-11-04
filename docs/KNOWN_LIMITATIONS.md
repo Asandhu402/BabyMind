@@ -39,10 +39,11 @@ missing, not what is planned.
 - **50 roles are 50 prompts over one model**, executed sequentially by default.
   There is no multi-model parallelism, no debate protocol beyond the shared
   digest, and no learned routing.
-- A mission only edits source when started with `self_edit: true`. The loop then
-  applies **one** patch proposed by the Coding Agent role, verified by compile
-  and tests. It is not an iterative engineer: it does not read the failure,
-  repair its own patch, and retry within the same mission.
+- A mission only edits source when started with `self_edit: true`, in a source
+  checkout; the frozen desktop cannot self-edit. The loop attempts a patch
+  proposed by the Coding Agent, verified by compile and tests. After a failed
+  verification it can request one repair and retry; malformed or unsafe proposals
+  can stop the loop earlier. This is not an unrestricted iterative engineer.
 - The patch comes from a 4B-class local model. Expect small, local changes, not
   architectural rewrites.
 - Missions stop at the time budget. Unrun roles are recorded as `deferred`; they

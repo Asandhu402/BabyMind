@@ -519,8 +519,10 @@ class Orchestrator:
             for item in verdicts
         )
         text = (
-            f"Mission {status}: {contributed}/50 roles contributed, {errors} errored, "
-            f"{len(deferred)} deferred, {seconds}s elapsed."
+            f"Mission {status}: {contributed}/50 roles returned non-empty text, {errors} errored, "
+            f"{len(deferred)} deferred, {seconds}s elapsed. "
+            "Role output is unverified model text; completion does not prove the work was done "
+            "or that the answers are correct."
         )
         if verdict:
             text += "\n\nAcceptance phase record:\n" + verdict

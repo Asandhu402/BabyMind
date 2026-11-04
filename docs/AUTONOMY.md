@@ -31,6 +31,9 @@ run inside the budget are recorded as `deferred` with a reason.
 
 You cannot get more intelligence by adding roles. Roles change *framing* —
 what the model attends to and what it is asked to produce — not capability.
+A role recorded as `contributed` merely returned non-empty model text. A mission
+marked `completed` means all calls returned text; neither status verifies that
+its output is correct, useful, or that requested work was actually performed.
 
 ## The autonomous loop (opt-in per mission)
 
@@ -38,14 +41,16 @@ Starting a mission with `self_edit: true` (UI: **Also apply one verified
 self-edit**) closes the loop:
 
 1. All 50 roles run and record their contributions.
-2. The Coding Agent makes one extra model call asking for a JSON patch against
-   BabyMind's own source, constrained to at most 40 files and allowed suffixes.
+2. The Coding Agent requests a JSON patch against BabyMind's own source,
+   constrained by the engine's file-count and suffix limits.
 3. The patch goes through the self-development engine: checkpoint → write →
-   compile → test → keep, or automatic rollback.
+   compile → test → keep, or automatic rollback. After a failed verification,
+   the model can receive the failure and propose one repair attempt.
 
-It runs at most once per mission, never bypasses verification, and records the
-outcome (`applied`, `rolled_back`, `no_change`, `rejected`, `skipped`) on the
-mission. A malformed or unsafe patch changes nothing.
+The loop attempts at most two patches per mission, never bypasses verification,
+and records the outcome (`applied`, `rolled_back`, `no_change`, `rejected`,
+`skipped`). A malformed or unsafe patch changes nothing. This feature is
+unavailable in the frozen desktop application.
 
 The loop is still bounded by the model. A 4B model's patch that compiles and
 passes the suite is kept even if it is not the improvement you wanted; that is
