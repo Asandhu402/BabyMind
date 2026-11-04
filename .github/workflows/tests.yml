@@ -12,14 +12,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ubuntu: ['22.04', '24.04']
+        include:
+          - ubuntu: '22.04'
+            python: '3.11'
+          - ubuntu: '24.04'
+            python: '3.12'
     runs-on: ubuntu-${{ matrix.ubuntu }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
       - name: Install Linux desktop test libraries
         run: |
           sudo apt-get update
