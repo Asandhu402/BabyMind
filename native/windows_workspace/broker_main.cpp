@@ -15,6 +15,7 @@ constexpr DWORD kExitNotAppContainer = 10;
 constexpr DWORD kExitBadInput = 20;
 constexpr DWORD kExitDeniedNotImplemented = 30;
 constexpr DWORD kExitIoFailure = 40;
+constexpr ULONGLONG kReadDeadlineMs = 5000;
 
 bool running_in_appcontainer_without_capabilities() {
     HANDLE token = GetCurrentProcessToken();
@@ -39,17 +40,14 @@ bool running_in_appcontainer_without_capabilities() {
     return capabilities->GroupCount == 0;
 }
 
-bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes) {
-    constexpr ULONGLONG kReadDeadlineMs = 5000;
-    const ULONGLONG started = GetTickCount64();
+bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes, ULONGLONG deadline) {
     DWORD offset = 0;
     while (offset < bytes) {
         DWORD available = 0;
         if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr))
             return false;
         if (available == 0) {
-            if (GetTickCount64() - started >= kReadDeadlineMs)
-                return false;
+            if (GetTickCount64() >= deadline) return false;
             Sleep(5);
             continue;
         }
@@ -61,6 +59,19 @@ bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes) {
     }
     return true;
 }
+
+// The protocol is deliberately one request per process. Do not silently
+// ignore a second frame or trailing bytes after a valid request.
+bool require_eof(HANDLE input, ULONGLONG deadline) {
+    for (;;) {
+        DWORD available = 0;
+        if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr))
+            return GetLastError() == ERROR_BROKEN_PIPE;
+        if (available != 0) return false;
+        if (GetTickCount64() >= deadline) return false;
+        Sleep(5);
+    }
+}
 }
 
 int wmain(int argc, wchar_t** argv) {
@@ -68,38 +79,32 @@ int wmain(int argc, wchar_t** argv) {
         return running_in_appcontainer_without_capabilities() ? 50 :
             static_cast<int>(kExitNotAppContainer);
     }
-    std::cerr << "BROKER: process started.\\n" << std::flush;
     // Fail closed when launched outside the intended restricted identity.
     if (!running_in_appcontainer_without_capabilities()) {
         std::cerr << "DENIED: broker requires a capability-free Windows AppContainer token.\n";
         return static_cast<int>(kExitNotAppContainer);
     }
 
-    std::cerr << "BROKER: capability-free AppContainer token accepted.\\n" << std::flush;
     HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
-    if (input == nullptr || input == INVALID_HANDLE_VALUE) {
+    if (input == nullptr || input == INVALID_HANDLE_VALUE ||
+        GetFileType(input) != FILE_TYPE_PIPE) {
         std::cerr << "DENIED: private request pipe is unavailable.\n";
         return static_cast<int>(kExitIoFailure);
     }
 
-    if (GetFileType(input) != FILE_TYPE_PIPE) {
-        std::cerr << "DENIED: standard input is not a pipe.\\n";
-        return static_cast<int>(kExitIoFailure);
-    }
-    std::cerr << "BROKER: private input pipe acquired.\\n" << std::flush;
+    const ULONGLONG deadline = GetTickCount64() + kReadDeadlineMs;
     std::array<uint8_t, 12> header{};
-    if (!read_exact(input, header.data(), static_cast<DWORD>(header.size()))) {
+    if (!read_exact(input, header.data(), static_cast<DWORD>(header.size()), deadline)) {
         std::cerr << "DENIED: incomplete request header.\n";
         return static_cast<int>(kExitBadInput);
     }
 
-    std::cerr << "BROKER: request header received.\\n" << std::flush;
-    uint32_t frame_bytes = 0;
-    frame_bytes = static_cast<uint32_t>(header[8]) |
-                  (static_cast<uint32_t>(header[9]) << 8) |
-                  (static_cast<uint32_t>(header[10]) << 16) |
-                  (static_cast<uint32_t>(header[11]) << 24);
-    if (frame_bytes < header.size() || frame_bytes > bm_ws_protocol::kMaxFrameBytes) {
+    const uint32_t frame_bytes =
+        static_cast<uint32_t>(header[8]) |
+        (static_cast<uint32_t>(header[9]) << 8) |
+        (static_cast<uint32_t>(header[10]) << 16) |
+        (static_cast<uint32_t>(header[11]) << 24);
+    if (frame_bytes < 36 || frame_bytes > bm_ws_protocol::kMaxFrameBytes) {
         std::cerr << "DENIED: invalid request frame length.\n";
         return static_cast<int>(kExitBadInput);
     }
@@ -107,12 +112,18 @@ int wmain(int argc, wchar_t** argv) {
     std::vector<uint8_t> frame(frame_bytes);
     std::copy(header.begin(), header.end(), frame.begin());
     if (!read_exact(input, frame.data() + header.size(),
-                    frame_bytes - static_cast<DWORD>(header.size()))) {
+                    frame_bytes - static_cast<DWORD>(header.size()), deadline)) {
         std::cerr << "DENIED: truncated request frame.\n";
         return static_cast<int>(kExitBadInput);
     }
 
-    std::cerr << "BROKER: complete frame received.\\n" << std::flush;
+    // Parent must close its writer after the one frame. Any additional byte
+    // is a second request/trailing data and causes rejection.
+    if (!require_eof(input, deadline)) {
+        std::cerr << "DENIED: trailing bytes, chained request, or missing EOF.\n";
+        return static_cast<int>(kExitBadInput);
+    }
+
     bm_ws_protocol::Request request{};
     const auto parsed = bm_ws_protocol::parse_request(frame.data(), frame.size(), &request);
     if (parsed != bm_ws_protocol::ParseStatus::Ok) {
