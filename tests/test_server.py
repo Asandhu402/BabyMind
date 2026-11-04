@@ -783,5 +783,16 @@ class BabyMindWebTests(unittest.TestCase):
             execute_readonly_proposal({"relative_path": "."}, action="run_tests")
 
 
+    def test_workspace_readiness_api_reports_closed_security_gates(self) -> None:
+        status, _, body = self.request("/api/workspace/readiness")
+        self.assertEqual(status, 200)
+        report = json.loads(body)
+        self.assertEqual(report["model_engine"], "llama.cpp")
+        self.assertFalse(report["release_ready"])
+        self.assertFalse(report["native_workspace"]["file_actions_enabled"])
+        self.assertFalse(report["project_execution"]["sandbox_available"])
+        self.assertIn("read-only readiness report", report["notice"])
+
+
 if __name__ == "__main__":
     unittest.main()
