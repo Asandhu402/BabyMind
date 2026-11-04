@@ -96,6 +96,11 @@ class BabyMindCoordinator:
             remembered=remember,
         )
 
+    def run_coding_task(self, task: str, code_context: str = "") -> str:
+        """Analyze supplied code and propose changes using BabyMind's sole local model."""
+        from .integrations.coding_agent import run_coding_task
+        return run_coding_task(self.provider, task, code_context)
+
     def process_document(
         self, agent_id: str, path: str | Path, instruction: str = "Summarize this document and identify its key points.",
         *, use_memory: bool = False, remember: bool = False,

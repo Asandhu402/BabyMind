@@ -45,10 +45,10 @@ def integration_status() -> list[dict[str, object]]:
             "Can interact with websites; keep supervised and approve each task explicitly.",
         ),
         IntegrationStatus(
-            "open-interpreter", "Coding CLI", "Disabled pending a verified llama.cpp-native adapter",
-            False,
-            "Unavailable until a direct llama.cpp integration and reviewed OS sandbox are implemented.",
-            "Disabled by design pending a verified llama.cpp-native adapter; BabyMind will not start a different model runtime.",
+            "babymind-coding", "BabyMind Coding Assistant", "Local code analysis and patch proposals through BabyMind llama.cpp",
+            True,
+            "Available through BabyMind’s configured local llama.cpp model; workspace editing and command execution remain disabled pending security controls.",
+            "Uses only BabyMind’s local ChatProvider. It analyzes code supplied in the request and proposes changes; it does not read or modify workspace files or execute commands.",
         ),
         IntegrationStatus(
             "cognee", "Cognee", "Local knowledge graph and semantic retrieval for BabyMind",

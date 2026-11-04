@@ -18,11 +18,12 @@ class IntegrationTests(unittest.TestCase):
         statuses = integration_status()
         self.assertEqual(
             {item["integration_id"] for item in statuses},
-            {"docling", "faster-whisper", "browser-use", "open-interpreter", "cognee", "voicebox", "promptfoo"},
+            {"docling", "faster-whisper", "browser-use", "babymind-coding", "cognee", "voicebox", "promptfoo"},
         )
-        coding = next(item for item in statuses if item["integration_id"] == "open-interpreter")
-        self.assertFalse(coding["available"])
-        self.assertIn("llama.cpp", coding["safety"])
+        coding = next(item for item in statuses if item["integration_id"] == "babymind-coding")
+        self.assertTrue(coding["available"])
+        self.assertIn("local ChatProvider", coding["safety"])
+        self.assertIn("does not read or modify", coding["safety"])
 
     def test_voicebox_rejects_non_loopback_endpoint(self):
         from babymind.integrations.voicebox import _base_url
@@ -106,6 +107,37 @@ class IntegrationTests(unittest.TestCase):
                 asyncio.run(run_browser_task(
                     "Read this page", model="local-model", user_approved=True
                 ))
+
+    def test_native_coding_agent_uses_babymind_provider_and_supplied_context(self):
+        from babymind.integrations.coding_agent import run_coding_task
+
+        class FakeProvider:
+            def __init__(self):
+                self.calls = []
+            def complete(self, system_prompt, user_prompt):
+                self.calls.append((system_prompt, user_prompt))
+                return "Proposed patch: update the function and add a regression test."
+
+        provider = FakeProvider()
+        result = run_coding_task(provider, "Fix the parser", "def parse(): pass")
+        self.assertIn("Proposed patch", result)
+        self.assertEqual(len(provider.calls), 1)
+        self.assertIn("Do not claim to have edited files", provider.calls[0][0])
+        self.assertIn("def parse(): pass", provider.calls[0][1])
+
+    def test_native_coding_agent_validates_task_and_context_limits(self):
+        from babymind.integrations.coding_agent import run_coding_task
+
+        class FakeProvider:
+            def complete(self, system_prompt, user_prompt):
+                return "unused"
+
+        with self.assertRaises(ValueError):
+            run_coding_task(FakeProvider(), " ")
+        with self.assertRaises(ValueError):
+            run_coding_task(FakeProvider(), "x" * 4001)
+        with self.assertRaises(ValueError):
+            run_coding_task(FakeProvider(), "task", "x" * 50001)
 
     def test_open_interpreter_requires_approval_before_launch(self):
         with self.assertRaises(PermissionError):
