@@ -7,9 +7,6 @@ kernel-enforced isolation: no network, no access to the host home directory
 (outside the project), no writes to system paths, and children die with the
 parent.
 
-Windows backend: **not implemented.** AppContainer/Job Object containment needs
-the native broker in ``native/windows_workspace`` and a reviewed launcher. This
-module reports that honestly instead of pretending a subprocess is a sandbox.
 
 ``self_test()`` actually runs the probes and returns the evidence, so
 ``verified`` is only true when the boundary was demonstrated on this machine.
@@ -135,7 +132,7 @@ class Backend:
 
 def _linux_backend() -> Backend:
     if sys.platform != "linux":
-        return Backend("none", False, "Only the Linux namespace backend is implemented.")
+        return Backend("none", False, "This build supports Linux only.")
     unshare = shutil.which("unshare")
     if unshare is None:
         return Backend("none", False, "unshare(1) was not found.")
@@ -153,18 +150,6 @@ def _linux_backend() -> Backend:
 
 
 def backend() -> Backend:
-    if sys.platform == "win32":
-        return Backend(
-            "windows", False,
-            "Windows containment needs the AppContainer/Job Object broker in native/windows_workspace; "
-            "the Python layer does not pretend a subprocess is a sandbox.",
-        )
-    if sys.platform == "darwin":
-        return Backend(
-            "macos", False,
-            "sandbox-exec profiles are not implemented. Run without the sandbox flag and treat "
-            "the runner as containment only.",
-        )
     return _linux_backend()
 
 
@@ -216,10 +201,9 @@ def wrap(argv: list[str], *, root: str | Path, cwd: str | Path | None = None,
     launcher = Path(tempfile.mkstemp(prefix="babymind-sandbox-", suffix=".py")[1])
     launcher.write_text(LAUNCHER_SOURCE, encoding="utf-8")
     child_env = dict(env or {})
-    home = child_env.get("HOME") or child_env.get("USERPROFILE") or ""
+    home = child_env.get("HOME") or ""
     if not home or not Path(home).resolve().is_relative_to(root_path):
         child_env["HOME"] = str(root_path)
-        child_env["USERPROFILE"] = str(root_path)
     spec = _spec(root_path, working, list(argv), child_env, allow_network)
     command = [
         shutil.which("unshare") or "unshare",
