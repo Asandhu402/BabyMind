@@ -17,8 +17,10 @@ add_executable(workspace_broker_tests tests.cpp broker_protocol.cpp)
 
 # Fail-closed broker host. It validates AppContainer identity and IPC framing,
 # but intentionally dispatches no filesystem operations.
-add_executable(babymind_workspace_broker broker_main.cpp broker_protocol.cpp)
-target_link_libraries(babymind_workspace_broker PRIVATE babymind_workspace)
+add_executable(babymind_workspace_broker
+    broker_main.cpp broker_protocol.cpp workspace_broker.cpp)
+target_include_directories(babymind_workspace_broker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(babymind_workspace_broker PRIVATE BABYMIND_WORKSPACE_BUILD)
 
 add_executable(babymind_workspace_isolation_smoke broker_isolation_smoke.cpp)
 target_link_libraries(babymind_workspace_isolation_smoke PRIVATE userenv)
