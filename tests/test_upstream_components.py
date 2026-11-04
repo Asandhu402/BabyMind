@@ -7,12 +7,12 @@ from babymind.integrations.upstream_components import upstream_component_report
 
 
 class UpstreamComponentTests(unittest.TestCase):
-    def test_all_eight_upstreams_are_mapped_without_enabling_them(self):
+    def test_linux_relevant_upstreams_are_mapped_without_enabling_them(self):
         report = upstream_component_report()
         components = report["components"]
         self.assertEqual(
             set(components),
-            {"sqlcipher3", "flaui", "code_symbol_index", "opencode", "atomic_agent", "wincage", "sandbox_runtime", "ocbox"},
+            {"sqlcipher3", "code_symbol_index", "opencode", "atomic_agent", "sandbox_runtime", "ocbox"},
         )
         self.assertEqual(report["policy"]["model_engine"], "llama.cpp")
         self.assertFalse(report["policy"]["cloud_inference_allowed"])
