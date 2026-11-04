@@ -40,12 +40,13 @@ def main() -> None:
         # Import only after the local engine environment is configured. The
         # server module creates its shared coordinator during import and starts
         # the selected local model process.
-        from .server import DATA_HOME, Handler, init_db
+        from .server import DATA_HOME, Handler, init_db, recover_development_reviews
     except Exception as error:
         _show_error(str(error))
         return
 
     init_db()
+    recover_development_reviews()
     port = _available_port()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server_thread = threading.Thread(

@@ -63,6 +63,65 @@ class BabyMindWebTests(unittest.TestCase):
         except HTTPError as error:
             return error.code, error.headers.get("Content-Type"), error.read()
 
+    def test_marker_prefixed_conversation_is_encrypted_and_survives_reinitialization(self) -> None:
+        value = "bmenc:v1:private conversation"
+        conversation_id = server.persist_integration_exchange("", value, value)
+        with server.db() as connection:
+            title = connection.execute("SELECT title FROM conversations WHERE id=?", (conversation_id,)).fetchone()[0]
+            messages = connection.execute("SELECT content FROM messages WHERE conversation_id=?", (conversation_id,)).fetchall()
+        self.assertNotIn(value, title)
+        self.assertTrue(all(value not in row[0] for row in messages))
+        server.init_db()
+        status, _, body = self.request("/api/conversations/" + conversation_id)
+        self.assertEqual(status, 200)
+        self.assertEqual([item["content"] for item in json.loads(body)], [value, value])
+
+    def test_development_review_api_records_and_cancels_a_real_worker(self) -> None:
+        import time
+        started, release = threading.Event(), threading.Event()
+        class BlockingProvider:
+            def complete(self, system, prompt):
+                started.set()
+                if not release.wait(3):
+                    raise RuntimeError("test timed out")
+                return "Specialist review, not verified work."
+        with patch.object(server.COORDINATOR, "provider", BlockingProvider()):
+            try:
+                status, _, body = self.request("/api/development-reviews", {"task": "Build inventory app", "context": "Use SQLite"})
+                self.assertEqual(status, 202, body)
+                review_id = json.loads(body)["id"]
+                self.assertTrue(started.wait(2))
+                status, _, body = self.request("/api/development-reviews/" + review_id)
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body)["roles"][0]["status"], "running")
+                self.assertEqual(self.request("/api/development-reviews/" + review_id + "/cancel", {})[0], 200)
+            finally:
+                release.set()
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                status, _, body = self.request("/api/development-reviews/" + review_id)
+                review = json.loads(body)
+                if review["status"] == "cancelled":
+                    break
+                time.sleep(0.01)
+            self.assertEqual(review["status"], "cancelled")
+            self.assertEqual(review["roles"][0]["status"], "completed")
+            self.assertEqual(review["roles"][1]["status"], "pending")
+            self.assertEqual(len(review["attempts"]), 1)
+
+    def test_github_research_routes_expose_read_only_operations(self) -> None:
+        from babymind import github_research
+        with patch.object(github_research, 'search_repositories', return_value={'results': []}) as search, \
+             patch.object(github_research, 'inspect_repository', return_value={'commit': '1' * 40}) as inspect, \
+             patch.object(github_research, 'read_file', return_value={'text': 'sample'}) as read:
+            self.assertEqual(self.request('/api/research/github/search', {'query':'inventory'})[0], 200)
+            self.assertEqual(self.request('/api/research/github/inspect', {'owner':'owner','repo':'repo'})[0], 200)
+            self.assertEqual(self.request('/api/research/github/file', {'owner':'owner','repo':'repo','commit':'1' * 40,'path':'README'})[0], 200)
+            search.assert_called_once_with('inventory', 5)
+            inspect.assert_called_once_with('owner', 'repo')
+            read.assert_called_once_with('owner', 'repo', '1' * 40, 'README')
+            self.assertEqual(self.request('/api/research/github/search', {'query':'x'}, extra_headers={'Sec-Fetch-Site':'cross-site'})[0], 403)
+
     def test_encrypted_backup_export_api(self) -> None:
         destination = Path(self.temp.name) / "BabyMind.bmbak"
         status, _, body = self.request("/api/backup/export", {

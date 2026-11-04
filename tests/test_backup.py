@@ -63,6 +63,29 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(memory_store.decrypt(task), "Private memory task")
             self.assertEqual(memory_store.decrypt(response), "Private memory response")
 
+    def test_backup_restores_and_validates_development_review_text(self):
+        with tempfile.TemporaryDirectory() as folder:
+            from babymind.development_review import DevelopmentReviews
+            root = Path(folder)
+            original, restored = root / "original", root / "restored"
+            self.make_home(original)
+            store = SecureTextStore(original / "app.key")
+            with sqlite3.connect(original / "app.sqlite3") as connection:
+                DevelopmentReviews.create_tables(connection)
+                connection.execute("INSERT INTO development_reviews VALUES (?, ?, ?, ?, ?, ?)",
+                                   ('r', store.encrypt('Private task'), store.encrypt('Private context'), 'reviewed', 'time', 'time'))
+                connection.execute("INSERT INTO development_review_roles VALUES (?, ?, ?, ?, ?, ?)",
+                                   ('r', 1, 'Architect', 'Objective', 'completed', store.encrypt('Private report')))
+            backup = root / "review.bmbak"
+            create_backup(original, backup, "a-long-backup-password")
+            restore_backup(restored, backup, "a-long-backup-password", confirmation="RESTORE BABYMIND")
+            with sqlite3.connect(restored / "app.sqlite3") as connection:
+                task = connection.execute("SELECT task FROM development_reviews").fetchone()[0]
+                report = connection.execute("SELECT response FROM development_review_roles").fetchone()[0]
+            restored_store = SecureTextStore(restored / "app.key")
+            self.assertEqual(restored_store.decrypt(task), 'Private task')
+            self.assertEqual(restored_store.decrypt(report), 'Private report')
+
     def test_wrong_password_does_not_modify_existing_data(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

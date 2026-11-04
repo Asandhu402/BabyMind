@@ -109,8 +109,6 @@ def _download_model(
 
 
 def _ensure_model(model_path: Path) -> None:
-    from tkinter import Tk, messagebox, ttk
-
     marker = model_path.with_suffix(model_path.suffix + ".sha256")
     # Never trust a sidecar marker as proof of the model's contents. Re-hash
     # the actual GGUF on every startup before allowing it to reach llama.cpp.
@@ -124,6 +122,17 @@ def _ensure_model(model_path: Path) -> None:
             return
         model_path.unlink(missing_ok=True)
         marker.unlink(missing_ok=True)
+
+    # A verified existing model does not require the GUI toolkit.
+    try:
+        from tkinter import Tk, messagebox, ttk
+    except ImportError as error:
+        raise RuntimeError(
+            "Tkinter is required for the first-time model download dialog. "
+            "Install Python with Tcl/Tk support (on Debian or Ubuntu, install "
+            "python3-tk), or set BABYMIND_GGUF_MODEL to an already downloaded "
+            "model that matches BabyMind's pinned SHA-256."
+        ) from error
 
     root = Tk()
     root.withdraw()

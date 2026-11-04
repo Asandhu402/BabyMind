@@ -42,8 +42,8 @@ class LocalMemory:
                 "SELECT id, task, response FROM memories"
             ).fetchall()
             for memory_id, task, response in rows:
-                encrypted_task = self.secure.encrypt(task)
-                encrypted_response = self.secure.encrypt(response)
+                encrypted_task = self.secure.encrypt_legacy(task)
+                encrypted_response = self.secure.encrypt_legacy(response)
                 if encrypted_task != task or encrypted_response != response:
                     connection.execute(
                         "UPDATE memories SET task=?, response=? WHERE id=?",

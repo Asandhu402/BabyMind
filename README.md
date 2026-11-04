@@ -4,6 +4,8 @@ BabyMind is a local-first AI development platform with exactly **50 specialist r
 
 The 50 roles are the development team defined in [docs/AUTONOMY.md](docs/AUTONOMY.md): architect, language specialists, testers, security reviewers, recovery, research, and release acceptance. They replaced the earlier general-purpose role set. They are configurations over one underlying model — not 50 separately trained or separately running models — and a "50-agent mission" is 50 role-guided passes over the same weights.
 
+**Autonomous development status:** The full self-developing platform is not implemented. The experimental native workspace broker is not enabled, and Windows has no verified execution sandbox. The self-development runner can execute commands without isolation in its default `auto` mode when no sandbox is available; use `BABYMIND_SANDBOX=require` to refuse such execution. See the [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md) for implemented capabilities, test results, and outstanding acceptance gates.
+
 ## What is included
 
 - **Chat workspace:** responsive browser UI, conversation history, agent selector, typing indicator, prompt starters, dark/light themes, and Markdown conversation export.
@@ -14,12 +16,20 @@ The 50 roles are the development team defined in [docs/AUTONOMY.md](docs/AUTONOM
 - **Bounded command runner:** allowlisted executables, working-directory boundary, scrubbed environment, output caps, timeout, and process-tree termination.
 - **Open-source research:** public GitHub metadata and licence classification, without cloning or auto-importing anything.
 - **Unified coordinator:** one BabyMind identity with role-specific instructions.
-- **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
+- **Collaboration mode:** selected specialist, Independent Verification Agent (BM-49), then Chief Architect (BM-01).
+- **Development review:** a separate desktop view runs the 50 requested development specialist roles sequentially on the same local model, recording their reports and attempts in the encrypted app database. This is an advisory review of text you supply, not autonomous development, file access, testing, or independent verification.
+- **GitHub research:** anonymous, read-only search and commit-pinned inspection of public repository trees and UTF-8 source files; files can be supplied as excerpts to the development-review workflow. Nothing is cloned, executed, or automatically integrated. License metadata requires independent review.
 - **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows. When enabled, BabyMind ranks relevant notes locally using lightweight text matching; no embeddings or extra AI model are used. The Memory workspace also supports local search.
 - **Encrypted conversation storage:** local SQLite history on the computer running BabyMind; message text and titles are encrypted at rest with AES-256-GCM.
 - **Local model runtime:** BabyMind-managed llama.cpp server using a local GGUF model.
 - **CLI:** health, list, ask, route, and memory commands.
 - **Lightweight runtime:** core server, storage, and HTTP client use the Python standard library; the desktop window uses pywebview.
+
+### Development reviews
+
+Open **Development review**, enter a task and optional context, and start a review. Each role gets a separate model call; the first two reports provide limited context to later roles, and the last two receive excerpts of earlier reports. All reports are unverified model output. The review does not inspect your project, make changes, run commands, or verify acceptance criteria.
+
+The review holds the web application's inference slot and may take a long time on CPU. Mission control has separate scheduling and can still compete for model resources. Cancel stops after the current model request returns, not immediately. Failed or interrupted reviews can be resumed; dependent final reviews are rerun where necessary, and previous attempts remain in history. An interrupted review is marked on the next startup; it is not resumed automatically. Review contents are included in BabyMind's encrypted database backups. Do not paste credentials into the supplied context. Use one BabyMind instance for normal operation; the review worker also uses a cooperative process lock to prevent overlapping review workers.
 
 ## Requirements
 

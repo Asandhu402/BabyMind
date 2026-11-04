@@ -113,11 +113,19 @@ class SecureTextStore:
         return key
 
     def encrypt(self, value: str) -> str:
-        if value.startswith(_PREFIX):
-            return value
+        """Encrypt new plaintext, even when it resembles a ciphertext marker."""
         nonce = secrets.token_bytes(12)
         ciphertext = self._cipher.encrypt(nonce, value.encode("utf-8"), b"BabyMind:text:v1")
         return _PREFIX + base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii")
+
+    def encrypt_legacy(self, value: str) -> str:
+        """Migrate a stored legacy value; never use this for new user input.
+
+        The old format has no separate encrypted-column marker, so a legacy
+        plaintext value beginning with the marker is ambiguous. Preserve it
+        rather than silently converting a damaged ciphertext into plaintext.
+        """
+        return value if value.startswith(_PREFIX) else self.encrypt(value)
 
     def decrypt(self, value: str) -> str:
         if not value.startswith(_PREFIX):
