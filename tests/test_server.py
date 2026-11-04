@@ -195,7 +195,11 @@ class BabyMindWebTests(unittest.TestCase):
         ]:
             status, _, body = self.request(endpoint, payload)
             self.assertEqual(status, 400)
-            self.assertIn(b"explicitly", body.lower())
+            if endpoint.endswith("/coding"):
+                self.assertIn(b"disabled", body.lower())
+                self.assertIn(b"llama.cpp-native", body.lower())
+            else:
+                self.assertIn(b"explicitly", body.lower())
 
     def test_integration_exchanges_are_saved_in_encrypted_conversation_history(self) -> None:
         conversation_id = server.persist_integration_exchange(
