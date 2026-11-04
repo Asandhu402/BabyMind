@@ -15,14 +15,27 @@ constexpr DWORD kExitBadInput = 20;
 constexpr DWORD kExitDeniedNotImplemented = 30;
 constexpr DWORD kExitIoFailure = 40;
 
-bool running_in_appcontainer() {
+bool running_in_appcontainer_without_capabilities() {
+    HANDLE token = GetCurrentProcessToken();
     BOOL is_appcontainer = FALSE;
     DWORD returned = 0;
-    if (!GetTokenInformation(GetCurrentProcessToken(), TokenIsAppContainer,
-                             &is_appcontainer, sizeof(is_appcontainer), &returned)) {
+    if (!GetTokenInformation(token, TokenIsAppContainer,
+                             &is_appcontainer, sizeof(is_appcontainer), &returned) ||
+        is_appcontainer != TRUE) {
         return false;
     }
-    return is_appcontainer == TRUE;
+
+    // This broker currently needs no capabilities at all. In particular it
+    // receives no internetClient/internetClientServer capability.
+    std::array<uint8_t, 4096> capability_buffer{};
+    if (!GetTokenInformation(token, TokenCapabilities, capability_buffer.data(),
+                             static_cast<DWORD>(capability_buffer.size()), &returned) ||
+        returned < sizeof(DWORD)) {
+        return false;
+    }
+    const auto* capabilities =
+        reinterpret_cast<const TOKEN_GROUPS*>(capability_buffer.data());
+    return capabilities->GroupCount == 0;
 }
 
 bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes) {
@@ -39,8 +52,8 @@ bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes) {
 
 int wmain() {
     // Fail closed when launched outside the intended restricted identity.
-    if (!running_in_appcontainer()) {
-        std::cerr << "DENIED: broker requires a Windows AppContainer token.\n";
+    if (!running_in_appcontainer_without_capabilities()) {
+        std::cerr << "DENIED: broker requires a capability-free Windows AppContainer token.\n";
         return static_cast<int>(kExitNotAppContainer);
     }
 
