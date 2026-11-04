@@ -55,8 +55,7 @@ class LocalMemory:
         """Yield a serialized SQLite connection and always close its file handle.
 
         sqlite3.Connection's context manager commits/rolls back but does not
-        close the connection; explicit close is important on Windows where
-        open database handles prevent temporary-directory cleanup.
+        close the connection; explicit close keeps temporary database handles from leaking.
         """
         with MEMORY_LOCK:
             connection = sqlite3.connect(self.database_path)
