@@ -78,8 +78,8 @@ Promptfoo is a developer/CI test harness, not a second runtime assistant. The ch
 
 Run the check:
 
-    $env:PROMPTFOO_DISABLE_TELEMETRY = "1"
-    $env:BABYMIND_EVAL_URL = "http://127.0.0.1:8765"
+    export PROMPTFOO_DISABLE_TELEMETRY=1
+    export BABYMIND_EVAL_URL=http://127.0.0.1:8765
     npx promptfoo eval -c quality/promptfooconfig.yaml
 
 ## Availability
