@@ -53,27 +53,27 @@ def wait_for_server(process: subprocess.Popen, log_path: Path) -> None:
     )
 
 
-def resolve_core_source(relative: str) -> Path:
-    """Resolve core source from either the checkout or the installed package.
-
-    GitHub Actions installs BabyMind editable before running this recorder. The
-    package location is therefore the authoritative fallback if the checkout
-    layout differs from the expected src/ tree.
-    """
-    candidates = (
-        ROOT / relative,
-        Path(providers_module.__file__).resolve(),
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    locations = "; ".join(str(candidate) for candidate in candidates)
+def read_core_source(relative: str) -> tuple[Path, str]:
+    """Read imported core source through its loader, then try checkout paths."""
+    module_path = Path(providers_module.__file__).resolve()
+    if relative.endswith("providers.py"):
+        loader = providers_module.__loader__
+        get_source = getattr(loader, "get_source", None)
+        if callable(get_source):
+            source = get_source(providers_module.__name__)
+            if isinstance(source, str) and source:
+                return module_path, source
+    errors: list[str] = []
+    for candidate in (ROOT / relative, module_path):
+        try:
+            return candidate, candidate.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            errors.append(f"{candidate}: {error}")
     raise RuntimeError(
-        f"BabyMind core source file {relative!r} was not found. "
-        f"Checked: {locations}. Checkout root: {ROOT}; "
-        f"package location: {Path(babymind.__file__).resolve().parent}"
+        f"Could not read BabyMind core source {relative!r}. "
+        f"Checkout root: {ROOT}; package file: {module_path}; "
+        f"read errors: {"; ".join(errors)}"
     )
-
 
 def collect_local_code_context() -> str:
     """Read complete, bounded core files; never silently present partial files as complete."""
@@ -87,9 +87,8 @@ def collect_local_code_context() -> str:
     omitted: list[str] = []
     for relative in source_paths:
         try:
-            path = resolve_core_source(relative)
-            content = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
+            path, content = read_core_source(relative)
+        except (OSError, UnicodeError, RuntimeError) as error:
             omitted.append(f"{relative} (could not read: {error})")
             continue
         if total_chars + len(content) > total_limit:
@@ -107,7 +106,7 @@ def collect_local_code_context() -> str:
             "No complete BabyMind core source files were available for inspection. "
             f"Checkout root: {ROOT}; package file: {babymind.__file__}; "
             f"providers module: {providers_module.__file__}; "
-            f"candidate paths: {resolve_core_source.__name__}({source_paths[0]!r}) failed."
+            f"details: {"; ".join(omitted)}"
         )
     manifest = (
         "SOURCE-COVERAGE MANIFEST: Every file below is included in full, from first byte "
@@ -370,7 +369,7 @@ def main() -> None:
                             "BabyMind UI did not produce a successful substantive answer. "
                             f"Rendered assistant text: {assistant_response[:2000]}"
                         )
-                    source_file = resolve_core_source("src/babymind/providers.py").read_text(encoding="utf-8")
+                    _, source_file = read_core_source("src/babymind/providers.py")
                     try:
                         validate_code_review_report(assistant_response, source_file)
                     except ValueError as error:
