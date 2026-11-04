@@ -35,14 +35,22 @@ def validate_code_review_report(report: str, source: str) -> None:
         raise ValueError("Self-inspection report exceeds the 450-word limit.")
     lines = source.splitlines()
     evidence = re.findall(
-        r"\bline\s+(\d+)\)?\s*[:—-]\s*`([^`]+)`",
+        r"\bline\s+(\d+)\)?\s*[:—-]\s*(.+)",
         report,
         flags=re.IGNORECASE,
     )
     verified = False
     for raw_number, quote in evidence:
         number = int(raw_number)
-        if 1 <= number <= len(lines) and lines[number - 1].strip() == quote.strip():
+        if not 1 <= number <= len(lines):
+            continue
+        candidate = quote.strip()
+        # Models may omit Markdown delimiters or add sentence punctuation after
+        # the quoted code. Normalize presentation only; source text must match.
+        if len(candidate) >= 2 and candidate.startswith("`") and candidate.endswith("`"):
+            candidate = candidate[1:-1].strip()
+        source_line = lines[number - 1].strip()
+        if candidate == source_line or candidate.removesuffix(".") == source_line:
             verified = True
             break
     if not verified:
