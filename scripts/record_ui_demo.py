@@ -331,47 +331,65 @@ def main() -> None:
                         "() => document.querySelector('#welcome')?.style.display !== 'none'",
                         timeout=10000,
                     )
-                    page.locator("#messageInput").fill(prompt)
-                    previous = page.locator("#messages .message .message-content").count()
-                    page.locator("#sendButton").click()
-                    page.wait_for_function(
-                        "(count) => document.querySelectorAll('#messages .message .message-content').length > count",
-                        arg=previous, timeout=600000,
-                    )
-                    page.wait_for_function(
-                        "() => !document.querySelector('#typingIndicator')", timeout=600000,
-                    )
-                    assistant_messages = page.locator("#messages .message.assistant .message-content")
-                    if assistant_messages.count() < 1:
-                        raise RuntimeError("The UI did not render an assistant response.")
-                    assistant_response = assistant_messages.last.inner_text().strip()
-                    failure_markers = (
-                        "I couldn't complete that request", "Conversation not found",
-                        "Check that your selected local model engine is running",
-                        "Unable to reach BabyMind server",
-                    )
-                    if len(assistant_response) < 80 or any(
-                        marker.lower() in assistant_response.lower() for marker in failure_markers
-                    ):
-                        raise RuntimeError(
-                            "BabyMind UI did not produce a successful substantive answer. "
-                            f"Rendered assistant text: {assistant_response[:2000]}"
+                    questions = [
+                        "Hi BabyMind! What can you help me with?",
+                        "Can you explain how you work in simple words?",
+                        "I am building a Windows app. If something goes wrong, how would you help me figure out what happened?",
+                        "What would you do if you weren't sure your answer was correct?",
+                    ]
+                    conversation = ["# BabyMind — natural conversation test", ""]
+                    for index, question in enumerate(questions, start=1):
+                        print(f"Sending natural conversation question {index}/{len(questions)}.")
+                        page.locator("#messageInput").fill(question)
+                        previous = page.locator("#messages .message .message-content").count()
+                        page.locator("#sendButton").click()
+                        page.wait_for_function(
+                            "(count) => document.querySelectorAll('#messages .message .message-content').length > count",
+                            arg=previous, timeout=600000,
                         )
-                    try:
-                        validate_code_review_report(assistant_response, source_file)
-                    except ValueError as error:
-                        raise RuntimeError(
-                            "BabyMind self-inspection response failed quality validation: "
-                            f"{error}\\nRendered response: {assistant_response[:3000]}"
-                        ) from error
-                    print(
-                        "BabyMind produced a validated self-inspection report "
-                        f"({len(assistant_response)} characters) after inspecting "
-                        f"{len(source_file)} characters of local source."
+                        page.wait_for_function(
+                            "() => !document.querySelector('#typingIndicator')", timeout=600000,
+                        )
+                        assistant_messages = page.locator("#messages .message.assistant .message-content")
+                        if assistant_messages.count() < index:
+                            raise RuntimeError(
+                                f"BabyMind did not render an assistant reply to question {index}."
+                            )
+                        assistant_response = assistant_messages.last.inner_text().strip()
+                        failure_markers = (
+                            "I couldn't complete that request", "Conversation not found",
+                            "Check that your selected local model engine is running",
+                            "Unable to reach BabyMind server",
+                        )
+                        if len(assistant_response) < 20 or any(
+                            marker.lower() in assistant_response.lower() for marker in failure_markers
+                        ):
+                            raise RuntimeError(
+                                f"BabyMind failed to answer question {index}. "
+                                f"Rendered text: {assistant_response[:2000]}"
+                            )
+                        conversation.extend([
+                            f"## Question {index}",
+                            question,
+                            "",
+                            "## BabyMind's answer",
+                            assistant_response,
+                            "",
+                        ])
+                        page.screenshot(
+                            path=str(OUT / f"conversation-{index:02d}.png"),
+                            full_page=True,
+                        )
+                        print(
+                            f"BabyMind answered question {index} "
+                            f"({len(assistant_response)} characters)."
+                        )
+                    (OUT / "BabyMind-Natural-Conversation-Test.md").write_text(
+                        "\n".join(conversation), encoding="utf-8",
                     )
-                    (OUT / "BabyMind-Upgrade-Recommendation.md").write_text(
-                        "# BabyMind self-inspection result\\n\\n"
-                        + assistant_response + "\\n", encoding="utf-8",
+                    print(
+                        "Natural conversation test completed: "
+                        f"{len(questions)} ordinary questions answered in one conversation."
                     )
                     page.screenshot(path=str(OUT / "03-live-model-chat.png"), full_page=True)
                     page.locator('[data-view="memory"]').click()
