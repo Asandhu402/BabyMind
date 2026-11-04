@@ -1,6 +1,6 @@
-"""First-launch setup for the bundled BabyMind Windows desktop app.
+"""First-launch setup for the bundled BabyMind Linux desktop app.
 
-The llama.cpp executable is bundled with the Windows package. The model is
+The llama.cpp server is installed locally. The model is
 downloaded once to the user's local BabyMind data directory and verified
 against the publisher's SHA-256 checksum before it can be used.
 """
@@ -43,12 +43,12 @@ def _find_llama_server(app_dir: Path) -> Path | None:
     configured = os.getenv("BABYMIND_LLAMA_SERVER", "").strip()
     if configured and Path(configured).is_file():
         return Path(configured).resolve()
-    bundled = app_dir / "llama.cpp" / "llama-server.exe"
+    bundled = app_dir / "llama.cpp" / "llama-server"
     if bundled.is_file():
         return bundled
     runtime_dir = app_dir / "llama.cpp"
     if runtime_dir.is_dir():
-        return next(runtime_dir.rglob("llama-server.exe"), None)
+        return next(runtime_dir.rglob("llama-server"), None)
     return None
 
 
@@ -215,7 +215,7 @@ def prepare_local_engine() -> None:
     if server is None:
         raise RuntimeError(
             "The llama.cpp runtime is missing. Set BABYMIND_LLAMA_SERVER to a valid "
-            "llama-server executable or download the complete BabyMind Windows package."
+            "llama-server executable or install the Linux llama.cpp runtime."
         )
 
     # BabyMind always uses the single bundled, SHA-256-pinned model.
