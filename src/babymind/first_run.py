@@ -1,16 +1,16 @@
-"""First-launch setup for the bundled BabyMind Windows desktop app.
+"""First-launch setup for the bundled BabyMind Linux desktop app.
 
-The llama.cpp executable is bundled with the Windows package. The model is
+The llama.cpp executable is bundled with the Linux package. The model is
 downloaded once to the user's local BabyMind data directory and verified
-against the publisher's SHA-256 checksum before it can be used.
+against a pinned SHA-256 checksum before it can be used.
 """
 from __future__ import annotations
 
 import hashlib
 import os
-import queue
 import shutil
 import sys
+import tempfile
 import threading
 import urllib.request
 from pathlib import Path
@@ -26,6 +26,7 @@ MODEL_SHA256 = (
 )
 MODEL_SIZE_LABEL = "approximately 2.71 GB"
 CHUNK_SIZE = 4 * 1024 * 1024
+MAX_MODEL_DOWNLOAD_BYTES = 3_500_000_000
 
 
 def _data_home() -> Path:
@@ -43,12 +44,12 @@ def _find_llama_server(app_dir: Path) -> Path | None:
     configured = os.getenv("BABYMIND_LLAMA_SERVER", "").strip()
     if configured and Path(configured).is_file():
         return Path(configured).resolve()
-    bundled = app_dir / "llama.cpp" / "llama-server.exe"
+    bundled = app_dir / "llama.cpp" / "llama-server"
     if bundled.is_file():
         return bundled
     runtime_dir = app_dir / "llama.cpp"
     if runtime_dir.is_dir():
-        return next(runtime_dir.rglob("llama-server.exe"), None)
+        return next(runtime_dir.rglob("llama-server"), None)
     return None
 
 
@@ -66,12 +67,15 @@ def _download_model(
     cancelled: threading.Event | None = None,
 ) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    partial = destination.with_suffix(destination.suffix + ".part")
     if shutil.disk_usage(destination.parent).free < 4_500_000_000:
         raise RuntimeError(
             "BabyMind needs at least 4.5 GB of free disk space for the first model download."
         )
 
+    # A unique private partial file avoids overwriting any unrelated .part file.
+    fd, name = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".part", dir=destination.parent)
+    os.close(fd)
+    partial = Path(name)
     request = urllib.request.Request(
         MODEL_URL,
         headers={"User-Agent": "BabyMind-Desktop/0.3", "Accept": "application/octet-stream"},
@@ -79,6 +83,8 @@ def _download_model(
     try:
         with urllib.request.urlopen(request, timeout=60) as response:
             total = int(response.headers.get("Content-Length", "0") or 0)
+            if total < 0 or total > MAX_MODEL_DOWNLOAD_BYTES:
+                raise RuntimeError("Model download exceeds the allowed size limit.")
             downloaded = 0
             digest = hashlib.sha256()
             with partial.open("wb") as output:
@@ -88,9 +94,11 @@ def _download_model(
                     chunk = response.read(CHUNK_SIZE)
                     if not chunk:
                         break
+                    downloaded += len(chunk)
+                    if downloaded > MAX_MODEL_DOWNLOAD_BYTES:
+                        raise RuntimeError("Model download exceeds the allowed size limit.")
                     output.write(chunk)
                     digest.update(chunk)
-                    downloaded += len(chunk)
                     if progress:
                         progress(downloaded, total)
         actual_hash = digest.hexdigest()
@@ -99,121 +107,44 @@ def _download_model(
                 "The downloaded model failed its SHA-256 integrity check. "
                 "The incomplete file has been discarded; please try again."
             )
-        partial.replace(destination)
-        destination.with_suffix(destination.suffix + ".sha256").write_text(
-            MODEL_SHA256, encoding="ascii"
-        )
+        # Publish without overwriting a file that appeared during the download.
+        # Both paths share a directory/filesystem, so the link is atomic.
+        try:
+            os.link(partial, destination)
+        except FileExistsError as error:
+            raise RuntimeError("The model path appeared during download; it was not overwritten.") from error
+        partial.unlink()
     except Exception:
         partial.unlink(missing_ok=True)
         raise
 
 
-def _ensure_model(model_path: Path) -> None:
-    marker = model_path.with_suffix(model_path.suffix + ".sha256")
-    # Never trust a sidecar marker as proof of the model's contents. Re-hash
-    # the actual GGUF on every startup before allowing it to reach llama.cpp.
+def _ensure_model(
+    model_path: Path, downloader: Callable[[Path], None] | None = None,
+    verifier: Callable[[Path], str] | None = None,
+) -> None:
+    # A sidecar marker is not evidence: verify the file itself every time.
+    verifier = verifier or _sha256
     if model_path.is_file():
-        try:
-            actual_hash = _sha256(model_path).lower()
-        except OSError:
-            actual_hash = ""
-        if actual_hash == MODEL_SHA256:
-            marker.write_text(MODEL_SHA256, encoding="ascii")
+        if verifier(model_path).lower() == MODEL_SHA256:
             return
-        model_path.unlink(missing_ok=True)
-        marker.unlink(missing_ok=True)
-
-    # A verified existing model does not require the GUI toolkit.
-    try:
-        from tkinter import Tk, messagebox, ttk
-    except ImportError as error:
         raise RuntimeError(
-            "Tkinter is required for the first-time model download dialog. "
-            "Install Python with Tcl/Tk support (on Debian or Ubuntu, install "
-            "python3-tk), or set BABYMIND_GGUF_MODEL to an already downloaded "
-            "model that matches BabyMind's pinned SHA-256."
-        ) from error
-
-    root = Tk()
-    root.withdraw()
-    accepted = messagebox.askyesno(
-        "Set up BabyMind's local AI",
-        "BabyMind needs to download its first local AI model "
-        f"({MODEL_SIZE_LABEL}).\n\n"
-        "This is a one-time download. The model will be saved on this computer "
-        "and used locally. No external model account or API key is required.\n\n"
-        "Download now?",
-        parent=root,
-    )
-    if not accepted:
-        root.destroy()
-        raise RuntimeError(
-            "First-time model setup was cancelled. Reopen BabyMind when you are ready."
+            f"The existing model at {model_path} does not match BabyMind's pinned "
+            "SHA-256. It was not deleted. Move it elsewhere or choose another "
+            "BABYMIND_GGUF_MODEL path, then restart."
         )
-
-    root.deiconify()
-    root.title("BabyMind — Downloading local AI")
-    root.geometry("500x155")
-    root.resizable(False, False)
-    root.protocol("WM_DELETE_WINDOW", lambda: cancel.set())
-    status = ttk.Label(root, text="Connecting to the model host…", wraplength=460)
-    status.pack(padx=18, pady=(18, 8), anchor="w")
-    bar = ttk.Progressbar(root, length=460, mode="determinate", maximum=100)
-    bar.pack(padx=18, pady=8)
-    detail = ttk.Label(root, text="The first download is approximately 2.71 GB.")
-    detail.pack(padx=18, pady=(0, 12), anchor="w")
-
-    updates: queue.Queue[tuple] = queue.Queue()
-    cancel = threading.Event()
-    outcome: dict[str, Exception | bool] = {}
-
-    def worker() -> None:
-        try:
-            _download_model(
-                model_path,
-                progress=lambda done, total: updates.put(("progress", done, total)),
-                cancelled=cancel,
-            )
-            outcome["ok"] = True
-        except Exception as error:
-            outcome["error"] = error
-        updates.put(("finished",))
-
-    threading.Thread(target=worker, name="BabyMindModelDownload", daemon=True).start()
-
-    def poll() -> None:
-        try:
-            while True:
-                item = updates.get_nowait()
-                if item[0] == "progress":
-                    done, total = item[1], item[2]
-                    if total:
-                        percent = min(100, done * 100 / total)
-                        bar.configure(value=percent)
-                        status.configure(text=f"Downloading model… {percent:.1f}%")
-                        detail.configure(
-                            text=f"{done / 1_000_000_000:.2f} / {total / 1_000_000_000:.2f} GB"
-                        )
-                    else:
-                        status.configure(text=f"Downloaded {done / 1_000_000_000:.2f} GB…")
-                elif item[0] == "finished":
-                    root.destroy()
-                    return
-        except queue.Empty:
-            pass
-        if cancel.is_set():
-            status.configure(text="Cancelling download safely…")
-        root.after(150, poll)
-
-    root.after(150, poll)
-    root.mainloop()
-    if "error" in outcome:
-        raise RuntimeError(f"BabyMind could not download its local model: {outcome['error']}")
-    if not outcome.get("ok"):
-        raise RuntimeError("The model download did not complete.")
+    if downloader is None:
+        raise RuntimeError("First-time model setup requires the BabyMind desktop window.")
+    downloader(model_path)
+    # Do not trust the callback or marker, either.
+    if not model_path.is_file() or verifier(model_path).lower() != MODEL_SHA256:
+        raise RuntimeError("Model download did not produce the verified pinned model.")
 
 
-def prepare_local_engine() -> None:
+def prepare_local_engine(
+    downloader: Callable[[Path], None] | None = None,
+    verifier: Callable[[Path], str] | None = None,
+) -> None:
     """Configure the bundled CPU engine and ensure its verified model exists."""
     selected = os.getenv("BABYMIND_ENGINE", "").strip().lower()
     if selected and selected not in {"llama.cpp", "llamacpp", "llama-cpp"}:
@@ -224,19 +155,19 @@ def prepare_local_engine() -> None:
     if server is None:
         raise RuntimeError(
             "The llama.cpp runtime is missing. Set BABYMIND_LLAMA_SERVER to a valid "
-            "llama-server executable or download the complete BabyMind Windows package."
+            "llama-server executable or download the complete BabyMind Linux package."
         )
 
     # BabyMind always uses the single bundled, SHA-256-pinned model.
     # The environment variable may relocate that exact file for packaging/tests,
-    # but _ensure_model verifies its contents and replaces mismatches safely.
+    # and _ensure_model verifies its contents without deleting mismatches.
     configured_path = os.getenv("BABYMIND_GGUF_MODEL", "").strip()
     model_path = (
         Path(configured_path).expanduser()
         if configured_path
         else _data_home() / "models" / MODEL_FILENAME
     )
-    _ensure_model(model_path)
+    _ensure_model(model_path, downloader, verifier or _sha256)
 
     os.environ["BABYMIND_ENGINE"] = "llama.cpp"
     os.environ["BABYMIND_LLAMA_SERVER"] = str(server)

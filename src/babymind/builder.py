@@ -45,8 +45,7 @@ ALLOWED_SUFFIXES = {
 
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 _SAFE_ENV_KEYS = {
-    "PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP",
-    "TMPDIR", "HOME", "USERPROFILE", "LANG", "LC_ALL", "PYTHONIOENCODING",
+    "PATH", "TMPDIR", "HOME", "LANG", "LC_ALL", "PYTHONIOENCODING",
     "PYTHONUTF8", "NUMBER_OF_PROCESSORS",
 }
 
@@ -317,6 +316,8 @@ def _scrubbed_environment() -> dict[str, str]:
 
 def _run_entry(app_dir: Path, entry: str) -> dict:
     """Run the generated Python entry point once, with no shell and a timeout."""
+    if getattr(sys, "frozen", False):
+        return {"ran": False, "reason": "Running generated code is unavailable in the portable app; a frozen executable is not a Python interpreter."}
     if not entry.endswith(".py"):
         return {"ran": False, "reason": "No Python entry point in this plan."}
     command = [sys.executable, "-u", entry]

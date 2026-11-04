@@ -17,6 +17,7 @@ import json
 import os
 import secrets
 import shutil
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -91,6 +92,8 @@ def available() -> bool:
 
 
 def selfdev_enabled() -> bool:
+    if getattr(sys, "frozen", False):
+        return False
     if _flag_disabled():
         return False
     if _flag_enabled():
@@ -458,6 +461,8 @@ def apply_edits(
     test_timeout: int = 300,
 ) -> dict:
     """Apply a validated multi-file transaction and verify it, or roll it back."""
+    if getattr(sys, "frozen", False):
+        raise SelfDevError("Self-development edits are unavailable in the portable app; use a source checkout with Python.")
     root = dev_root()
     require("repo.write", agent_id)
     if not selfdev_enabled():

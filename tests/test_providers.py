@@ -1,8 +1,10 @@
 """Tests for BabyMind's llama.cpp local model engine."""
 
 import os
+import tempfile
+from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from babymind.providers import (
     LlamaCppHTTPClient,
@@ -64,12 +66,27 @@ class ProviderSelectionTests(unittest.TestCase):
     def test_llama_cpp_rejects_missing_executable(self) -> None:
         env = {
             "BABYMIND_ENGINE": "llama.cpp",
-            "BABYMIND_LLAMA_SERVER": "Z:\\missing\\llama-server.exe",
-            "BABYMIND_GGUF_MODEL": "Z:\\missing\\model.gguf",
+            "BABYMIND_LLAMA_SERVER": "/missing/llama-server",
+            "BABYMIND_GGUF_MODEL": "/missing/model.gguf",
         }
         with patch.dict(os.environ, env, clear=True):
             with self.assertRaisesRegex(ProviderError, "executable not found"):
                 LlamaCppProvider()
+
+    def test_refuses_reuse_of_unverified_local_server(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            executable = Path(folder) / "llama-server"
+            model = Path(folder) / "model.gguf"
+            executable.write_bytes(b"fixture")
+            model.write_bytes(b"fixture")
+            env = {"BABYMIND_LLAMA_SERVER": str(executable), "BABYMIND_GGUF_MODEL": str(model)}
+            response = MagicMock()
+            with patch.dict(os.environ, env, clear=True), \
+                 patch("babymind.providers.urlopen", return_value=response), \
+                 patch("subprocess.Popen") as popen:
+                with self.assertRaisesRegex(ProviderError, "will not reuse"):
+                    LlamaCppProvider()
+                popen.assert_not_called()
 
 
 if __name__ == "__main__":

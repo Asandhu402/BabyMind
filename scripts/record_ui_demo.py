@@ -1,7 +1,7 @@
 """Record the real BabyMind local web UI against a local llama.cpp model.
 
 The recorder owns the web-server subprocess so startup failures are captured and
-reported instead of being hidden by a detached PowerShell Start-Process.
+reported instead of being hidden by a detached background process.
 """
 from __future__ import annotations
 
@@ -286,7 +286,7 @@ def main() -> None:
                     questions = [
                         "Hi BabyMind! What can you help me with?",
                         "Can you explain how you work in simple words?",
-                        "I am building a Windows app. If something goes wrong, how would you help me figure out what happened?",
+                        "I am building a Linux app. If something goes wrong, how would you help me figure out what happened?",
                         "What would you do if you weren't sure your answer was correct?",
                     ]
                     conversation = ["# BabyMind — natural conversation test", ""]

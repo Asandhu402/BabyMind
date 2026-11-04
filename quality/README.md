@@ -11,9 +11,8 @@ use deterministic string assertions and do not require a hosted grader.
 2. Install Node.js 22.22+ and Promptfoo (npm install -g promptfoo), or use npx.
 3. From the repository root:
 
-   powershell
-   $env:PROMPTFOO_DISABLE_TELEMETRY = "1"
-   $env:BABYMIND_EVAL_URL = "http://127.0.0.1:8765"
+   export PROMPTFOO_DISABLE_TELEMETRY=1
+   export BABYMIND_EVAL_URL=http://127.0.0.1:8765
    npx promptfoo eval -c quality/promptfooconfig.yaml
 
 The evaluation makes requests only to the local BabyMind server. Do not add

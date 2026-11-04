@@ -613,7 +613,7 @@ class Handler(BaseHTTPRequestHandler):
                     INFERENCE_SEMAPHORE.release()
                 self.send_json({
                     **result,
-                    "notice": "Encrypted backup created. It contains encrypted databases and key files, not plaintext chat or memory. On Windows, DPAPI keys can only be restored by the same Windows user on the same device.",
+                    "notice": "Encrypted backup created. It contains encrypted databases and key files, not plaintext chat or memory. Keep the password and key files safe.",
                 }, 201)
             elif path == "/api/backup/restore":
                 source = str(payload.get("path", "")).strip()

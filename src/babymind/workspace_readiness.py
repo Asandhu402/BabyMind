@@ -1,12 +1,10 @@
-"""Truthful capability reporting for the integrated Windows coding workflow.
+"""Truthful capability reporting for the Linux coding workflow.
 
 This module is intentionally descriptive only: it never enables filesystem or
 process access. The release gates stay closed until their security boundaries
 are implemented and independently verified.
 """
 from __future__ import annotations
-
-import sys
 
 
 def workspace_readiness() -> dict:
@@ -26,7 +24,7 @@ def workspace_readiness() -> dict:
             "can_run_commands": False,
         },
         "native_workspace": {
-            "status": "experimental_primitives" if sys.platform == "win32" else "windows_only",
+            "status": "not_implemented",
             "file_actions_enabled": workspace_enabled,
             "production_broker": False,
             "broker_owned_approval": False,
@@ -50,7 +48,7 @@ def workspace_readiness() -> dict:
             "root": app_builder["root"],
             "writes_only_inside_apps_folder": True,
             "runs_shell_commands": False,
-            "os_sandbox": isolation["available"],
+            "os_sandbox": False,  # The builder does not use the namespace runner.
             "requires_reviewed_plan_hash": True,
         },
         "mission_control": {
@@ -74,10 +72,9 @@ def workspace_readiness() -> dict:
         "release_ready": False,
         "blockers": [
             "Production broker launcher, package verification, and workspace ACL provisioning are incomplete.",
-            "Broker-owned, single-use approval and adversarial Windows security tests are incomplete.",
+            "Broker-owned, single-use approval and adversarial Linux security tests are incomplete.",
             "The coding assistant is not yet connected to authorized workspace read/write operations.",
-            ("No Windows or macOS execution sandbox backend exists yet; commands are only "
-             "isolated on Linux.") if isolation["available"] else
+            "The namespace sandbox requires independent adversarial verification." if isolation["available"] else
             "No OS-enforced project execution sandbox is available on this platform.",
         ],
         "notice": (

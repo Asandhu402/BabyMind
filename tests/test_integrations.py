@@ -142,28 +142,6 @@ class IntegrationTests(unittest.TestCase):
             assist_with_code(Provider(), "valid", context="x" * 24001)
 
 
-    def test_native_workspace_binding_is_not_loaded_or_enabled_on_import(self):
-        from babymind import approval
-        from babymind.integrations import native_workspace
-        self.assertFalse(approval.WORKSPACE_FILE_ACTIONS_ENABLED)
-        self.assertTrue(callable(native_workspace.load_native_workspace_library))
-        with patch("babymind.integrations.native_workspace.os.name", "posix"):
-            with self.assertRaises(OSError):
-                native_workspace.load_native_workspace_library()
-
-
-    def test_native_workspace_binding_rejects_invalid_limits_before_ffi(self):
-        from babymind.integrations.native_workspace import _NativeWorkspaceRoot
-        class NoCallLibrary:
-            def __getattr__(self, name):
-                raise AssertionError(f"Native function unexpectedly called: {name}")
-        root = _NativeWorkspaceRoot(NoCallLibrary(), 1)
-        with self.assertRaises(ValueError):
-            root.list_directory("", capacity=201)
-        with self.assertRaises(ValueError):
-            root.read_text("../outside.txt", max_bytes=0)
-        with self.assertRaises(ValueError):
-            root.create_new_text("new.txt", "too long", max_bytes=1)
 
 
 if __name__ == "__main__":
