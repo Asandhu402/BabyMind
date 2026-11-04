@@ -54,7 +54,7 @@ Both tests pass."""
 
 
     def test_accepts_exact_source_line_without_markdown_and_with_sentence_period(self):
-        source = "def answer():\\n    return 'ok'\\n"
+        source = "def answer():\n    return 'ok'\n"
         report = """Finding
 The function returns a fixed value.
 Evidence (line 2):     return 'ok'.
@@ -67,7 +67,7 @@ Both tests pass and invalid input is rejected."""
         validate_code_review_report(report, source)
 
     def test_rejects_near_match_even_with_sentence_period(self):
-        source = "def answer():\\n    return 'ok'\\n"
+        source = "def answer():\n    return 'ok'\n"
         report = """Finding
 The function returns a fixed value.
 Evidence (line 2):     return 'not ok'.
