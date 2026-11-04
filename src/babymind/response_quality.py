@@ -35,7 +35,7 @@ def validate_code_review_report(report: str, source: str) -> None:
         raise ValueError("Self-inspection report exceeds the 450-word limit.")
     lines = source.splitlines()
     evidence = re.findall(
-        r"\bline\s+(\d+)\s*[:—-]\s*`([^`]+)`",
+        r"\bline\s+(\d+)\)?\s*[:—-]\s*`([^`]+)`",
         report,
         flags=re.IGNORECASE,
     )
