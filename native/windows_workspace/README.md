@@ -14,9 +14,18 @@ This is an experimental MSVC/CMake native component with a versioned C ABI and a
 - Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory and file symlink escape rejection, read-size enforcement, and concurrent exclusive-create behavior.
 - Windows CI build and CTest steps.
 
-## Fail-closed broker executable
+## Fail-closed broker executable and IPC isolation smoke test
 
-`babymind_workspace_broker.exe` is now built as a separate process host. It refuses to run unless its process token is an AppContainer token with zero declared capabilities (including no network capabilities), reads one bounded frame from its inherited standard-input pipe with a five-second input deadline, validates it with the strict parser, and then denies the request. The broker statically compiles its native path-validation implementation so the AppContainer process does not need to load a workspace DLL from the developer's directory. It intentionally has no filesystem dispatch, no network code, and no shell/process-launch feature. A native identity smoke launcher creates a dedicated AppContainer profile, starts the broker without inherited handles or declared capabilities, places it in a kill-on-close Job Object with a one-process and 256 MiB process-memory limit, and verifies the broker's token. This test isolates process identity and resource limits; the IPC transport is separately parser-tested but is not yet wired into a stable launcher.
+`babymind_workspace_broker.exe` is a separate process host. It refuses to run unless its process token is a capability-free Windows AppContainer token (no declared network capabilities), reads one bounded frame from standard input with a five-second deadline, validates it with the strict parser, and then denies the request. The broker statically compiles its native path-validation implementation so the AppContainer process does not need to load a workspace DLL from the developer's directory.
+
+The Windows smoke launcher now:
+- Creates or reuses a dedicated AppContainer profile and launches the broker suspended with `PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES`.
+- Uses `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` to inherit only the request pipe and two NUL output handles.
+- Sends exactly one bounded root-list request through the private anonymous pipe, then closes the parent writer to signal EOF.
+- Places the child in a kill-on-close Job Object with a one-process and 256 MiB process-memory limit.
+- Requires the broker to parse the frame and return the deliberate “operation not implemented” denial exit code.
+
+This is an end-to-end isolation/IPC smoke test, not a production launcher or authorization path. It does not grant workspace ACLs, show a native approval dialog, or dispatch file operations.
 
 ## IPC frame parser
 
@@ -24,14 +33,14 @@ This is an experimental MSVC/CMake native component with a versioned C ABI and a
 
 ## Approval and process isolation
 
-See [NATIVE_WORKSPACE_BROKER_PROTOCOL.md](../../docs/NATIVE_WORKSPACE_BROKER_PROTOCOL.md) for the required broker-owned confirmation, one-use approval, AppContainer isolation, IPC framing, and enablement gates. This is a design contract, not implemented functionality.
+See [NATIVE_WORKSPACE_BROKER_PROTOCOL.md](../../docs/NATIVE_WORKSPACE_BROKER_PROTOCOL.md) for the required broker-owned confirmation, one-use approval, AppContainer isolation, IPC framing, and enablement gates. The process/IPC smoke launcher covers only a subset of the design contract.
 
 ## Security limits — do not enable
 
-This is an initial implementation, not a completed security review. The ctypes adapter is experimental and is not an approval dispatcher. It does not yet include native approval-token binding, a broker process boundary, deterministic concurrent rename stress tests, a hostile same-user isolation boundary, or independent review.
+This is an initial implementation, not a completed security review. The ctypes adapter is experimental and is not an approval dispatcher. It does not yet include native approval-token binding, workspace ACL provisioning and revocation, deterministic concurrent rename stress tests, a hostile same-user isolation boundary, production package/signature verification, or independent review.
 
-The read and create functions are native primitives only. The private ctypes adapter can load the DLL for controlled development tests, but no application route invokes it. Keep WORKSPACE_FILE_ACTIONS_ENABLED = False and project test execution disabled. Never fall back to Python open(), Path.resolve(), or path-based file operations.
+The read and create functions are native primitives only. The private ctypes adapter can load the DLL for controlled development tests, but no application route invokes it. Keep `WORKSPACE_FILE_ACTIONS_ENABLED = False` and project test execution disabled. Never fall back to Python open(), Path.resolve(), or path-based file operations.
 
-A process running as the same Windows user may have equivalent filesystem permissions. Handle-relative opens do not by themselves protect against a hostile same-user process. A separate restricted identity/ACL boundary is required before claiming that threat is covered.
+A process running as the same Windows user may have equivalent filesystem permissions. Handle-relative opens and a capability-free AppContainer token do not by themselves grant or confine access to a selected workspace. A separate, narrowly scoped ACL grant/revoke flow and independent review are required before claiming that threat is covered.
 
 The first release remains limited to non-recursive directory listing, bounded text reads, and exclusive creation. Editing, deletion, recursive search, and command execution remain out of scope.
