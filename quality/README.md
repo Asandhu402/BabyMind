@@ -7,7 +7,7 @@ use deterministic string assertions and do not require a hosted grader.
 
 ## Run
 
-1. Start BabyMind and load the local model in LM Studio.
+1. Start BabyMind and wait for its local llama.cpp model to become ready.
 2. Install Node.js 22.22+ and Promptfoo (npm install -g promptfoo), or use npx.
 3. From the repository root:
 
