@@ -72,7 +72,7 @@ int main() {
         auto op=frame(99,L"file.txt",{});
         CHECK(bm_ws_protocol::parse_request(op.data(),op.size(),&req)==bm_ws_protocol::ParseStatus::UnsupportedOperation);
         auto p=frame(2,L"file.txt",{'x'});
-        CHECK(bm_ws_protocol::parse_request(p.data(),p.size(),&req)==bm_ws_protocol::ParseStatus::InvalidLength);
+        CHECK(bm_ws_protocol::parse_request(p.data(),p.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
         auto nul_text=frame(3,L"file.txt",{0});
         CHECK(bm_ws_protocol::parse_request(nul_text.data(),nul_text.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPayload);
         auto invalid_utf8=frame(3,L"file.txt",{0xC0,0xAF});
