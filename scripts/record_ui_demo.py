@@ -1,7 +1,7 @@
 """Record the real BabyMind local web UI against a local llama.cpp model.
 
 The recorder owns the web-server subprocess so startup failures are captured and
-reported instead of being hidden by a detached PowerShell Start-Process.
+reported instead of being hidden by a detached shell process.
 """
 from __future__ import annotations
 
