@@ -110,7 +110,7 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(self.memory.recent(), [])
 
     def test_provider_requires_loaded_model_when_model_not_set(self) -> None:
-        provider = LMStudioProvider(base_url="http://127.0.0.1:1235/v1", timeout=1)
+        provider = LocalOpenAICompatibleClient(base_url="http://127.0.0.1:1235/v1", timeout=1)
         with self.assertRaises(ProviderError):
             provider.complete("system", "task")
 
