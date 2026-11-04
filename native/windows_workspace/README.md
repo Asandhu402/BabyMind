@@ -14,6 +14,10 @@ This is an experimental MSVC/CMake native component with a versioned C ABI and a
 - Native tests for traversal, create/read behavior, duplicate creation, buffer limits, and directory and file symlink escape rejection, read-size enforcement, and concurrent exclusive-create behavior.
 - Windows CI build and CTest steps.
 
+## Approval and process isolation
+
+See [NATIVE_WORKSPACE_BROKER_PROTOCOL.md](../../docs/NATIVE_WORKSPACE_BROKER_PROTOCOL.md) for the required broker-owned confirmation, one-use approval, AppContainer isolation, IPC framing, and enablement gates. This is a design contract, not implemented functionality.
+
 ## Security limits — do not enable
 
 This is an initial implementation, not a completed security review. The ctypes adapter is experimental and is not an approval dispatcher. It does not yet include native approval-token binding, a broker process boundary, deterministic concurrent rename stress tests, a hostile same-user isolation boundary, or independent review.

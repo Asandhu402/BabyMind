@@ -149,10 +149,14 @@ Do not set `WORKSPACE_FILE_ACTIONS_ENABLED = True` until all of the following ar
 
 Project code execution remains a separate project. It requires an OS-level sandbox with explicit filesystem, network, process, and resource controls; this file design does not provide one.
 
-## 9. Current status
+## 9. Approval and process isolation protocol
+
+The required broker-owned confirmation, one-use approval state, AppContainer isolation, restricted IPC, and test gates are specified in [NATIVE_WORKSPACE_BROKER_PROTOCOL.md](NATIVE_WORKSPACE_BROKER_PROTOCOL.md). That document is design only; none of those mechanisms is implemented or enabled.
+
+## 10. Current status
 
 A Windows-only C++ prototype now exists under native/windows_workspace/. It provides:
-- An MSVC/CMake static-library target and native unit-test executable.
+- An MSVC/CMake DLL target and native unit-test executable.
 - Strict lexical validation for relative Windows path components.
 - Fixed-local-NTFS root admission by walking from the volume root through pinned directory handles.
 - Handle-relative child opens using NtCreateFile and OBJECT_ATTRIBUTES.RootDirectory.
