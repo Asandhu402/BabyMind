@@ -22,10 +22,9 @@ model plus several GB for dependencies and build files; 10 GB free recommended).
 It may prompt for your sudo password. Open **BabyMind** from Applications when
 finished, or run `~/.local/bin/babymind`.
 
-The single-command installer has **not been validated end to end** on a clean
-Ubuntu desktop or against the real model host in this environment. The merged
-Linux CI passed its Qt GUI fixture, but that is not a real desktop installation
-or production-model test; see [verification](docs/LINUX_VERIFICATION.md).
+The installer and one real-model chat response passed on a hosted Ubuntu 22.04
+VM with an Xvfb virtual display. A clean Ubuntu Desktop session and broader
+model capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
 
 ## Portable desktop
 

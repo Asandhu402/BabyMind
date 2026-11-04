@@ -365,7 +365,8 @@ def _load_checkpoint(root: Path, checkpoint_id: str) -> dict:
 
 
 def rollback(checkpoint_id: str, *, agent_id: str = "BM-47", require_permission: bool = True,
-             _only_paths: set[str] | None = None, _created_paths: list[str] | None = None) -> dict:
+             _only_paths: set[str] | None = None, _created_paths: list[str] | None = None,
+             _expected_hashes: dict[str, str] | None = None) -> dict:
     """Restore every file recorded in a checkpoint and drop files it created.
 
     ``require_permission`` is False only for the engine's own automatic
@@ -376,6 +377,14 @@ def rollback(checkpoint_id: str, *, agent_id: str = "BM-47", require_permission:
         require("recovery.rollback", agent_id)
     record = _load_checkpoint(root, checkpoint_id)
     directory = Path(record["_directory"])
+    # Do not silently overwrite a later user's change to an edited path. Check
+    # the whole set first, before restoring any file. This is not a lock and
+    # cannot eliminate races with a concurrent writer after the check.
+    if _expected_hashes is not None:
+        for relative in _only_paths or set():
+            target = resolve_path(root, relative)
+            if not target.is_file() or _sha256(target.read_bytes()) != _expected_hashes.get(relative):
+                raise SelfDevError(f"{relative} changed after the edit; manual recovery is required.")
     restored, created_removed = [], []
     for relative, meta in record["files"].items():
         if _only_paths is not None and relative not in _only_paths:
@@ -505,6 +514,7 @@ def apply_edits(
     manifest_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     written: list[str] = []
+    expected_hashes = {item["path"]: _sha256(item["content"].encode("utf-8")) for item in reviewed}
     temporary: Path | None = None
     try:
         for item in reviewed:
@@ -535,7 +545,8 @@ def apply_edits(
                 cleanup_error = cleanup_failure
         try:
             rollback(snapshot["id"], agent_id=agent_id, require_permission=False,
-                     _only_paths=set(written), _created_paths=created)
+                     _only_paths=set(written), _created_paths=created,
+                     _expected_hashes=expected_hashes)
         except Exception as rollback_error:
             raise SelfDevError(
                 f"Writing failed and automatic rollback failed: {rollback_error}. "
@@ -572,7 +583,8 @@ def apply_edits(
     except Exception as error:
         try:
             rollback(snapshot["id"], agent_id=agent_id, require_permission=False,
-                     _only_paths=set(written), _created_paths=created)
+                     _only_paths=set(written), _created_paths=created,
+                     _expected_hashes=expected_hashes)
         except Exception as rollback_error:
             raise SelfDevError(
                 f"Verification failed and automatic rollback failed: {rollback_error}. "
@@ -581,8 +593,15 @@ def apply_edits(
         raise SelfDevError(f"Verification failed and the change was reverted: {error}") from error
 
     if failure:
-        restore = rollback(snapshot["id"], agent_id=agent_id, require_permission=False,
-                           _only_paths=set(written), _created_paths=created)
+        try:
+            restore = rollback(snapshot["id"], agent_id=agent_id, require_permission=False,
+                               _only_paths=set(written), _created_paths=created,
+                               _expected_hashes=expected_hashes)
+        except Exception as rollback_error:
+            raise SelfDevError(
+                f"{failure}; automatic rollback failed: {rollback_error}. "
+                f"Manual recovery may be needed from checkpoint {snapshot['id']}."
+            ) from rollback_error
         _append_audit(root, {
             "action": "auto_rollback", "reason": failure, "checkpoint": snapshot["id"],
             "applied": [item["path"] for item in reviewed], "agent": agent_id,

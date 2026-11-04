@@ -369,9 +369,11 @@ before writing, refuses an edit if the checkpoint could not contain its target,
 restores successfully written targets on write or verification exceptions,
 removes its newly created files, and reports a rollback failure instead of
 claiming success. Automatic rollback is limited to the edited paths so it does
-not undo unrelated concurrent edits. New targets are published without
-overwriting paths that appeared after preview. These checks do not eliminate
-all same-user races, resource failures, or the need for independent backups.
+not undo unrelated concurrent edits. It also refuses to overwrite an edited
+path that has changed again since the transaction wrote it, reporting that
+manual recovery may be needed. New targets are published without overwriting
+paths that appeared after preview. These checks do not eliminate all same-user
+races, resource failures, or the need for independent backups.
 
 The Ubuntu Base source-suite retest ran **328 tests, OK, 17 skipped**, using the
 same augmented, network-isolated environment and fixtures noted above. The
@@ -382,3 +384,8 @@ Generated code was executed only after the namespace sandbox's four probes
 passed, inside a disposable project. Those results are not production-model
 results. The 50 specialist contributions requested for development work were
 not independently verified for this fix.
+
+After the follow-up check for changes made to an edited path during verification,
+26 self-development tests passed in the isolated Ubuntu Base environment. The
+Debian source suite then ran **330 tests, OK, 2 skipped**. These are not a new
+hosted production-model result.

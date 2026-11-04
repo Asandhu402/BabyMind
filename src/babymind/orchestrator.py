@@ -416,11 +416,10 @@ class Orchestrator:
         self.store.set_status(mission_id, status, summary)
 
     def _run_self_edit(self, mission_id: str, brief: str, recorded: list[AgentRun]) -> dict:
-        """Ask the coding role for one concrete patch and apply it under the engine's guards.
+        """Ask the coding role for a patch and apply it under the engine's guards.
 
-        This is the autonomous loop: plan -> patch -> checkpoint -> verify -> keep
-        or roll back. It runs at most once per mission and never bypasses
-        verification.
+        One self-edit loop runs per mission: checkpoint, verify and keep or roll
+        back. A failed verification may trigger one further repair attempt.
         """
         from . import selfdev
 

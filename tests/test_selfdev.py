@@ -129,6 +129,30 @@ class SelfDevTests(unittest.TestCase):
         self.assertFalse((self.root / "src/babymind/new.py").exists())
         self.assertEqual(unrelated.read_text(), "user_change = 2\n")
 
+    def test_rollback_does_not_overwrite_later_change_to_edited_file(self) -> None:
+        edited = self.root / "src/babymind/mod.py"
+        def compile_fails(*args, **kwargs):
+            edited.write_text("USER_CHANGE = 42\n")
+            return {"ok": False}
+        with patch("babymind.selfdev.runner.run_compile_check", side_effect=compile_fails):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "automatic rollback failed.*manual recovery"):
+                selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 99\n"}], verify=False)
+        self.assertEqual(edited.read_text(), "USER_CHANGE = 42\n")
+
+    def test_failed_verification_preserves_unrelated_concurrent_edit(self) -> None:
+        unrelated = self.root / "src/babymind/unrelated.py"
+        unrelated.write_text("before = 1\n")
+        def compile_fails(*args, **kwargs):
+            unrelated.write_text("user_change = 2\n")
+            return {"ok": False}
+        with patch("babymind.selfdev.runner.run_compile_check", side_effect=compile_fails):
+            result = selfdev.apply_edits([
+                {"path": "src/babymind/mod.py", "content": "VALUE = 99\n"},
+            ], verify=False)
+        self.assertEqual(result["status"], "rolled_back")
+        self.assertEqual((self.root / "src/babymind/mod.py").read_text(), "VALUE = 1\n")
+        self.assertEqual(unrelated.read_text(), "user_change = 2\n")
+
     def test_new_file_is_created_and_removable_by_rollback(self) -> None:
         result = selfdev.apply_edits(
             [{"path": "src/babymind/extra.py", "content": "FLAG = True\n"}],
