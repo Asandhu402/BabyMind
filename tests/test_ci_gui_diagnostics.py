@@ -2,6 +2,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -30,6 +31,17 @@ class GuiDiagnosticTests(unittest.TestCase):
         self.assertIn("log was empty", diagnostics.annotation("", "134"))
         result = diagnostics.annotation("error " + "x" * 100000, "134")
         self.assertLess(len(result), 25000)
+
+    def test_ci_installs_the_installers_explicit_desktop_libraries(self):
+        repo = Path(__file__).resolve().parents[1]
+        installer = (repo / "install-linux.sh").read_text()
+        packages = installer.split("sudo apt-get install -y ", 1)[1].split("\n\n", 1)[0]
+        expected = set(re.findall(r"\blib[a-z0-9-]+\b", packages))
+        self.assertIn("libxcb-shape0", expected)
+        workflow = (repo / ".github/workflows/tests.yml").read_text()
+        ci_packages = workflow.split("sudo apt-get install -y ", 1)[1].split("\n", 1)[0]
+        actual = set(re.findall(r"\blib[a-z0-9-]+\b", ci_packages))
+        self.assertEqual(expected - actual, set(), "CI omits desktop libraries installed for users")
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "requires bash")
     def test_workflow_preserves_abort_and_emits_failure_annotation(self):

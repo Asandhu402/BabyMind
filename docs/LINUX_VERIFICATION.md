@@ -221,6 +221,20 @@ with the copied host Python 3.11 in the isolated Xvfb environment. A simulated
 workflow abort confirmed that exit code 134 is preserved and the error appears
 in a check annotation. The Debian suite ran 314 tests without failures, with
 two skipped; the added workflow-diagnostic regression also passed separately.
-These are preventative changes and an improved diagnostic path, not proof that
-the GitHub abort is fixed. A new GitHub Actions run on these changes is needed
-to confirm.
+The authorized GitHub workflow-dispatch run `41917882980` on commit `ceaa3a9`
+passed the build, source tests and synthetic llama.cpp integration, but failed
+the GUI step with exit 134. The new check annotation identified its concrete
+cause: Qt's `libqxcb.so` could not load `libxcb-shape.so.0`. CI had not
+explicitly installed Ubuntu's `libxcb-shape0`, although the Ubuntu installer
+already did. CI now installs that package and the other explicit XCB libraries
+from the installer; a regression test compares the two package lists. The
+updated Debian suite ran 316 tests without failures, with two skipped.
+
+The missing-library failure was independently reproduced in the isolated Xvfb
+fixture by removing `libxcb-shape.so.0` from a temporary library directory: Qt
+reported the same missing library and aborted. Restoring the library made the
+GUI test pass again. The isolated test used Python 3.11 and mixed third-party
+libraries; it is not the GitHub runner. The earlier CI runs' log messages are
+still inaccessible, so their exact root cause cannot be conclusively established
+from the matching exit codes alone. No second GitHub run was initiated; the
+corrected workflow is not yet confirmed on GitHub.
