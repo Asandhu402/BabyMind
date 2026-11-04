@@ -23,8 +23,10 @@ It may prompt for your sudo password. Open **BabyMind** from Applications when
 finished, or run `~/.local/bin/babymind`.
 
 The installer and one real-model chat response passed on a hosted Ubuntu 22.04
-VM with an Xvfb virtual display. A clean Ubuntu Desktop session and broader
-model capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
+VM with an Xvfb virtual display. Separate CI builds and fixture tests passed on
+Ubuntu 22.04 and 24.04; the synthetic model used there does not measure the
+pinned model's quality. A clean Ubuntu Desktop session and broader model
+capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
 
 ## Portable desktop
 
@@ -38,8 +40,10 @@ model. There is no API key, paid service, LM Studio or auto-updater.
 CPU inference may be slow and needs substantial memory.
 
 The Linux package and first-run GUI have **not yet been validated end to end**
-in this environment. See [Linux portable instructions](docs/LINUX_PORTABLE.md)
-for compatibility, building from source, and current limitations. Linux is the sole supported desktop target.
+on a normal Ubuntu desktop with the production model. See
+[Linux portable instructions](docs/LINUX_PORTABLE.md) for compatibility,
+building from source, and current limitations. Linux is the sole supported
+desktop target.
 
 ## Safety and capabilities
 
