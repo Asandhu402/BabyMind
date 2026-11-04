@@ -56,6 +56,9 @@ int main() {
         auto f=frame(1,L"src",{});
         CHECK(bm_ws_protocol::parse_request(f.data(),f.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
         CHECK(req.relative_path==L"src"&&req.payload.empty());
+        auto root_frame=frame(1,L"",{});
+        CHECK(bm_ws_protocol::parse_request(root_frame.data(),root_frame.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
+        CHECK(req.relative_path.empty());
         auto c=frame(3,L"notes/new.txt",{'o','k'});
         CHECK(bm_ws_protocol::parse_request(c.data(),c.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
         CHECK(req.payload.size()==2&&req.payload[0]=='o');
