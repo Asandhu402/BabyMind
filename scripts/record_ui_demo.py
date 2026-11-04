@@ -340,8 +340,10 @@ def main() -> None:
                         "name the function, give 2-3 focused tests and measurable pass criteria. "
                         "Separate facts from inference. Do not include hidden reasoning or claim "
                         "to have edited code.\\n\\n"
-                        "COMPLETE SOURCE CONTEXT (coverage manifest):\\n" + local_code
-                        + "\\n\\nproviders.py with authoritative physical line numbers "
+                        "SOURCE-COVERAGE MANIFEST: The complete providers.py file is supplied below, "
+                        "with every original physical line numbered. No source lines are omitted. "
+                        "The numbered source is the sole authoritative source context.\\n\\n"
+                        "providers.py with authoritative physical line numbers "
                         "(the text after each | is exact source):\\n"
                         + "\\n".join(
                             f"{line_number} | {line}"
