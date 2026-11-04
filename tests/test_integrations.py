@@ -137,9 +137,6 @@ class IntegrationTests(unittest.TestCase):
                     convert_document(path)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_coding_assistant_uses_provider_and_marks_context_untrusted(self):
         from babymind.integrations.coding import assist_with_code
         class Provider:
@@ -164,3 +161,7 @@ if __name__ == "__main__":
             assist_with_code(Provider(), "x" * 12001)
         with self.assertRaises(ValueError):
             assist_with_code(Provider(), "valid", context="x" * 24001)
+
+
+if __name__ == "__main__":
+    unittest.main()
