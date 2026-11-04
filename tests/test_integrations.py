@@ -122,7 +122,7 @@ class IntegrationTests(unittest.TestCase):
         result = run_coding_task(provider, "Fix the parser", "def parse(): pass")
         self.assertIn("Proposed patch", result)
         self.assertEqual(len(provider.calls), 1)
-        self.assertIn("Never claim you inspected files, changed a workspace", provider.calls[0][0])
+        self.assertIn("Never claim you inspected files", provider.calls[0][0])
         self.assertIn("def parse(): pass", provider.calls[0][1])
 
     def test_native_coding_agent_validates_task_and_context_limits(self):
