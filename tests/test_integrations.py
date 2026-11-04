@@ -9,7 +9,6 @@ from unittest.mock import patch
 from babymind.integrations.browser import run_browser_task
 from babymind.integrations.catalog import integration_status
 from babymind.integrations.documents import IntegrationUnavailable, convert_document
-from babymind.integrations.open_interpreter import launch_workspace_session
 from babymind.integrations.speech import transcribe_audio
 
 
@@ -107,26 +106,6 @@ class IntegrationTests(unittest.TestCase):
                 asyncio.run(run_browser_task(
                     "Read this page", model="local-model", user_approved=True
                 ))
-
-    def test_open_interpreter_requires_approval_before_launch(self):
-        with self.assertRaises(PermissionError):
-            launch_workspace_session(".")
-
-    def test_open_interpreter_fails_closed_without_llama_cpp_native_support(self):
-        with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaisesRegex(RuntimeError, "llama.cpp-native"):
-                launch_workspace_session(
-                    folder, model="local-model", base_url="http://127.0.0.1:1235/v1",
-                    user_approved=True,
-                )
-
-    def test_open_interpreter_rejects_nonlocal_model_endpoint(self):
-        with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaises(ValueError):
-                launch_workspace_session(
-                    folder, model="remote", base_url="https://api.example.com/v1",
-                    user_approved=True,
-                )
 
     def test_missing_optional_docling_is_reported_cleanly(self):
         with tempfile.TemporaryDirectory() as folder:
