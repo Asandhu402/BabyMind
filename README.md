@@ -4,6 +4,30 @@ BabyMind is a local-first AI workspace for **Linux x86-64** with a desktop
 window and a bundled CPU llama.cpp runtime. Its 50 specialist roles are prompts
 over one model, not independent people or independently trained agents.
 
+## Install on Ubuntu with one command
+
+On Ubuntu 22.04 or newer, x86-64, open a terminal as your normal user and run:
+
+```bash
+sudo apt-get update && sudo apt-get install -y git ca-certificates && bash -c 'set -e; d=$(mktemp -d); trap "rm -rf -- \"$d\"" EXIT; git clone --depth 1 https://github.com/Asandhu402/BabyMind.git "$d/repo"; bash "$d/repo/install-linux.sh"'
+```
+
+This command downloads and executes the current repository's installer. Review
+`install-linux.sh` and its dependencies before running it. It uses `sudo` to
+install Ubuntu packages, downloads about 2.71 GB of model weights, verifies the
+pinned model SHA-256, builds the CPU runtime and desktop, and creates a BabyMind
+application-menu entry. It requires a working internet connection, time to
+compile, a graphical desktop, and ample disk space (at least 4.5 GB for the
+model plus several GB for dependencies and build files; 10 GB free recommended).
+It may prompt for your sudo password. Open **BabyMind** from Applications when
+finished, or run `~/.local/bin/babymind`.
+
+The single-command installer has **not been validated end to end** on a clean
+Ubuntu desktop or against the real model host in this environment. The previous
+Linux CI run failed at the Qt GUI test; see [verification](docs/LINUX_VERIFICATION.md).
+The command above uses the repository's default branch and will include this
+installer only after its changes are merged there.
+
 ## Portable desktop
 
 The target is a graphical Linux desktop with glibc 2.35 or newer (for example
@@ -12,7 +36,7 @@ Linux portable archive and run `./BabyMind` (or open the executable in your file
 manager). On first launch BabyMind asks to download a roughly 2.71 GB model,
 verifies its SHA-256, and saves it under `~/.babymind/models`. The download
 requires internet and at least 4.5 GB free. Subsequent launches use the local
-model. There is no API key, paid service, LM Studio, installer or auto-updater.
+model. There is no API key, paid service, LM Studio or auto-updater.
 CPU inference may be slow and needs substantial memory.
 
 The Linux package and first-run GUI have **not yet been validated end to end**

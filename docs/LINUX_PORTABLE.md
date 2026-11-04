@@ -5,7 +5,17 @@ example Ubuntu 22.04 or later), a graphical X11/Wayland desktop, and standard
 Qt WebEngine system libraries (NSS, XCB, xkbcommon, OpenGL/Mesa, ALSA). This is
 not an AppImage and is not guaranteed to run on every Linux distribution.
 
-Extract the **complete** release archive and double-click `BabyMind`, or run
+For Ubuntu 22.04+ x86-64, the repository includes `install-linux.sh`; the
+single-command bootstrap is in the main README. The installer uses sudo for
+system packages, builds in a temporary per-user cache, downloads and verifies
+the pinned model, and creates a per-user application-menu entry. Reinstalling
+retains prior application versions and never deletes the model or user data.
+It installs the default model in `~/.babymind`; keep sufficient disk space for
+Ubuntu packages, build tools, the model, and previous versions. Installing
+requires network access to Ubuntu, GitHub, PyPI and Hugging Face. Python
+packages are not hash-locked. Full clean-host installation is unverified.
+
+Alternatively, extract the **complete** release archive and double-click `BabyMind`, or run
 `./BabyMind` from a terminal. Keep the `_internal` and `llama.cpp` directories
 beside it. The first launch asks before downloading the pinned model (about
 2.71 GB; at least 4.5 GB free). Internet access to Hugging Face is required for

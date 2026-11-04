@@ -6,7 +6,7 @@ missing, not what is planned.
 ## Platform and packaging
 
 - The supported portable target is Linux x86-64 with glibc 2.35+ and a graphical desktop. The package, first-run GUI, real model download and inference have not been verified end to end in this environment.
-- No installer, auto-updater, code signing, or self-repair supervisor ships.
+- The Ubuntu one-command installer has not been validated end to end on a clean graphical host or against the real model download. There is no auto-updater, code signing, or self-repair supervisor.
 - Linux x86-64 is the sole supported desktop target.
 - The portable executable is not a Python interpreter. Source tests and generated Python app execution are unavailable in the portable build.
 

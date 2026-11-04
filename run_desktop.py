@@ -21,6 +21,14 @@ def check_package() -> None:
 if __name__ == "__main__":
     if sys.argv[1:] == ["--check-package"]:
         check_package()
+    elif sys.argv[1:] == ["--check-desktop-deps"]:
+        # Check that the bundled Qt WebEngine module and system libraries load.
+        # This is not a window or model inference test.
+        try:
+            from PySide6.QtWebEngineWidgets import QWebEngineView
+        except ImportError as error:
+            raise SystemExit(f"Desktop dependency check failed: {error}") from error
+        print("Qt WebEngine libraries loaded; no window or model was tested.")
     else:
         from babymind.desktop import main
         main()

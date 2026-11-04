@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 from babymind.first_run import (
     MODEL_SHA256,
+    MODEL_URL,
+    MODEL_FILENAME,
     _ensure_model,
     _find_llama_server,
     _sha256,
@@ -17,6 +19,14 @@ from babymind.first_run import (
 class FirstRunSetupTests(unittest.TestCase):
     def test_pinned_model_checksum_is_sha256(self) -> None:
         self.assertRegex(MODEL_SHA256, r"^[0-9a-f]{64}$")
+
+    def test_model_url_pins_the_known_revision_and_filename(self) -> None:
+        from urllib.parse import urlparse
+        parsed = urlparse(MODEL_URL)
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.hostname, "huggingface.co")
+        self.assertIn("/resolve/c09cdbcdb1fefad6d335809d445621b5f5ba0c6e/", parsed.path)
+        self.assertTrue(parsed.path.endswith("/" + MODEL_FILENAME))
 
     def test_sha256_reads_file_contents(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

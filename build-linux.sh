@@ -3,11 +3,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'Build requires Linux x86-64.' >&2; exit 1; }
-command -v python3 >/dev/null
+python=${BABYMIND_BUILD_PYTHON:-python3}
+command -v "$python" >/dev/null || { echo "Python interpreter not found: $python" >&2; exit 1; }
 command -v curl >/dev/null
 command -v c++ >/dev/null
 command -v cmake >/dev/null || { echo 'Install cmake to build the bundled llama.cpp runtime.' >&2; exit 1; }
-python3 -m venv .venv
+"$python" -m venv .venv
 .venv/bin/python -m pip install -e '.[build]'
 .venv/bin/python - <<'PYTHON'
 import pathlib, sys, sysconfig
