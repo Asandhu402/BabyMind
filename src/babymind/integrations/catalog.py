@@ -48,7 +48,7 @@ def integration_status() -> list[dict[str, object]]:
             "open-interpreter", "Coding CLI", "Disabled pending a verified llama.cpp-native adapter",
             False,
             "Unavailable until a direct llama.cpp integration and reviewed OS sandbox are implemented.",
-            "Disabled by design; BabyMind will not start a different model runtime.",
+            "Disabled by design pending a verified llama.cpp-native adapter; BabyMind will not start a different model runtime.",
         ),
         IntegrationStatus(
             "cognee", "Cognee", "Local knowledge graph and semantic retrieval for BabyMind",
