@@ -122,3 +122,59 @@ and does not load or launch any third-party component.
 - [wincage](https://github.com/rymorrisj/wincage)
 - [Anthropic sandbox-runtime](https://github.com/anthropics/sandbox-runtime)
 - [OCBox](https://github.com/lucatirel/opencode-local-sandbox)
+
+
+---
+
+# Pinned upstream source integrations
+
+BabyMind tracks the five selected upstream codebases as Git submodules. Each submodule is pinned to an immutable commit in the parent repository; updating an upstream requires a reviewed pointer change and compatibility/security checks.
+
+## Pinned sources
+
+| Component | Local path | Upstream | Pinned commit | License |
+|---|---|---|---|---|
+| OpenCode | `vendor/upstream/opencode` | https://github.com/anomalyco/opencode | `8568952e77be2137289d12ecf264bdfca7809578` | MIT |
+| Atomic Agent | `vendor/upstream/atomic-agent` | https://github.com/AtomicBot-ai/atomic-agent | `fdc7813cb1b2d7a72781c957b211e03af5e02130` | MIT |
+| wincage | `vendor/upstream/wincage` | https://github.com/rymorrisj/wincage | `6f76360cab2d4ba503554474f264dc69932ed781` | MIT |
+| Anthropic Sandbox Runtime | `vendor/upstream/sandbox-runtime` | https://github.com/anthropics/sandbox-runtime | `98a4016d27609ed34dd1fb43d23ed6efb6eeeb77` | Apache-2.0 |
+| OCBox | `vendor/upstream/ocbox` | https://github.com/lucatirel/opencode-local-sandbox | `b9d1e1939e08541a368859d0de7752c800ac63de` | MIT |
+
+These are source checkouts, not Python runtime dependencies. Their own license and notice files remain in each submodule. Review dependency licenses and notices again before redistributing a packaged BabyMind build.
+
+## Clone and update
+
+Clone the integrated source tree with:
+
+```powershell
+git clone --recurse-submodules https://github.com/Asandhu402/BabyMind.git
+```
+
+For an existing checkout:
+
+```powershell
+git submodule update --init --recursive
+```
+
+Do not use floating upstream branches in a release. Update a submodule pointer only after reviewing the exact upstream diff, license changes, build requirements, Windows compatibility, and security impact.
+
+## Intended component boundaries
+
+- **Agent runtime candidates:** OpenCode and Atomic Agent. These overlap; they are not both started as independent autonomous agents by default. BabyMind's native UI/provider/session layer remains the controller, and llama.cpp remains the only model backend.
+- **Windows process isolation candidate:** wincage (AppContainer / Job Object-oriented controls). Treat its grants, token behavior, and process-tree coverage as security-sensitive and independently test them.
+- **Cross-platform sandbox candidate:** Anthropic Sandbox Runtime. Its Windows implementation uses a dedicated local account and Windows Filtering Platform controls. It is a separate backend candidate, not an automatic fallback.
+- **Disposable microVM workflow:** OCBox. It wraps OpenCode with Docker Sandboxes, a private Git clone, and verified Git-bundle handoff. It overlaps with the OpenCode runtime and has additional Docker / virtualization prerequisites.
+
+## Runtime and security status
+
+Adding these repositories as pinned submodules makes their source available to developers. It does **not** mean BabyMind currently builds, launches, trusts, or exposes their functionality.
+
+No upstream agent or sandbox is enabled by this change. Do not execute upstream install scripts automatically. Do not enable workspace writes or project execution as a side effect of initializing submodules.
+
+Before enabling a backend, BabyMind must provide a narrow adapter with explicit capability declarations, signed/hash-verified binaries, user-visible approval bound to the exact operation, deny-by-default filesystem/network policy, bounded resources, cleanup, audit logging, and adversarial Windows tests. There must be no unsandboxed host fallback.
+
+The current Python project does not automatically build or install these Node/TypeScript, Python, or Docker-based projects. In particular, Atomic Agent currently declares Node.js >=25.7.0; OpenCode uses Bun; OCBox requires Docker Sandboxes and Windows virtualization. These toolchains must be isolated from the ordinary BabyMind install and validated separately.
+
+## Model policy
+
+BabyMind supports llama.cpp only. Do not add LM Studio or mandatory cloud inference while adapting these projects. Configure each adapter to use the user's local llama.cpp endpoint and validate model/API compatibility before launch.
