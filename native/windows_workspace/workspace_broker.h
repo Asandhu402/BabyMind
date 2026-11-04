@@ -3,8 +3,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(_WIN32)
+#if defined(_WIN32) && defined(BABYMIND_WORKSPACE_BUILD)
 #define BM_WS_API __declspec(dllexport)
+#elif defined(_WIN32)
+#define BM_WS_API __declspec(dllimport)
 #else
 #define BM_WS_API
 #endif

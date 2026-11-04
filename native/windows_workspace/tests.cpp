@@ -17,6 +17,7 @@ static bm_ws_status validate(const wchar_t* value, int allow_empty = 0) {
 }
 
 int main() {
+    CHECK(bm_ws_abi_version() == 1);
     CHECK(validate(L"src/main.py") == BM_WS_OK);
     CHECK(validate(L"docs/guide.md") == BM_WS_OK);
     CHECK(validate(L"folder/file name.txt") == BM_WS_OK);

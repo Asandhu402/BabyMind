@@ -5,6 +5,8 @@
 #include <winternl.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstring>
 #include <cwctype>
 #include <string>
 #include <string_view>
