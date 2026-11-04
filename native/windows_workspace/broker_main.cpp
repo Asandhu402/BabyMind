@@ -63,24 +63,32 @@ bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes) {
 }
 
 int wmain() {
+    std::cerr << "BROKER: process started.\\n" << std::flush;
     // Fail closed when launched outside the intended restricted identity.
     if (!running_in_appcontainer_without_capabilities()) {
         std::cerr << "DENIED: broker requires a capability-free Windows AppContainer token.\n";
         return static_cast<int>(kExitNotAppContainer);
     }
 
+    std::cerr << "BROKER: capability-free AppContainer token accepted.\\n" << std::flush;
     HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
     if (input == nullptr || input == INVALID_HANDLE_VALUE) {
         std::cerr << "DENIED: private request pipe is unavailable.\n";
         return static_cast<int>(kExitIoFailure);
     }
 
+    if (GetFileType(input) != FILE_TYPE_PIPE) {
+        std::cerr << "DENIED: standard input is not a pipe.\\n";
+        return static_cast<int>(kExitIoFailure);
+    }
+    std::cerr << "BROKER: private input pipe acquired.\\n" << std::flush;
     std::array<uint8_t, 12> header{};
     if (!read_exact(input, header.data(), static_cast<DWORD>(header.size()))) {
         std::cerr << "DENIED: incomplete request header.\n";
         return static_cast<int>(kExitBadInput);
     }
 
+    std::cerr << "BROKER: request header received.\\n" << std::flush;
     uint32_t frame_bytes = 0;
     frame_bytes = static_cast<uint32_t>(header[8]) |
                   (static_cast<uint32_t>(header[9]) << 8) |
@@ -99,6 +107,7 @@ int wmain() {
         return static_cast<int>(kExitBadInput);
     }
 
+    std::cerr << "BROKER: complete frame received.\\n" << std::flush;
     bm_ws_protocol::Request request{};
     const auto parsed = bm_ws_protocol::parse_request(frame.data(), frame.size(), &request);
     if (parsed != bm_ws_protocol::ParseStatus::Ok) {

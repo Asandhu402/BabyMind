@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <userenv.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <iostream>
@@ -186,19 +187,38 @@ int wmain() {
         return 6;
     }
 
-    const DWORD wait = WaitForSingleObject(process_handle.get(), kTimeoutMs);
+    DWORD wait = WAIT_TIMEOUT;
+    ULONGLONG waited_ms = 0;
+    char output[1024]{};
+    while (waited_ms < kTimeoutMs) {
+        DWORD available = 0;
+        if (PeekNamedPipe(parent_stdout_read.get(), nullptr, 0, nullptr,
+                          &available, nullptr) && available > 0) {
+            DWORD received = 0;
+            const DWORD request_bytes = (std::min)(available,
+                static_cast<DWORD>(sizeof(output)));
+            if (ReadFile(parent_stdout_read.get(), output, request_bytes,
+                         &received, nullptr) && received > 0) {
+                std::cerr.write(output, received);
+                std::cerr.flush();
+            }
+        }
+        wait = WaitForSingleObject(process_handle.get(), 50);
+        if (wait == WAIT_OBJECT_0 || wait == WAIT_FAILED) break;
+        waited_ms += 50;
+    }
     if (wait != WAIT_OBJECT_0) {
         TerminateJobObject(job.get(), 8);
-        std::cerr << "FAIL: broker timed out or wait failed.\n";
+        std::cerr << "FAIL: broker timed out or wait failed; wait=" << wait
+                  << ", elapsed_ms=" << waited_ms << "\\n";
         return 8;
     }
     DWORD exit_code = 0;
     if (!GetExitCodeProcess(process_handle.get(), &exit_code)) {
-        std::cerr << "FAIL: unable to read broker exit status.\n";
+        std::cerr << "FAIL: unable to read broker exit status.\\n";
         return 9;
     }
 
-    char output[1024]{};
     DWORD received = 0;
     while (ReadFile(parent_stdout_read.get(), output, sizeof(output), &received, nullptr)
            && received > 0) {
