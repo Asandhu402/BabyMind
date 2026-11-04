@@ -108,7 +108,7 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             launch_workspace_session(".")
 
-    def test_open_interpreter_is_forced_to_local_provider_and_workspace_write_sandbox(self):
+    def test_open_interpreter_fails_closed_without_llama_cpp_native_support(self):
         from unittest.mock import MagicMock
         with tempfile.TemporaryDirectory() as folder:
             process = MagicMock()
@@ -117,32 +117,15 @@ class IntegrationTests(unittest.TestCase):
                 "subprocess.Popen", return_value=process
             ) as popen:
                 result = launch_workspace_session(
-                    folder, model="local-model", base_url="http://127.0.0.1:1234/v1",
+                    folder, model="local-model", base_url="http://127.0.0.1:1235/v1",
                     user_approved=True,
                 )
-            self.assertEqual(result.pid, 4321)
-            command = popen.call_args.args[0]
-            self.assertIn("--oss", command)
-            self.assertIn("--local-provider", command)
-            self.assertIn("lmstudio", command)
-            self.assertIn("local-model", command)
-            self.assertIn("--sandbox", command)
-            self.assertIn("workspace-write", command)
-            self.assertIn("--ask-for-approval", command)
-            self.assertIn("on-request", command)
-            self.assertIn("--cd", command)
-            self.assertIn(str(Path(folder).resolve()), command)
-            self.assertIn("sandbox_workspace_write.network_access=false", command)
-            self.assertEqual(
-                popen.call_args.kwargs["env"]["CODEX_OSS_BASE_URL"],
-                "http://127.0.0.1:1234/v1",
-            )
-            self.assertFalse(popen.call_args.kwargs["shell"])
-            import subprocess
-            self.assertEqual(
-                popen.call_args.kwargs["creationflags"],
-                getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if os.name == "nt" else 0,
-            )
+            with self.assertRaisesRegex(RuntimeError, "llama.cpp-native"):
+                launch_workspace_session(
+                    folder, model="local-model", base_url="http://127.0.0.1:1235/v1",
+                    user_approved=True,
+                )
+            popen.assert_not_called()
 
     def test_open_interpreter_rejects_nonlocal_model_endpoint(self):
         with tempfile.TemporaryDirectory() as folder:
