@@ -1,4 +1,4 @@
-"""First-launch setup for the bundled BabyMind Linux desktop app.
+"""First-launch setup for the BabyMind Linux desktop app.
 
 The llama.cpp server is installed locally. The model is
 downloaded once to the user's local BabyMind data directory and verified
