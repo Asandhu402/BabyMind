@@ -1,8 +1,7 @@
 """Portable console entry point for secure same-Wi-Fi iPhone access.
 
-The portable Windows package includes its own Python runtime and llama.cpp.
-Prepare the same verified local model as the desktop app, then start the
-existing token-protected HTTPS LAN server.
+Run this companion on the Linux host that runs BabyMind and the local model.
+It starts the existing token-protected HTTPS LAN server for trusted local devices.
 """
 from __future__ import annotations
 
