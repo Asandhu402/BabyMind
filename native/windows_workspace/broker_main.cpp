@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cwchar>
 #include <iostream>
 #include <vector>
 
@@ -62,7 +63,11 @@ bool read_exact(HANDLE input, uint8_t* buffer, DWORD bytes) {
 }
 }
 
-int wmain() {
+int wmain(int argc, wchar_t** argv) {
+    if (argc == 2 && std::wcscmp(argv[1], L"--identity-probe") == 0) {
+        return running_in_appcontainer_without_capabilities() ? 50 :
+            static_cast<int>(kExitNotAppContainer);
+    }
     std::cerr << "BROKER: process started.\\n" << std::flush;
     // Fail closed when launched outside the intended restricted identity.
     if (!running_in_appcontainer_without_capabilities()) {

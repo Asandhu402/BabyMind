@@ -32,7 +32,7 @@ if(MSVC)
 endif()
 enable_testing()
 add_test(NAME workspace_broker_tests COMMAND workspace_broker_tests)
-add_test(NAME broker_appcontainer_isolation_smoke
+add_test(NAME broker_appcontainer_identity_smoke
     COMMAND babymind_workspace_isolation_smoke)
 add_test(NAME broker_rejects_unrestricted_token
     COMMAND ${CMAKE_COMMAND}
