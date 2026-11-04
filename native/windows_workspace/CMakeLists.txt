@@ -34,6 +34,8 @@ enable_testing()
 add_test(NAME workspace_broker_tests COMMAND workspace_broker_tests)
 add_test(NAME broker_appcontainer_identity_smoke
     COMMAND babymind_workspace_isolation_smoke)
+add_test(NAME broker_rejects_trailing_ipc_data
+    COMMAND babymind_workspace_isolation_smoke --trailing-byte)
 add_test(NAME broker_rejects_unrestricted_token
     COMMAND ${CMAKE_COMMAND}
         -DBROKER_EXE=$<TARGET_FILE:babymind_workspace_broker>
