@@ -305,7 +305,7 @@ model can guarantee unrestricted behaviour on every prompt. iPhone use is suppor
 
 BabyMind validates that the canonical registry contains exactly 50 unique, sequential IDs from BM-01 through BM-50.
 
-**Security status:** The coding assistant supports OS-sandboxed workspace-write sessions for a selected project, with on-request escalation approvals and network disabled. BabyMind's separate in-app workspace file broker remains disabled pending native race-resistant filesystem protections.
+**Security status:** The external coding CLI adapter is disabled until a verified llama.cpp-native integration and OS-enforced workspace sandbox are available. BabyMind's separate in-app workspace file broker also remains disabled pending native race-resistant filesystem protections.
 
 
 ## Installation diagnostics
@@ -348,7 +348,7 @@ Open **Settings → Connected tools** in BabyMind. These are product capabilitie
 - **Speech:** faster-whisper and Voicebox transcription feed the same coordinator; Voicebox speech output uses the same BabyMind identity.
 - **Knowledge retrieval:** Cognee search is answered by the shared coordinator and can use BabyMind's encrypted memory. Only individually approved notes are indexed. Cognee's separate graph/vector store is not encrypted by BabyMind, so do not index secrets.
 - **Browser automation:** supervised local browser tasks require explicit approval before launch.
-- **Coding:** Open Interpreter runs against the local model with workspace-write access confined by the OS sandbox to the selected project folder. Network access is disabled and escalation requires approval. If the OS sandbox cannot be enforced, the session must fail closed. This is not full-PC access.
+- **Coding:** The external coding CLI adapter is disabled because it does not currently provide a verified llama.cpp-native connection. BabyMind refuses to start a coding runtime that would require a different model backend.
 - **Quality and security:** Promptfoo is part of the repository's developer/CI quality workflow and tests BabyMind through its loopback API; it is not another runtime assistant.
 
 Some capabilities need their local engine installed or running because large speech/document models and browser runtimes should not be forced into every lightweight install. They are still integrated BabyMind capabilities, not separate AI products. Install or start only the local engine needed by a capability:
