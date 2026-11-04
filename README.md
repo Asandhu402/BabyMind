@@ -1,6 +1,6 @@
 # BabyMind
 
-BabyMind is a local-first personal AI application with exactly **50 specialist roles**, one consistent assistant identity, a browser-based interface, optional shared memory, and selectable local model backends (LM Studio or llama.cpp).
+BabyMind is a local-first personal AI application with exactly **50 specialist roles**, one consistent assistant identity, a browser-based interface, optional shared memory, and one integrated local inference runtime: llama.cpp.
 
 The 50 agents are specialist configurations that share one underlying language model. They are not 50 separately trained or separately running models. The optional collaboration mode performs a specialist pass, a quality-review pass, and a final synthesis pass using that same model.
 
@@ -13,13 +13,13 @@ The 50 agents are specialist configurations that share one underlying language m
 - **Collaboration mode:** selected specialist, QualityReviewer (BM-49), then Coordinator (BM-01).
 - **Encrypted local memory:** opt-in SQLite task/response memories, encrypted at rest with AES-256-GCM; the encryption key is protected by Windows DPAPI on Windows. When enabled, BabyMind ranks relevant notes locally using lightweight text matching; no embeddings or extra AI model are used. The Memory workspace also supports local search.
 - **Encrypted conversation storage:** local SQLite history on the computer running BabyMind; message text and titles are encrypted at rest with AES-256-GCM.
-- **Local model adapters:** LM Studio's OpenAI-compatible API or a BabyMind-managed llama.cpp server using a local GGUF model.
+- **Local model adapters:** BabyMind-managed llama.cpp server using a local GGUF model.
 - **CLI:** health, list, ask, route, and memory commands.
 - **Lightweight runtime:** core server, storage, and HTTP client use the Python standard library; the desktop window uses pywebview.
 
 ## Requirements
 
-For running from source: Windows 10/11 and Python 3.10 or newer, plus either LM Studio or a compatible llama.cpp runtime and local model. The portable Windows desktop package bundles Python and the llama.cpp CPU runtime; it downloads and verifies its default GGUF model on first launch. A current Microsoft Edge WebView2 Runtime is required for the desktop window.
+For running from source: Windows 10/11 and Python 3.10 or newer, plus the llama.cpp runtime and a compatible local GGUF model. The portable Windows desktop package bundles Python and the llama.cpp CPU runtime; it downloads and verifies its default GGUF model on first launch. A current Microsoft Edge WebView2 Runtime is required for the desktop window.
 
 ## Install
 
@@ -27,27 +27,30 @@ Open PowerShell in the repository folder:
 
     py -m pip install -e .
 
-## Start the model
+## Local model runtime
 
-1. Open LM Studio and download a model that fits the computer's available memory.
-2. Load the model.
-3. Start the local server in LM Studio.
-4. Keep the default endpoint at `http://127.0.0.1:1234/v1`, unless you configure another one.
+BabyMind uses llama.cpp as its only model runtime. It starts the local
+llama-server process, loads the pinned GGUF model, and sends inference requests
+to the loopback API. No separate model-manager application or API account is
+part of the architecture.
 
-Optional environment variables:
+For source/developer launches, set these paths in PowerShell:
 
-- `BABYMIND_BASE_URL` — local OpenAI-compatible endpoint; defaults to `http://127.0.0.1:1234/v1`
-- `BABYMIND_MODEL` — optional explicit model ID; otherwise BabyMind discovers the first loaded model
-- `BABYMIND_API_KEY` — optional key if the local server requires one
-- `BABYMIND_HOME` — optional location for BabyMind's SQLite data
+    $env:BABYMIND_ENGINE = "llama.cpp"
+    $env:BABYMIND_LLAMA_SERVER = "C:\BabyMind\llama.cpp\llama-server.exe"
+    $env:BABYMIND_GGUF_MODEL = "C:\BabyMind\models\your-model.gguf"
 
+The default local endpoint is `http://127.0.0.1:1235/v1`. Optional settings:
+`BABYMIND_MODEL`, `BABYMIND_LLAMA_PORT`, `BABYMIND_CONTEXT_SIZE`,
+`BABYMIND_TEMPERATURE`, `BABYMIND_TOP_P`, `BABYMIND_MAX_TOKENS`, and
+`BABYMIND_HOME`.
 
 ## Choose BabyMind's local model engine
 
-BabyMind can use LM Studio, or launch its own local `llama.cpp` server. The
+There is no engine selector: llama.cpp is the sole supported runtime. The
 portable Windows desktop package bundles the CPU runtime and offers a verified
-first-run model download. For source/developer launches, you still provide the
-runtime and GGUF model paths yourself. Both modes run inference on this computer.
+first-run model download. For source/developer launches, provide the runtime
+and GGUF model paths yourself.
 
 ### llama.cpp setup on Windows
 
@@ -56,14 +59,8 @@ runtime and GGUF model paths yourself. Both modes run inference on this computer
    Extract it to a folder such as `C:\BabyMind\llama.cpp\`.
 2. Obtain a compatible `.gguf` model and save it in a folder such as
    `C:\BabyMind\models\`.
-3. In PowerShell, set the paths for your current terminal session:
-
-       $env:BABYMIND_ENGINE = "llama.cpp"
-       $env:BABYMIND_LLAMA_SERVER = "C:\BabyMind\llama.cpp\llama-server.exe"
-       $env:BABYMIND_GGUF_MODEL = "C:\BabyMind\models\your-model.gguf"
-
-4. Start BabyMind with `babymind-desktop` or double-click the desktop launcher
-   after setting these variables in Windows Environment Variables.
+3. Set `BABYMIND_LLAMA_SERVER` and `BABYMIND_GGUF_MODEL` as shown above.
+4. Start BabyMind with `babymind-desktop` or the desktop launcher.
 
 BabyMind starts `llama-server.exe` on `127.0.0.1:1235`, waits for the model
 to load, sends chat requests to its local OpenAI-compatible API, and stops the
@@ -72,35 +69,6 @@ server process it started when BabyMind exits. The default context size is
 `BABYMIND_LLAMA_PORT` to change the local port. This initial engine mode uses
 the CPU build by default; acceleration depends on the llama.cpp build you
 download and its compatible runtime libraries.
-
-### Fixed local model and answer quality
-
-BabyMind uses one bundled, SHA-256-pinned local model. Its model identity is
-fixed: configuration, updates, and specialist roles must never silently switch
-to another model. A relocated copy is accepted only when its contents match the
-pinned SHA-256. All 50 specialist roles share this same model; adding roles does
-not create separate models or increase its underlying reasoning capability.
-
-Answer quality is improved in BabyMind's core orchestration, bounded context,
-retrieval, safety checks, and evaluation—not by changing the model. The model
-runs locally through the bundled llama.cpp CPU runtime.
-
-Generation defaults are configurable for either local OpenAI-compatible backend:
-- `BABYMIND_TEMPERATURE` (default `0.4`)
-- `BABYMIND_TOP_P` (default `0.9`)
-- `BABYMIND_MAX_TOKENS` (default `2048`)
-
-Conversation history is limited to the most recent 10 messages and approximately
-10,000 characters so older dialogue does not consume the entire context window.
-For llama.cpp, set `BABYMIND_CONTEXT_SIZE` to a value supported by the model and
-available memory (for example, `8192`); a larger context also consumes more RAM.
-
-### Switch back to LM Studio
-
-For source/developer launches, set `BABYMIND_ENGINE=lm-studio` to use LM Studio.
-The portable Windows package uses its bundled llama.cpp engine by default.
-You can also set `BABYMIND_BASE_URL`, `BABYMIND_MODEL`, and `BABYMIND_API_KEY`
-for compatible local servers.
 
 ## Start the BabyMind interface
 
@@ -235,7 +203,7 @@ the Windows tests and build, then attaches a versioned ZIP and SHA-256 checksum
 to the GitHub Release. The package is portable but currently unsigned.
 
 The packaged desktop app selects its bundled llama.cpp engine automatically
-and does not require LM Studio, Python, or an API key. Inference and chat
+and does not require Python or an API key. Inference and chat
 storage remain on the user's computer. The desktop window requires Microsoft
 Edge WebView2 Runtime, which is normally present on current Windows 11 systems.
 If WebView2 is missing, install Microsoft's official Evergreen Runtime.
@@ -308,7 +276,7 @@ Both endpoints remain subject to local/LAN authorization and origin checks.
 
 ## Current capability boundaries
 
-The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. Open Interpreter can be launched in workspace-write mode for one explicitly selected project folder: it can edit project files and run project commands, while network access is disabled and requests beyond the workspace require approval. Its native Windows sandbox must enforce the boundary and fail closed if unavailable; this is not full-PC access. The packaged model is an aggressively uncensored community fine-tune, but no
+The 50 entries are not independent AI brains: they are 50 focused roles routed to one shared model. Collaboration mode is a sequential multi-pass workflow, not 50 agents reasoning simultaneously. Document analysis and speech transcription are routed through the core coordinator when their optional packages are installed. Browser automation is available only as an explicitly approved, supervised local-browser task behind a disabled-by-default environment gate. The external coding CLI adapter remains disabled until it supports a verified llama.cpp-native connection; BabyMind will not start it through a different model runtime. The packaged model is an aggressively uncensored community fine-tune, but no
 model can guarantee unrestricted behaviour on every prompt. iPhone use is supported on a trusted local Wi-Fi network with a one-time access token.
 
 ## Fixed invariant
