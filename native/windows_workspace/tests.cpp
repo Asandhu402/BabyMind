@@ -74,6 +74,24 @@ int main() {
 
     const uint8_t payload[] = {'B','a','b','y','M','i','n','d'};
     CHECK(bm_ws_create_new_text(root, L"nested/hello.txt", payload, sizeof(payload), 1024) == BM_WS_OK);
+
+    bm_ws_directory_entry listed[8]{};
+    size_t listed_count = 0;
+    int listing_truncated = 0;
+    CHECK(bm_ws_list_directory(root, L"", listed, 8, &listed_count, &listing_truncated) == BM_WS_OK);
+    CHECK(listing_truncated == 0);
+    bool saw_nested = false;
+    bool saw_escape_reparse = false;
+    for (size_t i = 0; i < listed_count; ++i) {
+        if (std::wstring(listed[i].name) == L"nested" && listed[i].type == 1) saw_nested = true;
+        if (std::wstring(listed[i].name) == L"escape" && listed[i].type == 2) saw_escape_reparse = true;
+    }
+    CHECK(saw_nested && saw_escape_reparse);
+    CHECK(bm_ws_list_directory(root, L"nested", listed, 8, &listed_count, &listing_truncated) == BM_WS_OK);
+    CHECK(listed_count == 1 && std::wstring(listed[0].name) == L"hello.txt" && listed[0].type == 0);
+    CHECK(bm_ws_list_directory(root, L"nested", listed, 0, &listed_count, &listing_truncated) == BM_WS_INVALID_ARGUMENT);
+    CHECK(bm_ws_list_directory(root, L"escape", listed, 8, &listed_count, &listing_truncated) == BM_WS_REPARSE_POINT);
+
     uint8_t output[1025]{};
     size_t bytes_read = 0;
     CHECK(bm_ws_read_text(root, L"nested/hello.txt", 1024, output, sizeof(output), &bytes_read) == BM_WS_OK);
