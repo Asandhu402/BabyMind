@@ -320,7 +320,6 @@ def main() -> None:
                     page.wait_for_timeout(700)
                     page.screenshot(path=str(OUT / "02-agent-directory.png"), full_page=True)
                     page.locator('[data-view="chat"]').click()
-                    local_code = collect_local_code_context()
                     _, source_file = read_core_source("src/babymind/providers.py")
                     numbered_source = "\\n".join(
                         f"{line_number}: {line}"
@@ -349,6 +348,11 @@ def main() -> None:
                             for line_number, line in enumerate(source_file.splitlines(), start=1)
                         )
                     )
+                    if len(prompt) > 20000:
+                        raise RuntimeError(
+                            "The complete numbered source review prompt exceeds BabyMind’s "
+                            f"20,000-character message limit ({len(prompt)} characters)."
+                        )
                     page.locator("#newChat").click()
                     page.wait_for_function(
                         "() => document.querySelector('#welcome')?.style.display !== 'none'",
@@ -390,7 +394,7 @@ def main() -> None:
                     print(
                         "BabyMind produced a validated self-inspection report "
                         f"({len(assistant_response)} characters) after inspecting "
-                        f"{len(local_code)} characters of local source."
+                        f"{len(source_file)} characters of local source."
                     )
                     (OUT / "BabyMind-Upgrade-Recommendation.md").write_text(
                         "# BabyMind self-inspection result\\n\\n"
