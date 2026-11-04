@@ -62,7 +62,11 @@ int main() {
         auto c=frame(3,L"notes/new.txt",{'o','k'});
         CHECK(bm_ws_protocol::parse_request(c.data(),c.size(),&req)==bm_ws_protocol::ParseStatus::Ok);
         CHECK(req.payload.size()==2&&req.payload[0]=='o');
-        CHECK(bm_ws_protocol::parse_request(f.data(),f.size()-1,&req)==bm_ws_protocol::ParseStatus::Truncated);
+        auto short_frame=f;
+        short_frame.pop_back();
+        const uint32_t short_size=static_cast<uint32_t>(short_frame.size());
+        std::memcpy(short_frame.data()+8,&short_size,sizeof(short_size));
+        CHECK(bm_ws_protocol::parse_request(short_frame.data(),short_frame.size(),&req)==bm_ws_protocol::ParseStatus::Truncated);
         auto bad=frame(2,L"../secret",{});
         CHECK(bm_ws_protocol::parse_request(bad.data(),bad.size(),&req)==bm_ws_protocol::ParseStatus::InvalidPath);
         auto op=frame(99,L"file.txt",{});
