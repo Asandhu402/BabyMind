@@ -339,3 +339,46 @@ operation, all-role competence, or autonomous self-upgrade. The 50 requested
 specialist contributions were not independently verified and were not used to
 claim this change was reviewed. A real Ubuntu Desktop installation and the
 pinned Qwen model remain necessary before acceptance.
+
+## Hosted Ubuntu real-model installer smoke (2026-11-04)
+
+GitHub Actions [run 41925821283](https://github.com/Asandhu402/BabyMind/actions/runs/41925821283)
+completed successfully for commit `655c95379aa94b531b8d8c406f67e5c400dd02cc` on
+a fresh GitHub-hosted Ubuntu 22.04 VM. After installing Xvfb, xauth and the Python
+WebSocket test dependency, the job ran the actual `install-linux.sh` in a
+disposable home: Ubuntu package installation, production-model download and
+SHA-256 verification, local build, and installed executable checks all passed.
+The installed Qt app then started under Xvfb with its default WebEngine sandbox,
+loaded the pinned real model, and answered “What is 2 + 2? Answer with the
+number only.” with `4`; this response is recorded in the check-run annotation.
+
+This is a single real inference smoke test on a hosted server VM with a virtual
+X display. It does not establish behavior on a fresh Ubuntu **Desktop** session,
+quality across topics, all-role competence, coding, self-edit, offline restart,
+or cancellation. A follow-up opt-in test has been prepared to test additional
+questions, role calls and source-only self-edit; no result is claimed until it
+runs. The GUI automation enables Qt remote debugging on loopback **only in the
+disposable test VM**, not in the application defaults.
+
+## Self-development recovery fix
+
+A regression test reproduced a partial-write error: an edit changed an earlier
+file, a later write failed, and the old code claimed rollback without actually
+restoring the first file. The transaction now backs up edited existing files
+before writing, refuses an edit if the checkpoint could not contain its target,
+restores successfully written targets on write or verification exceptions,
+removes its newly created files, and reports a rollback failure instead of
+claiming success. Automatic rollback is limited to the edited paths so it does
+not undo unrelated concurrent edits. New targets are published without
+overwriting paths that appeared after preview. These checks do not eliminate
+all same-user races, resource failures, or the need for independent backups.
+
+The Ubuntu Base source-suite retest ran **328 tests, OK, 17 skipped**, using the
+same augmented, network-isolated environment and fixtures noted above. The
+real-model acceptance harness was also exercised on the Debian host with the
+modified small story model: it correctly reported wrong chat answers, failed
+coding tests and no valid self-edit, while recording all 50 role outputs.
+Generated code was executed only after the namespace sandbox's four probes
+passed, inside a disposable project. Those results are not production-model
+results. The 50 specialist contributions requested for development work were
+not independently verified for this fix.
