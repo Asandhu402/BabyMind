@@ -192,6 +192,11 @@ class BabyMindCoordinator:
             user_approved=user_approved,
         )
 
+    def coding_assist(self, task: str, *, context: str = "") -> str:
+        """Draft code and debugging guidance through BabyMind's shared llama.cpp provider."""
+        from .integrations.coding import assist_with_code
+        return assist_with_code(self.provider, task, context=context)
+
     def launch_coding_session(self, workspace: str | Path, *, user_approved: bool = False) -> int:
         """Launch the external coding assistant with workspace-scoped write access."""
         from .integrations.open_interpreter import launch_workspace_session

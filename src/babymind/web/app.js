@@ -222,7 +222,7 @@ async function exportConversation(){
 async function loadIntegrations(){
   try{
     const items=await api("/api/integrations");
-    const targets={"docling":"documentStatus","faster-whisper":"audioStatus","browser-use":"browserStatus","open-interpreter":"codingStatus","voicebox":"voiceboxStatus","cognee":"cogneeStatus","promptfoo":"promptfooStatus"};
+    const targets={"docling":"documentStatus","faster-whisper":"audioStatus","browser-use":"browserStatus","coding-assistant":"codingStatus","voicebox":"voiceboxStatus","cognee":"cogneeStatus","promptfoo":"promptfooStatus"};
     items.forEach(item=>{
       const target=$("#"+targets[item.integration_id]);if(!target)return;
       target.textContent=(item.available?"Available · ":"Not installed · ")+item.purpose+(item.available?"":" · "+item.install_hint);
@@ -276,9 +276,11 @@ async function init() {
     runCoreTool("/api/integrations/browser",{task,user_approved:true},"Browser task");
   });
   $("#launchCodingSession").addEventListener("click",()=>{
-    const workspace=$("#codingWorkspace").value.trim();if(!workspace){toast("Enter a local workspace folder.");return;}
-    if(!confirm("Give the coding assistant read/write access to this project folder and allow it to run project commands? It will not have access outside this workspace, network access is disabled, and it must ask before actions requiring broader permissions. The installed CLI and Windows sandbox must enforce this boundary; if unavailable, launch must fail closed."))return;
-    runCoreTool("/api/integrations/coding",{workspace,user_approved:true},"Workspace-write coding session");
+    const task=$("#codingTask").value.trim();
+    const context=$("#codingContext").value.trim();
+    if(!task){toast("Describe the coding problem first.");return;}
+    if(!confirm("Send this coding request and any supplied code context to BabyMind's local llama.cpp model? This phase will not read or modify project files or run commands."))return;
+    runCoreTool("/api/integrations/coding",{task,context,user_approved:true},"Coding assistant");
   });
   $("#speakVoicebox").addEventListener("click",async()=>{
     const text=$("#voiceboxText").value.trim();if(!text){toast("Enter text to speak.");return;}

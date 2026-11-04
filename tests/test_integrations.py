@@ -18,11 +18,12 @@ class IntegrationTests(unittest.TestCase):
         statuses = integration_status()
         self.assertEqual(
             {item["integration_id"] for item in statuses},
-            {"docling", "faster-whisper", "browser-use", "open-interpreter", "cognee", "voicebox", "promptfoo"},
+            {"docling", "faster-whisper", "browser-use", "coding-assistant", "cognee", "voicebox", "promptfoo"},
         )
-        coding = next(item for item in statuses if item["integration_id"] == "open-interpreter")
-        self.assertFalse(coding["available"])
-        self.assertIn("llama.cpp", coding["safety"])
+        coding = next(item for item in statuses if item["integration_id"] == "coding-assistant")
+        self.assertTrue(coding["available"])
+        self.assertIn("llama.cpp", coding["purpose"])
+        self.assertIn("No automatic workspace", coding["safety"])
 
     def test_voicebox_rejects_non_loopback_endpoint(self):
         from babymind.integrations.voicebox import _base_url
@@ -138,3 +139,28 @@ class IntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_coding_assistant_uses_provider_and_marks_context_untrusted(self):
+        from babymind.integrations.coding import assist_with_code
+        class Provider:
+            def complete(self, system, user):
+                self.system, self.user = system, user
+                return "Proposed implementation."
+        provider = Provider()
+        result = assist_with_code(provider, "Fix the parser", context="ValueError at line 4")
+        self.assertEqual(result, "Proposed implementation.")
+        self.assertIn("no filesystem or command tools", provider.system)
+        self.assertIn("untrusted data", provider.user)
+
+    def test_coding_assistant_rejects_empty_and_oversized_requests(self):
+        from babymind.integrations.coding import assist_with_code
+        class Provider:
+            def complete(self, system, user):
+                raise AssertionError("Provider must not be called for invalid input.")
+        for task in ("", " "):
+            with self.assertRaises(ValueError):
+                assist_with_code(Provider(), task)
+        with self.assertRaises(ValueError):
+            assist_with_code(Provider(), "x" * 12001)
+        with self.assertRaises(ValueError):
+            assist_with_code(Provider(), "valid", context="x" * 24001)
