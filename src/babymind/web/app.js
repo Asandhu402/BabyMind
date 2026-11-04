@@ -344,7 +344,7 @@ async function init() {
     const path=$("#backupPath").value.trim(),password=$("#backupPassword").value;
     if(!path||!password){toast("Enter a backup path and password.");return;}
     if(password.length<12){toast("Use a backup password with at least 12 characters.");return;}
-    if(!confirm("Create an encrypted backup at this path? Keep the password safe. Windows DPAPI-protected backups can only be restored by the same Windows user on this device."))return;
+    if(!confirm("Create an encrypted backup at this path? Keep the password safe. Backups include encrypted databases and their Linux owner-only key files."))return;
     const button=$("#createBackup");button.disabled=true;$("#backupStatus").textContent="Creating and verifying encrypted backup…";
     try{
       const result=await api("/api/backup/export",{method:"POST",body:JSON.stringify({path,password})});
