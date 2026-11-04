@@ -19,7 +19,7 @@ async function api(path, options={}, retried=false) {
   const response = await fetch(path,{...options,headers:{"Content-Type":"application/json",...(token?{"X-BabyMind-Token":token}:{}),...(options.headers||{})}});
   const data = await response.json().catch(()=>({error:"Unexpected server response"}));
   if(response.status===401 && !retried) {
-    const entered=prompt("Enter the one-time BabyMind access token shown in the PowerShell window on your PC:");
+    const entered=prompt("Enter the one-time BabyMind access token shown in the terminal running BabyMind:");
     if(!entered) throw new Error("Access token is required for this BabyMind server.");
     localStorage.setItem("babymind_access_token",entered.trim());
     return api(path,options,true);
