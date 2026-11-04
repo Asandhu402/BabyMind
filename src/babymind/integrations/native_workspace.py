@@ -51,7 +51,7 @@ class _NativeWorkspaceRoot:
 
     def list_directory(self, relative_path: str = "", *, capacity: int = 200) -> dict:
         self._require_open()
-        if not isinstance(relative_path, str) or "\x00" in relative_path:
+        if not isinstance(relative_path, str) or len(relative_path) > 500 or "\x00" in relative_path:
             raise ValueError("Relative workspace path must be a NUL-free string.")
         if not isinstance(capacity, int) or isinstance(capacity, bool) or not 1 <= capacity <= _MAX_LIST_ENTRIES:
             raise ValueError(f"Directory listing capacity must be between 1 and {_MAX_LIST_ENTRIES}.")
@@ -63,18 +63,25 @@ class _NativeWorkspaceRoot:
             ctypes.byref(written), ctypes.byref(truncated),
         )
         _check_status(status, "list directory")
+        if written.value > capacity:
+            raise NativeWorkspaceError("Native broker returned an invalid directory-entry count.")
+        decoded_entries = []
+        for index in range(written.value):
+            entry_type = entries[index].type
+            if entry_type not in (0, 1, 2):
+                raise NativeWorkspaceError("Native broker returned an unknown directory-entry type.")
+            decoded_entries.append({
+                "name": entries[index].name,
+                "type": ("file", "directory", "reparse_point")[entry_type],
+            })
         return {
-            "entries": [
-                {"name": entries[index].name, "type": ("file", "directory", "reparse_point")[entries[index].type]}
-                for index in range(written.value)
-                if entries[index].type in (0, 1, 2)
-            ],
+            "entries": decoded_entries,
             "truncated": bool(truncated.value),
         }
 
     def read_text(self, relative_path: str, *, max_bytes: int = 32 * 1024) -> str:
         self._require_open()
-        if not isinstance(relative_path, str) or not relative_path or "\x00" in relative_path:
+        if not isinstance(relative_path, str) or not relative_path or len(relative_path) > 500 or "\x00" in relative_path:
             raise ValueError("A NUL-free relative file path is required.")
         if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or not 1 <= max_bytes <= _MAX_READ_BYTES:
             raise ValueError(f"Read limit must be between 1 and {_MAX_READ_BYTES} bytes.")
@@ -85,6 +92,8 @@ class _NativeWorkspaceRoot:
             ctypes.byref(received),
         )
         _check_status(status, "read text")
+        if received.value > max_bytes:
+            raise NativeWorkspaceError("Native broker returned more bytes than the approved read limit.")
         try:
             raw = bytes(output[:received.value])
             if b"\x00" in raw:
@@ -127,7 +136,7 @@ def _check_status(status: int, operation: str) -> None:
         7: "The requested operation exceeded its byte limit.",
         8: "The native output buffer is too small.",
     }
-    raise NativeWorkspaceError(f"Could not {operation}: {messages.get(status, f'native status {status}')}") 
+    raise NativeWorkspaceError(f"Could not {operation}: {messages.get(status, f'native status {status}')}")
 
 
 def load_native_workspace_library(dll_path: str | os.PathLike | None = None):

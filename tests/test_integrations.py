@@ -152,5 +152,19 @@ class IntegrationTests(unittest.TestCase):
                 native_workspace.load_native_workspace_library()
 
 
+    def test_native_workspace_binding_rejects_invalid_limits_before_ffi(self):
+        from babymind.integrations.native_workspace import _NativeWorkspaceRoot
+        class NoCallLibrary:
+            def __getattr__(self, name):
+                raise AssertionError(f"Native function unexpectedly called: {name}")
+        root = _NativeWorkspaceRoot(NoCallLibrary(), 1)
+        with self.assertRaises(ValueError):
+            root.list_directory("", capacity=201)
+        with self.assertRaises(ValueError):
+            root.read_text("../outside.txt", max_bytes=0)
+        with self.assertRaises(ValueError):
+            root.create_new_text("new.txt", "too long", max_bytes=1)
+
+
 if __name__ == "__main__":
     unittest.main()
