@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import babymind
+from babymind import providers as providers_module
 import json
 import shutil
 import subprocess
@@ -61,7 +62,7 @@ def resolve_core_source(relative: str) -> Path:
     """
     candidates = (
         ROOT / relative,
-        Path(babymind.__file__).resolve().parent / Path(relative).name,
+        Path(providers_module.__file__).resolve(),
     )
     for candidate in candidates:
         if candidate.is_file():
@@ -102,7 +103,12 @@ def collect_local_code_context() -> str:
         )
         total_chars += len(content)
     if not sections:
-        raise RuntimeError("No complete BabyMind core source files were available for inspection.")
+        raise RuntimeError(
+            "No complete BabyMind core source files were available for inspection. "
+            f"Checkout root: {ROOT}; package file: {babymind.__file__}; "
+            f"providers module: {providers_module.__file__}; "
+            f"candidate paths: {resolve_core_source.__name__}({source_paths[0]!r}) failed."
+        )
     manifest = (
         "SOURCE-COVERAGE MANIFEST: Every file below is included in full, from first byte "
         "to last byte. No file contents were clipped. Files not listed were not inspected; "
