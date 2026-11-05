@@ -344,3 +344,51 @@ class GraphMissionTests(unittest.TestCase):
         self.assertEqual(mission["agents_recorded"], 50)
         self.assertIn("task-graph mode", mission["summary"])
         self.assertEqual(provider.calls, 50)
+
+
+class GraphSelfEditTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory()
+        self.store = MissionStore(self.temp.name)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_graph_mode_runs_self_edit_when_completed(self) -> None:
+        provider = FakeProvider()
+        orchestrator = Orchestrator(provider, self.store, max_seconds=300)
+        with patch.object(Orchestrator, "_run_self_edit",
+                          return_value={"status": "applied", "detail": "ok"}) as se:
+            mission = orchestrator.run_now(BRIEF, mode="graph", self_edit=True)
+        self.assertEqual(mission["status"], "completed")
+        se.assert_called_once()
+        self.assertIn("Self-edit: applied", mission["summary"])
+
+    def test_graph_mode_skips_self_edit_when_cancelled(self) -> None:
+        provider = FakeProvider()
+        orchestrator = Orchestrator(provider, self.store, max_seconds=300)
+        mid = self.store.create(BRIEF, "graph")
+        self.store.request_cancel(mid)
+        with patch.object(Orchestrator, "_run_self_edit") as se:
+            orchestrator._run_graph(mid, BRIEF, self_edit=True)
+        se.assert_not_called()
+        self.assertEqual(self.store.get(mid)["status"], "cancelled")
+
+
+class GraphCancellationTests(unittest.TestCase):
+    def test_mission_cancel_flag_stops_graph(self) -> None:
+        import threading
+        store = MissionStore(TemporaryDirectory().name)
+        provider = FakeProvider()
+        orchestrator = Orchestrator(provider, store, max_seconds=300)
+
+        class SlowProvider:
+            def complete(self, s, u):
+                time.sleep(0.05)
+                return "text"
+        orchestrator.provider = SlowProvider()
+        mid = store.create(BRIEF, "graph")
+        store.request_cancel(mid)  # cancel before the graph starts
+        orchestrator._run_graph(mid, BRIEF)
+        mission = store.get(mid)
+        self.assertEqual(mission["status"], "cancelled")

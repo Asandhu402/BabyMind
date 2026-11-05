@@ -81,3 +81,25 @@ class VerifierDepthTests(unittest.TestCase):
                                      brief="build a hello app")
             self.assertTrue(report["fulfilment"]["fulfilled"])
             self.assertTrue(report["passed"])
+
+
+class VerifierBehaviorAllAppsTests(unittest.TestCase):
+    def test_behavior_check_covers_all_generated_apps(self):
+        with TemporaryDirectory() as tmp:
+            make_checkout(Path(tmp))
+            apps = Path(tmp) / "apps"
+            (apps / "app-one").mkdir(parents=True)
+            (apps / "app-two").mkdir(parents=True)
+            (apps / "app-one" / "app.py").write_text("print('one ok')\n")
+            (apps / "app-two" / "app.py").write_text("print('two ok')\n")
+            report = verifier.verify(tmp, timeout=120)
+            self.assertTrue(report["behavior"]["ok"], report["behavior"])
+            self.assertEqual(report["behavior"]["checked"], 2)
+
+    def test_fulfilment_is_labelled_preliminary(self):
+        with TemporaryDirectory() as tmp:
+            make_checkout(Path(tmp))
+            verdict = '{"fulfilled": true, "evidence": "x", "gaps": ""}'
+            report = verifier.verify(tmp, timeout=120, coordinator=FakeCoordinator(verdict),
+                                     brief="build a hello app")
+            self.assertIn("preliminary", report["fulfilment"]["independence"])

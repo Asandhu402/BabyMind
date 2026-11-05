@@ -40,13 +40,14 @@ def verify(root: str | Path, *, timeout: int = 300, coordinator=None, brief: str
         "security": _security_check(root),
         "fulfilment": None,
     }
+    # Hard gates: compile, tests, runtime behavior, security boundary.
     report["passed"] = (
         report["compile_ok"] and bool(summary.get("passed"))
         and report["behavior"]["ok"] and report["security"]["ok"]
     )
     if coordinator is not None and brief:
+        # Preliminary only (same shared model): reported, but not a hard gate.
         report["fulfilment"] = _fulfilment_check(coordinator, root, brief)
-        report["passed"] = report["passed"] and bool(report["fulfilment"]["fulfilled"])
     return report
 
 
@@ -55,18 +56,25 @@ def _behavior_check(root: Path) -> dict:
     that it produces output and exits cleanly — runtime behavior, not just
     compile/tests."""
     apps = root / "apps"
-    entries = sorted(apps.glob("*/*/app.py")) + sorted(apps.glob("*/app.py")) if apps.is_dir() else []
+    entries = sorted(set(apps.glob("*/*/app.py")) | set(apps.glob("*/app.py"))) if apps.is_dir() else []
     if not entries:
         return {"ok": True, "detail": "No generated app entry point present; behavior check not applicable."}
-    entry = entries[0]
-    app_dir = entry.parent
-    result = broker.execute([__import__("sys").executable, "-u", entry.name],
-                            cwd=app_dir, allowed_root=app_dir, timeout=60,
-                            sandbox_mode="require")
-    ok = result["exit_code"] == 0 and bool(result["stdout"].strip()) and result["sandboxed"]
-    return {"ok": ok, "entry": str(entry.relative_to(root)),
-            "exit_code": result["exit_code"], "stdout": result["stdout"][-2000:],
-            "sandboxed": result["sandboxed"]}
+    import sys
+    results = []
+    for entry in entries:
+        app_dir = entry.parent
+        result = broker.execute([sys.executable, "-u", entry.name],
+                                cwd=app_dir, allowed_root=app_dir, timeout=60,
+                                sandbox_mode="require")
+        results.append({
+            "entry": str(entry.relative_to(root)),
+            "exit_code": result["exit_code"],
+            "stdout": result["stdout"][-2000:],
+            "sandboxed": result["sandboxed"],
+            "ok": result["exit_code"] == 0 and bool(result["stdout"].strip()) and result["sandboxed"],
+        })
+    return {"ok": all(r["ok"] for r in results), "apps": results,
+            "checked": len(results)}
 
 
 def _security_check(root: Path) -> dict:
@@ -80,17 +88,34 @@ def _security_check(root: Path) -> dict:
 
 
 def _fulfilment_check(coordinator, root: Path, brief: str) -> dict:
-    """Ask the model to judge whether the implementation fulfils the brief.
-    Recorded as evidence, never as a self-attested pass."""
+    """Preliminary acceptance review against the brief, inspecting bounded
+    file CONTENTS (not just paths). Honest limitation: this uses the same
+    shared local model, so it is a preliminary review, not a genuinely
+    independent inspection — recorded as such."""
     import json
     from .orchestrator import _extract_json
-    tree = [str(p.relative_to(root)) for p in sorted(root.rglob("*")) if p.is_file()][:200]
-    system = ("You are an independent acceptance reviewer. Return ONLY JSON: "
-              '{"fulfilled": true|false, "evidence": "...", "gaps": "..."}. '
-              "Judge against the brief and the actual files; do not trust claims.")
-    user = f"BRIEF:\n{brief}\n\nFILES:\n" + "\n".join(tree)
+    chunks = []
+    total = 0
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.stat().st_size > 64 * 1024:
+            continue
+        if total > 40_000:
+            break
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        total += len(text)
+        chunks.append(f"--- {path.relative_to(root)} ---\n{text[:4000]}")
+    system = ("You are an acceptance reviewer. You share one local model with the "
+              "system under review, so this is a PRELIMINARY review, not independent "
+              "verification. Return ONLY JSON: {\"fulfilled\": true|false, \"evidence\": "
+              "\"...\", \"gaps\": \"...\"}. Judge against the brief and the actual file "
+              "contents; do not trust claims.")
+    user = f"BRIEF:\n{brief}\n\nFILE CONTENTS (bounded):\n" + "\n".join(chunks)
     verdict = json.loads(_extract_json(coordinator.provider.complete(system, user)))
     return {"fulfilled": bool(verdict.get("fulfilled")),
+            "independence": "preliminary — same shared local model, not an independent inspection",
             "evidence": str(verdict.get("evidence", ""))[:1000],
             "gaps": str(verdict.get("gaps", ""))[:1000]}
 
