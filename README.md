@@ -1,5 +1,11 @@
 # BabyMind
 
+> **Status: experimental / development software — NOT production-ready.**
+> The autonomous-development features are partially implemented and not
+> independently verified; see
+> [production readiness programme](docs/PRODUCTION_READINESS.md) for the
+> open gates.
+
 BabyMind is a local-first AI workspace for **Linux x86-64** with a desktop
 window and a bundled CPU llama.cpp runtime. Its 50 specialist roles are prompts
 over one model, not independent people or independently trained agents.
