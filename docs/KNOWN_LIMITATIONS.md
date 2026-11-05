@@ -22,14 +22,16 @@ missing, not what is planned.
   self-development requires a successful boundary probe and fails closed when
   unavailable. In source mode, `auto` may fall back to unsandboxed execution;
   never use that fallback for untrusted code.
-- **Nested sandboxes fail closed to plain execution.** The kernel forbids user
-  namespaces inside a user namespace, so a verification run started *by* a
-  sandboxed process reports the backend as unavailable and executes inside the
-  existing namespace. That is still contained, but it is one layer, not two.
-- **Limits are rlimits, not cgroups.** CPU time, file size and open files are
-  capped; memory is not, because cgroup delegation is unavailable here. A runaway
-  allocation inside the sandbox is bounded by the parent's monitor and timeout,
-  not by the kernel.
+- **Nested sandboxes are detected but still single-layer.** Running BabyMind
+  inside a container/VM is reported by `sandbox.status()` and
+  `/api/broker/status` (`nested_sandbox_detected`), but user namespaces inside
+  a user namespace add no second layer of isolation.
+- **Limits are rlimits, not cgroups.** CPU time, file size, open files, process
+  count, and address space/heap (RLIMIT_AS + RLIMIT_DATA, 2 GiB by default,
+  `BABYMIND_SANDBOX_MEM_BYTES`) are capped, and refused limits are reported as
+  `LIMIT_FAILED`. Physical RAM is still not capped, because cgroup delegation
+  is unavailable here; a runaway allocation is bounded by virtual-memory
+  failure plus the parent's monitor and timeout, not by a cgroup memory cap.
 - **Only the project root is writable, and that includes `state/`.** The sandbox
   protects your home directory, keys and the network, not the project's own
   files: a model-authored patch can still damage the checkout it is editing,
