@@ -39,6 +39,8 @@ cmake --build build/llama-build --target llama-server --parallel "${BABYMIND_BUI
 mkdir -p dist/BabyMind/llama.cpp dist/BabyMind/licenses
 cp build/llama-build/bin/llama-server dist/BabyMind/llama.cpp/
 cp build/llama-source/LICENSE dist/BabyMind/licenses/llama.cpp-MIT.txt
+cp LICENSE dist/BabyMind/LICENSE
+cp NOTICE dist/BabyMind/NOTICE
 cp docs/LINUX_PORTABLE.md dist/BabyMind/README.txt
 .venv/bin/python scripts/build_packaged_dev.py "$PWD" "$PWD/dist/BabyMind"
 printf 'Built dist/BabyMind; start with ./dist/BabyMind/BabyMind\n'
