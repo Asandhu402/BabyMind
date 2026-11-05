@@ -70,7 +70,11 @@ def verify_packaged_staging() -> None:
         raise PackagedDevelopmentError("This check must run from the packaged executable.")
     backend = sandbox.backend()
     if not backend.available:
-        print(f"SKIPPED packaged source edit: OS sandbox unavailable: {backend.detail}")
+        message = f"SKIPPED packaged source edit: OS sandbox unavailable: {backend.detail}"
+        print(message)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            safe = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print(f"::warning title=Packaged staging skipped::{safe}")
         return
     with tempfile.TemporaryDirectory(prefix="babymind-packaged-check-") as home:
         old_home = os.environ.get("BABYMIND_HOME")
@@ -97,6 +101,8 @@ def verify_packaged_staging() -> None:
             if (app_directory() / "dev-source-seed/src/babymind/__init__.py").read_text(encoding="utf-8") != seed_original:
                 raise PackagedDevelopmentError("The packaged source seed was unexpectedly modified.")
             print("Packaged source staging passed its sandboxed edit and independent behavior test. The running app was not updated.")
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                print("::notice title=Packaged staging::Sandboxed staged-source edit and independent behavior test passed; running app unchanged.")
         finally:
             for name, value in (("BABYMIND_HOME", old_home), ("BABYMIND_SELF_DEVELOPMENT_ENABLED", old_flag)):
                 if value is None:

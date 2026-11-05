@@ -10,11 +10,15 @@ on:
         description: Run the expensive real-model installer and GUI smoke test
         type: boolean
         default: false
+      chat_test_only:
+        description: Run extended production-model GUI questions without the 50-role test
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   linux:
-    if: github.event_name != 'workflow_dispatch' || !inputs.real_model_test
+    if: github.event_name != 'workflow_dispatch' || (!inputs.real_model_test && !inputs.chat_test_only)
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +48,15 @@ jobs:
       - name: Test source
         run: |
           .venv/bin/python -m compileall -q src tests
-          .venv/bin/python -m unittest discover -s tests -q
+          log="$RUNNER_TEMP/babymind-source-tests.log"
+          if .venv/bin/python -m unittest discover -s tests -q >"$log" 2>&1; then
+            cat "$log"
+          else
+            status=$?
+            cat "$log"
+            .venv/bin/python scripts/ci_acceptance_diagnostics.py "$log" 'Source tests' "$status"
+            exit "$status"
+          fi
           for file in src/babymind/web/*.js; do node --check "$file"; done
       - name: Exercise llama.cpp with an untrained test fixture
         run: |
@@ -88,7 +100,7 @@ jobs:
   real-model-installer:
     # Manual and opt-in: this downloads ~2.71 GB and builds the installer on
     # an ephemeral Ubuntu VM. Xvfb is not a full Ubuntu Desktop session.
-    if: github.event_name == 'workflow_dispatch' && inputs.real_model_test
+    if: github.event_name == 'workflow_dispatch' && (inputs.real_model_test || inputs.chat_test_only)
     runs-on: ubuntu-22.04
     timeout-minutes: 110
     steps:
@@ -113,18 +125,24 @@ jobs:
             exit "$status"
           fi
       - name: Exercise installed Qt GUI and real-model response under Xvfb
+        env:
+          EXTENDED_CHAT: ${{ inputs.chat_test_only }}
         run: |
           export HOME="$RUNNER_TEMP/babymind-test-home"
+          args=("$HOME/.local/bin/babymind" --log "$RUNNER_TEMP/babymind-desktop.log")
+          if [[ "$EXTENDED_CHAT" == 'true' ]]; then
+            args+=(--extended-chat --report "$RUNNER_TEMP/babymind-chat-report.json")
+          fi
           set +e
           xvfb-run -a /usr/bin/python3 scripts/verify_installed_desktop.py \
-            "$HOME/.local/bin/babymind" --log "$RUNNER_TEMP/babymind-desktop.log" 2>&1 | tee "$RUNNER_TEMP/babymind-gui-test.log"
+            "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/babymind-gui-test.log"
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-gui-test.log" GUI "$status"
             exit "$status"
           fi
       - name: Exercise real model roles, coding, and disposable source self-edit
-        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' && !inputs.chat_test_only }}
         run: |
           export HOME="$RUNNER_TEMP/babymind-test-home"
           /usr/bin/python3 -m venv "$RUNNER_TEMP/acceptance-venv"
@@ -138,8 +156,16 @@ jobs:
             /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-roles-test.log" Roles "$status"
             exit "$status"
           fi
+      - name: Upload extended chat report
+        if: ${{ !cancelled() && inputs.chat_test_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: babymind-gui-chat-report
+          path: ${{ runner.temp }}/babymind-chat-report.json
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload disposable test report
-        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' && !inputs.chat_test_only }}
         uses: actions/upload-artifact@v4
         with:
           name: babymind-real-model-test-report
