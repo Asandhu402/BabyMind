@@ -28,6 +28,21 @@ Ubuntu 22.04 and 24.04; the synthetic model used there does not measure the
 pinned model's quality. A clean Ubuntu Desktop session and broader model
 capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
 
+## Install and run with one command
+
+`install-and-run-linux.sh` is the zero-to-running entry point: it detects your
+distro's package manager (apt, dnf or pacman), installs any missing required
+software and system libraries, downloads the source, builds and installs
+BabyMind plus its verified local model, and then starts BabyMind automatically:
+
+```bash
+bash -c 'curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/install-and-run-linux.sh | bash'
+```
+
+Run from a repository checkout, `bash install-and-run-linux.sh` reuses that
+checkout instead of cloning. The same requirements as above apply (sudo,
+internet, disk space, graphical desktop).
+
 ## Portable desktop
 
 The target is a graphical Linux desktop with glibc 2.35 or newer (for example

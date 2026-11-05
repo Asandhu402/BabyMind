@@ -194,3 +194,24 @@ exec '{sys.executable}' "$@"
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue((self.home / '.local/share/babymind/current/BabyMind').is_file())
         self.assertFalse(list(self.root.glob('tmp.*')), 'bootstrap checkout must be cleaned')
+
+
+class InstallAndRunScriptTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = Path(__file__).resolve().parents[1]
+        self.script = self.root / 'install-and-run-linux.sh'
+
+    def test_script_exists_and_is_executable(self):
+        self.assertTrue(self.script.is_file())
+        self.assertTrue(os.access(self.script, os.X_OK))
+
+    def test_script_passes_bash_syntax_check(self):
+        result = subprocess.run(['bash', '-n', str(self.script)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_script_covers_detect_install_build_run(self):
+        text = self.script.read_text(encoding='utf-8')
+        for stage in ('apt-get', 'dnf', 'pacman', 'install-linux.sh', 'babymind'):
+            self.assertIn(stage, text)
+        # It must hand over to the reviewed installer and then launch the app.
+        self.assertIn('exec "$launcher"', text)
