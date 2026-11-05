@@ -211,3 +211,30 @@ class BuilderSandboxRefusalTests(unittest.TestCase):
         self.assertTrue(result["run"]["ran"])
         self.assertTrue(result["run"]["sandboxed"])
         self.assertEqual(result["run"]["exit_code"], 0)
+
+
+class BuilderVerificationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        (self.root / "apps").mkdir()
+        self.env = patch.dict(os.environ, {
+            "BABYMIND_APP_BUILDER_ENABLED": "true",
+            "BABYMIND_BUILDER_ROOT": str(self.root),
+        })
+        self.env.start()
+
+    def tearDown(self) -> None:
+        self.env.stop()
+        self.temp.cleanup()
+
+    def test_apply_plan_includes_behavior_verification(self) -> None:
+        from babymind import sandbox
+        if not sandbox.available():
+            self.skipTest("no OS sandbox backend in this environment")
+        files = [{"path": "app.py", "content": "print('verified app output')\n"}]
+        plan = builder.build_plan("Verify App", "app.py", files)
+        result = builder.apply_plan(plan, plan["plan_hash"])
+        self.assertTrue(result["run"]["ran"])
+        self.assertIsNotNone(result["verification"])
+        self.assertTrue(result["verification"]["ok"], result["verification"])

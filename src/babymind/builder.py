@@ -382,6 +382,13 @@ def apply_plan(plan: dict, approved_hash: str) -> dict:
         "ran": False,
         "reason": "This plan contains no Python entry point, so nothing was executed.",
     }
+    verification = None
+    if run.get("ran"):
+        from . import verifier
+        try:
+            verification = verifier._behavior_check(root)
+        except Exception as error:
+            verification = {"ok": False, "detail": str(error)}
     return {
         "name": plan["name"],
         "target": plan["target"],
@@ -389,6 +396,7 @@ def apply_plan(plan: dict, approved_hash: str) -> dict:
         "files": written,
         "entry": plan.get("entry") or None,
         "run": run,
+        "verification": verification,
         "plan_hash": plan["plan_hash"],
         "notice": (
             "Files were created inside the apps folder and the entry point ran once. "
