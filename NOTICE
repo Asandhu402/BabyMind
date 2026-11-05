@@ -1,0 +1,19 @@
+BabyMind
+Copyright (c) 2026 BabyMind contributors
+
+This project is licensed under the MIT License (see LICENSE).
+
+Bundled and referenced third-party components retain their own licenses:
+
+- llama.cpp (bundled as the CPU inference runtime, built from the pinned
+  b11960 tag): MIT License. The license text is copied into the packaged
+  build at dist/BabyMind/licenses/llama.cpp-MIT.txt.
+- The pinned local model (Qwen3.5-4B, Q4_K_M GGUF) is downloaded from its
+  upstream Hugging Face repository at install time and is subject to that
+  model's own license terms; see the upstream model card.
+- vendor/upstream/* are Git submodules (opencode, atomic-agent,
+  sandbox-runtime, ocbox, code-symbol-index, sqlcipher3). They are not
+  compiled into BabyMind by default and remain under their upstream licenses;
+  see docs/UPSTREAM_INTEGRATION.md.
+- Python dependencies (PySide6, cryptography, and optional integrations) are
+  distributed under their respective licenses; see each package's metadata.
