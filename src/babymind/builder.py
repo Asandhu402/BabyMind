@@ -4,9 +4,12 @@ BabyMind's own model turns a short brief into a set of text files. The files are
 written into one dedicated folder and the generated Python entry point is run
 once so the user can see whether the app actually starts.
 
-This is containment, not an operating-system sandbox. Generated code runs with
-the current user's privileges and can reach the network. What this module does
-enforce:
+Generated code is treated as untrusted and only executes through the shared
+sandboxed runner (``runner.run_command`` with ``sandbox="require"``): Linux
+user/mount/PID/network namespaces, a chrooted root with only the app folder
+writable, no network, and CPU/file-size/memory/process resource limits. If no
+OS sandbox backend is available, running generated code is refused outright.
+What this module additionally enforces:
 
 * Disabled unless ``BABYMIND_APP_BUILDER_ENABLED=true``.
 * Writes only inside ``<root>/apps/<slug>/``; traversal, absolute paths,
@@ -23,9 +26,7 @@ import hmac
 import json
 import os
 import re
-import subprocess
 import sys
-import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -116,7 +117,8 @@ def builder_status() -> dict:
         "can_write_files": enabled and root is not None,
         "can_run_generated_python": enabled and root is not None,
         "can_run_shell_commands": False,
-        "sandboxed": False,
+        "sandboxed": _sandbox_available(),
+        "requires_sandbox": True,
         "limits": {
             "max_files": MAX_PLAN_FILES,
             "max_file_bytes": MAX_FILE_BYTES,
@@ -129,11 +131,20 @@ def builder_status() -> dict:
         ),
         "problem": root_error,
         "notice": (
-            "Generated code runs with your user account's privileges and can use the network. "
-            "Files are confined to the apps folder and nothing is written before you approve "
-            "the exact reviewed plan."
+            "Generated code is untrusted: it only runs inside the OS sandbox (namespaces, "
+            "no network, resource limits) and is refused entirely when no sandbox backend is "
+            "available. Files are confined to the apps folder and nothing is written before "
+            "you approve the exact reviewed plan."
         ),
     }
+
+
+def _sandbox_available() -> bool:
+    try:
+        from . import sandbox as sandboxing
+        return sandboxing.available()
+    except Exception:
+        return False
 
 
 def _require_ready() -> Path:
@@ -315,44 +326,47 @@ def _scrubbed_environment() -> dict[str, str]:
 
 
 def _run_entry(app_dir: Path, entry: str) -> dict:
-    """Run the generated Python entry point once, with no shell and a timeout."""
+    """Run the generated Python entry point once through the sandboxed runner.
+
+    Generated code is untrusted. It only ever runs via ``runner.run_command``
+    with ``sandbox="require"``: if no OS sandbox backend is available, the run
+    is refused (fail closed) instead of executing with the user's privileges.
+    """
     if getattr(sys, "frozen", False):
         return {"ran": False, "reason": "Running generated code is unavailable in the portable app; a frozen executable is not a Python interpreter."}
     if not entry.endswith(".py"):
         return {"ran": False, "reason": "No Python entry point in this plan."}
-    command = [sys.executable, "-u", entry]
+    from . import runner
+    from . import sandbox as sandboxing
+
     shown = f"{Path(sys.executable).name} -u {entry}"
-    started = time.monotonic()
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed interpreter, fixed argv, no shell
-            command,
-            cwd=str(app_dir),
-            env=_scrubbed_environment(),
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
+        result = runner.run_command(
+            [sys.executable, "-u", entry],
+            cwd=app_dir,
+            allowed_root=app_dir,
             timeout=BUILD_TIMEOUT_SECONDS,
-            check=False,
+            env=_scrubbed_environment(),
+            sandbox="require",
         )
-    except subprocess.TimeoutExpired as expired:
+    except runner.CommandRejected as error:
         return {
-            "ran": True,
+            "ran": False,
             "command": shown,
-            "timed_out": True,
-            "exit_code": None,
-            "seconds": round(time.monotonic() - started, 2),
-            "stdout": (expired.stdout or "")[-MAX_OUTPUT_CHARS:] if isinstance(expired.stdout, str) else "",
-            "stderr": (expired.stderr or "")[-MAX_OUTPUT_CHARS:] if isinstance(expired.stderr, str) else "",
-            "note": f"Stopped after the {BUILD_TIMEOUT_SECONDS}s limit.",
+            "reason": f"Refused to run generated code without an OS sandbox: {error}",
+            "sandboxed": False,
         }
     return {
         "ran": True,
         "command": shown,
-        "timed_out": False,
-        "exit_code": completed.returncode,
-        "seconds": round(time.monotonic() - started, 2),
-        "stdout": completed.stdout[-MAX_OUTPUT_CHARS:],
-        "stderr": completed.stderr[-MAX_OUTPUT_CHARS:],
+        "timed_out": result["timed_out"],
+        "exit_code": result["exit_code"],
+        "seconds": result["seconds"],
+        "stdout": result["stdout"][-MAX_OUTPUT_CHARS:],
+        "stderr": result["stderr"][-MAX_OUTPUT_CHARS:],
+        "sandboxed": result["sandboxed"],
+        "note": "Ran inside the OS sandbox (namespaces + resource limits)."
+        if result["sandboxed"] else "Sandbox unavailable; run was refused.",
     }
 
 
@@ -378,7 +392,7 @@ def apply_plan(plan: dict, approved_hash: str) -> dict:
         "plan_hash": plan["plan_hash"],
         "notice": (
             "Files were created inside the apps folder and the entry point ran once. "
-            "Generated code runs with your privileges; review it before running it again."
+            "Generated code ran inside the OS sandbox only; review it before running it again."
         ),
     }
 

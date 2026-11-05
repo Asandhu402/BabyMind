@@ -107,6 +107,8 @@ try:
         (resource.RLIMIT_CPU, spec["cpu_seconds"]),
         (resource.RLIMIT_FSIZE, spec["fsize_bytes"]),
         (resource.RLIMIT_NOFILE, 512),
+        (resource.RLIMIT_AS, spec["mem_bytes"]),
+        (resource.RLIMIT_NPROC, spec["nproc"]),
     ):
         resource.setrlimit(limit, (value, value))
 except Exception:
@@ -117,6 +119,20 @@ os.execvpe(spec["argv"][0], spec["argv"], spec["env"])
 
 DEFAULT_CPU_SECONDS = 300
 DEFAULT_FSIZE_BYTES = 128 * 1024 * 1024
+# Address-space cap so a sandboxed process cannot exhaust host memory.
+DEFAULT_MEM_BYTES = 2 * 1024 * 1024 * 1024
+DEFAULT_NPROC = 256
+
+
+def _mem_bytes() -> int:
+    raw = os.getenv("BABYMIND_SANDBOX_MEM_BYTES", "").strip()
+    if not raw:
+        return DEFAULT_MEM_BYTES
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_MEM_BYTES
+    return max(64 * 1024 * 1024, min(value, 64 * 1024 * 1024 * 1024))
 
 
 class SandboxUnavailable(RuntimeError):
@@ -200,6 +216,8 @@ def _spec(root: Path, cwd: Path, argv: list[str], env: dict[str, str],
         "allow_local_network": allow_network,
         "cpu_seconds": DEFAULT_CPU_SECONDS,
         "fsize_bytes": DEFAULT_FSIZE_BYTES,
+        "mem_bytes": _mem_bytes(),
+        "nproc": DEFAULT_NPROC,
     }
 
 
@@ -359,7 +377,8 @@ def status(probe: bool = False) -> dict:
             "network": "separate network namespace (loopback only)" if record.available else "not enforced",
             "process": "separate PID namespace with --kill-child" if record.available else "not enforced",
             "privileges": "unprivileged user namespace; no host capabilities" if record.available else "not enforced",
-            "limits": "RLIMIT_CPU / RLIMIT_FSIZE / RLIMIT_NOFILE inside the sandbox"
+            "limits": "RLIMIT_CPU / RLIMIT_FSIZE / RLIMIT_NOFILE / RLIMIT_AS (memory cap) / "
+                      "RLIMIT_NPROC inside the sandbox"
             if record.available else "not enforced",
             "environment": "rebuilt from a non-secret allowlist",
         },

@@ -10,12 +10,17 @@ security boundary. This is a status summary, not an acceptance report.
   rollback, but its isolation depends on the Linux namespace backend. `auto`
   can fall back to unsandboxed execution; `require` fails closed. The frozen
   desktop cannot run its Python namespace helper or self-development edits.
-- The opt-in app builder directly runs generated Python as the current user in
-  source mode, without an OS sandbox. It cannot run generated code in the
-  portable app. Review code and do not execute untrusted programs.
+- The opt-in app builder now runs generated Python only through the shared
+  sandboxed runner (`runner.run_command` with `sandbox="require"`): Linux
+  user/mount/PID/network namespaces, no network, and CPU/file-size/memory
+  (RLIMIT_AS)/process (RLIMIT_NPROC) limits. When no OS sandbox backend is
+  available, running generated code is refused (fail closed). It still cannot
+  run generated code in the portable app. Review code regardless.
 - There is no production workspace broker or independently verified security
-  boundary. Same-user processes are not sandboxes. Checkpoints do not back up
-  databases, keys, the model or every Git state.
+  boundary. Same-user processes are not sandboxes; the builder and
+  self-development engine share the one sandboxed runner, but that is a single
+  choke point, not a verified broker. Checkpoints do not back up databases,
+  keys, the model or every Git state.
 - Local llama.cpp, the pinned model and Linux packaging exist, but real GUI,
   model download and inference acceptance have not been completed in this
   environment. See [Linux verification](LINUX_VERIFICATION.md).
