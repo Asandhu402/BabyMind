@@ -118,7 +118,9 @@ class BuilderPlanTests(unittest.TestCase):
         self.assertTrue(status["ready"])
         self.assertTrue(status["can_write_files"])
         self.assertFalse(status["can_run_shell_commands"])
-        self.assertFalse(status["sandboxed"])
+        from babymind import sandbox
+        self.assertEqual(status["sandboxed"], sandbox.available())
+        self.assertTrue(status["requires_sandbox"])
         self.assertEqual(status["limits"]["run_timeout_seconds"], builder.BUILD_TIMEOUT_SECONDS)
 
 
@@ -171,3 +173,41 @@ class BuilderExecutionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BuilderSandboxRefusalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        (self.root / "apps").mkdir()
+        self.env = patch.dict(os.environ, {
+            "BABYMIND_APP_BUILDER_ENABLED": "true",
+            "BABYMIND_BUILDER_ROOT": str(self.root),
+        })
+        self.env.start()
+
+    def tearDown(self) -> None:
+        self.env.stop()
+        self.temp.cleanup()
+
+    def test_generated_code_is_refused_without_a_sandbox(self) -> None:
+        from babymind import runner
+        files = [{"path": "app.py", "content": "print('hi')\n"}]
+        plan = builder.build_plan("Hello App", "app.py", files)
+        with patch.object(runner, "run_command",
+                          side_effect=runner.CommandRejected("no sandbox backend")):
+            result = builder.apply_plan(plan, plan["plan_hash"])
+        self.assertFalse(result["run"]["ran"])
+        self.assertFalse(result["run"]["sandboxed"])
+        self.assertIn("without an OS sandbox", result["run"]["reason"])
+
+    def test_generated_code_runs_sandboxed_when_backend_exists(self) -> None:
+        from babymind import sandbox
+        if not sandbox.available():
+            self.skipTest("no OS sandbox backend in this environment")
+        files = [{"path": "app.py", "content": "print('hello from generated app')\n"}]
+        plan = builder.build_plan("Hello App", "app.py", files)
+        result = builder.apply_plan(plan, plan["plan_hash"])
+        self.assertTrue(result["run"]["ran"])
+        self.assertTrue(result["run"]["sandboxed"])
+        self.assertEqual(result["run"]["exit_code"], 0)
