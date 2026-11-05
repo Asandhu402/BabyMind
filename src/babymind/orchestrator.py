@@ -23,6 +23,7 @@ from typing import Callable
 
 from .agents import AGENTS, AGENT_BY_ID, PHASES, AgentSpec, agents_in_phase, agent_instructions
 from .secure_store import SecureTextStore
+from .research_policy import SOURCE_QUALITY_AND_CITATION_POLICY
 
 DEFAULT_MAX_SECONDS = 900
 MAX_BRIEF_CHARS = 8_000
@@ -291,6 +292,7 @@ def _agent_prompt(agent: AgentSpec, brief: str, digest: str) -> tuple[str, str]:
         + "\nRespond with your contribution only: specific, verifiable, and at most 120 words. "
         "No preamble, no restating the brief, no markdown headings. If the phase needs code, "
         "name the exact file and the change; do not paste whole files."
+        + "\n\n" + SOURCE_QUALITY_AND_CITATION_POLICY
     )
     user = f"MISSION BRIEF:\n{brief}\n\nPRIOR CONTRIBUTIONS (oldest first):\n{digest or '(none yet)'}"
     return system, user
