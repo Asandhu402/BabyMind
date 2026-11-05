@@ -88,10 +88,10 @@ def run(args) -> dict:
                 response = coordinator.ask("BM-01", question).response
                 report["questions"].append({"question": question, "response": response})
                 annotate("Chat response", f"{question} {response}")
-                if question.startswith("What is 2 plus 2") and not re.search(r"\b(?:4|four)\b", response, re.IGNORECASE):
-                    report["failures"].append("Arithmetic chat response did not contain 4.")
-                if question.startswith("What color") and not re.search(r"\bblue\b", response, re.IGNORECASE):
-                    report["failures"].append("Sky-color chat response did not contain blue.")
+                if question.startswith("What is 2 plus 2") and not re.fullmatch(r"\s*(?:4|four)[.!]?\s*", response, re.IGNORECASE):
+                    report["failures"].append("Arithmetic chat response was not the requested answer 4.")
+                if question.startswith("What color") and not re.fullmatch(r"\s*blue[.!]?\s*", response, re.IGNORECASE):
+                    report["failures"].append("Sky-color chat response was not the requested answer blue.")
             except Exception as error:
                 report["failures"].append(f"Chat error: {error}")
         with tempfile.TemporaryDirectory(prefix="babymind-acceptance-", dir=args.workdir) as temp:

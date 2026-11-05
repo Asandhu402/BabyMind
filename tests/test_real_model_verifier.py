@@ -30,7 +30,8 @@ class RealModelVerifierTests(unittest.TestCase):
         self.assertIn("hello%0A::error::forged%25message", lines[1])
         self.assertFalse(any(line.startswith("::error::") for line in lines))
 
-    def _exercise(self, *, probe, mission_runs=None, test_error=False, real_success=False):
+    def _exercise(self, *, probe, mission_runs=None, test_error=False, real_success=False,
+                  chat_responses=("4", "blue", "To recover lost data.")):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "home"
             model = home / ".babymind/models/model.gguf"
@@ -55,9 +56,8 @@ class RealModelVerifierTests(unittest.TestCase):
                  patch.object(verifier.sandbox, "self_test", side_effect=probe) as sandbox_probe, \
                  patch.object(verifier.runner, "run_unit_tests") as run_tests, \
                  patch.dict(verifier.os.environ, {}, clear=False), redirect_stdout(io.StringIO()):
-                coordinator.return_value.ask.side_effect = [
-                    SimpleNamespace(response="4"), SimpleNamespace(response="blue"),
-                    SimpleNamespace(response="To recover lost data.")]
+                coordinator.return_value.ask.side_effect = [SimpleNamespace(response=response)
+                                                            for response in chat_responses]
                 orchestrator.return_value.run_now.return_value = mission
                 if real_success:
                     def apply_real_edit(brief, *, self_edit):
@@ -89,6 +89,12 @@ class RealModelVerifierTests(unittest.TestCase):
                     run_tests.assert_not_called()
                     orchestrator.return_value._run_self_edit.assert_not_called()
                 return result
+
+    def test_chat_does_not_accept_incorrect_answers_that_mention_expected_words(self):
+        result = self._exercise(probe=lambda root: {"verified": False},
+                                chat_responses=("The answer is not 4", "Not blue", "Backups help."))
+        self.assertTrue(any("Arithmetic" in item for item in result["failures"]))
+        self.assertTrue(any("Sky-color" in item for item in result["failures"]))
 
     def test_no_generated_code_runs_without_verified_sandbox(self):
         result = self._exercise(probe=lambda root: {"verified": False})

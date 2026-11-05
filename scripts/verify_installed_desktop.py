@@ -115,10 +115,12 @@ def run(executable: Path, log_path: Path):
                 const messages = document.querySelectorAll('#messages .message-content');
                 return messages.length >= 2 ? messages[messages.length - 1].innerText : '';
             })()"""), 600, "the model response")
-            print(f"GUI prompt: What is 2 + 2? Answer with the number only.\nGUI response: {response}", flush=True)
+            print("GUI prompt: What is 2 + 2? Answer with the number only.", flush=True)
+            # Escape model-controlled newlines so they cannot inject workflow commands.
+            print(f"GUI response: {json.dumps(response, ensure_ascii=True)}", flush=True)
             if "couldn't complete that request" in response.lower():
                 raise RuntimeError("The desktop displayed an inference error instead of a response.")
-            if not re.search(r"\b(?:4|four)\b", response, re.IGNORECASE):
+            if not re.fullmatch(r"\s*(?:4|four)[.!]?\s*", response, re.IGNORECASE):
                 raise RuntimeError("The response did not contain the expected answer; inspect the recorded output.")
             print("Installed GUI and real-model arithmetic smoke test passed.", flush=True)
             if os.getenv("GITHUB_ACTIONS") == "true":
@@ -147,10 +149,11 @@ def main():
     try:
         run(args.executable, args.log)
     except Exception as error:
-        print(f"Desktop verification failed: {error}", file=sys.stderr)
+        print(f"Desktop verification failed: {json.dumps(str(error), ensure_ascii=True)}", file=sys.stderr)
         if args.log.is_file():
             print("--- Desktop log (last 20,000 characters) ---", file=sys.stderr)
-            print(args.log.read_text(encoding="utf-8", errors="replace")[-20000:], file=sys.stderr)
+            print(json.dumps(args.log.read_text(encoding="utf-8", errors="replace")[-20000:],
+                             ensure_ascii=True), file=sys.stderr)
         return 1
     return 0
 

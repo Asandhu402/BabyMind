@@ -441,7 +441,10 @@ rewritten HOME path. Regression tests exercise the mount and namespace probes
 on the local Debian host and the other guards using fixtures; this is not a
 clean Ubuntu Desktop or a production-model result. Test counts cannot prove
 unchanged test semantics, and code under test still has write access to the
-designated project root.
+designated project root. A later local follow-up also compares reported test
+failure identities (so a new failure cannot replace a known one unnoticed),
+uses unique sandbox-probe files, and requires the requested short arithmetic
+and color answers rather than merely searching for expected words.
 
 On the local Debian host, the revised verifier also copied the actual BabyMind
 source into a disposable directory, passed the Linux namespace probes, and ran
@@ -453,3 +456,7 @@ skipped). This validates the integration and isolation path only: it is not
 proof of real-model quality, useful specialist work, or packaged self-upgrade.
 The revised opt-in hosted harness additionally attempts that real-source-copy
 scenario with the production model; its result must be reported separately.
+
+The local Debian source-suite follow-up ran **355 tests, OK, 2 skipped** after
+these later changes. Its sandbox and model-verifier regression tests do not
+substitute for the ongoing hosted production-model runs.

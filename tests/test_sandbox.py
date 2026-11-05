@@ -79,7 +79,10 @@ class SandboxBoundaryTests(unittest.TestCase):
         )
 
     def test_selftest_proves_every_part_of_the_boundary(self) -> None:
+        existing = self.root / ".babymind-probe"
+        existing.write_text("user data")
         evidence = sandbox.self_test(self.root)
+        self.assertEqual(existing.read_text(), "user data")
         self.assertTrue(evidence["verified"], evidence)
         self.assertIn("BLOCKED", evidence["checks"]["network"]["output"])
         self.assertIn("NAMESPACE_ISOLATED", evidence["checks"]["network"]["output"])

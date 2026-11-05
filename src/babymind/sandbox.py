@@ -285,15 +285,17 @@ def self_test(root: str | Path | None = None) -> dict:
             "    print('BLOCKED')\n"
         ),
         "system_write": (
+            "import os, tempfile\n"
             "try:\n"
-            "    open('/usr/bin/.babymind-probe', 'w').write('x'); print('WROTE')\n"
+            "    fd, p = tempfile.mkstemp(prefix='.babymind-probe-', dir='/usr/bin')\n"
+            "    os.close(fd); os.unlink(p); print('WROTE')\n"
             "except OSError as e:\n"
             "    print('BLOCKED', type(e).__name__)\n"
         ),
         "workspace_write": (
-            "import os\n"
-            "p = os.path.join(os.getcwd(), '.babymind-probe')\n"
-            "open(p, 'w').write('ok'); os.unlink(p); print('WRITABLE')\n"
+            "import os, tempfile\n"
+            "fd, p = tempfile.mkstemp(prefix='.babymind-probe-', dir=os.getcwd())\n"
+            "os.write(fd, b'ok'); os.close(fd); os.unlink(p); print('WRITABLE')\n"
         ),
     }
     checks: dict[str, dict] = {}

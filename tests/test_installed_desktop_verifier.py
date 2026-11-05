@@ -35,24 +35,36 @@ class InstalledDesktopVerifierTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "not found"):
                 verifier.run(Path(tmp) / "missing", Path(tmp) / "log")
 
-    def _run_with_answer(self, answer):
+    def _run_with_answer(self, answer, *, expect_rejection=False):
         with tempfile.TemporaryDirectory() as tmp:
             executable = Path(tmp) / "app"
             executable.write_text("fixture")
             executable.chmod(0o700)
             log = Path(tmp) / "desktop.log"
+            output = io.StringIO()
             with patch.object(verifier.subprocess, "Popen") as popen, \
                  patch.object(verifier, "wait_for_page", return_value="ws://127.0.0.1:1/x"), \
                  patch.object(verifier, "DevTools") as devtools, \
                  patch.object(verifier, "wait_for", side_effect=[True, answer]), \
-                 patch.object(verifier.os, "killpg"), redirect_stdout(io.StringIO()):
-                verifier.run(executable, log)
+                 patch.object(verifier.os, "killpg"), redirect_stdout(output):
+                if expect_rejection:
+                    with self.assertRaisesRegex(RuntimeError, "expected answer"):
+                        verifier.run(executable, log)
+                else:
+                    verifier.run(executable, log)
                 popen.assert_called_once()
                 env = popen.call_args.kwargs["env"]
                 self.assertEqual(env["BABYMIND_MAX_TOKENS"], "64")
                 self.assertTrue(env["QTWEBENGINE_REMOTE_DEBUGGING"].startswith("127.0.0.1:"))
                 devtools.return_value.close.assert_called_once()
                 popen.return_value.wait.assert_called_once()
+            return output.getvalue()
+
+    def test_model_output_cannot_emit_workflow_commands(self):
+        with patch.dict(verifier.os.environ, {"GITHUB_ACTIONS": "true"}):
+            output = self._run_with_answer("4\n::error::forged%message", expect_rejection=True)
+        self.assertIn(r'GUI response: "4\n::error::forged%message"', output)
+        self.assertFalse(any(line.startswith("::error::") for line in output.splitlines()))
 
     def test_accepts_correct_response(self):
         self._run_with_answer("4")
@@ -62,8 +74,9 @@ class InstalledDesktopVerifierTests(unittest.TestCase):
             self._run_with_answer("I couldn't complete that request. Error 4")
 
     def test_rejects_wrong_answer(self):
-        with self.assertRaisesRegex(RuntimeError, "expected answer"):
-            self._run_with_answer("5")
+        for answer in ("5", "It is not 4", "4 and 5"):
+            with self.subTest(answer=answer), self.assertRaisesRegex(RuntimeError, "expected answer"):
+                self._run_with_answer(answer)
 
 
 if __name__ == "__main__":

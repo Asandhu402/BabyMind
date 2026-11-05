@@ -337,6 +337,24 @@ class SelfDevTests(unittest.TestCase):
         self.assertEqual(result["status"], "applied", result)
         self.assertEqual(result["baseline"]["problems"], 1)
 
+    def test_new_failure_cannot_replace_a_known_baseline_failure(self) -> None:
+        known = self.root / "tests" / "test_known_failure.py"
+        known.write_text("import unittest\nclass Known(unittest.TestCase):\n"
+                         " def test_known(self): self.fail('known failure')\n")
+        original_known = known.read_text()
+        ok = self.root / "tests" / "test_ok.py"
+        original_ok = ok.read_text()
+        result = selfdev.apply_edits([
+            {"path": "tests/test_known_failure.py", "content":
+             "import unittest\nclass Known(unittest.TestCase):\n def test_known(self): pass\n"},
+            {"path": "tests/test_ok.py", "content":
+             "import unittest\nclass Ok(unittest.TestCase):\n def test_ok(self): self.fail('new failure')\n"},
+        ])
+        self.assertEqual(result["status"], "rolled_back", result)
+        self.assertIn("previously passing test", result["reason"])
+        self.assertEqual(known.read_text(), original_known)
+        self.assertEqual(ok.read_text(), original_ok)
+
     def test_new_failure_above_baseline_is_rolled_back(self) -> None:
         (self.root / "tests" / "test_known_failure.py").write_text(
             "import unittest\n\n\nclass Known(unittest.TestCase):\n"

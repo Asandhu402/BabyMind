@@ -73,8 +73,9 @@ Every write to BabyMind's own source follows the same path:
 3. Write each file atomically (`os.replace`), never through a symlink.
 4. Run `python -m compileall -q src tests`.
 5. Run the project's own unittest suite (`python -m unittest discover`). The
-   pre-edit and post-edit runs must complete with runnable tests; a drop in the
-   number run or a reduction in non-skipped tests is a regression.
+   pre-edit and post-edit runs must complete with runnable tests; fewer tests,
+   fewer non-skipped tests, or a newly failing test is a regression. Existing
+   failures are compared using unittest's reported failure headings.
 6. On any failure: **restore the checkpoint automatically**, remove files the
    transaction created, and append `auto_rollback` to the audit log.
 7. On success: append `applied` with the changed files and test count.

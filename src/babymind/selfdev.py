@@ -176,6 +176,12 @@ def load_test_baseline() -> dict | None:
         return None
 
 
+def _test_problem_ids(result: dict) -> set[str]:
+    """Extract unittest's failure/error headings for baseline comparison."""
+    import re
+    return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", result.get("stderr") or "", re.MULTILINE))
+
+
 def _suite_completed(result: dict) -> bool:
     """Reject empty, interrupted and unaccounted-for test runs.
 
@@ -185,6 +191,8 @@ def _suite_completed(result: dict) -> bool:
     summary = result["summary"]
     if summary["ran"] <= summary.get("skipped", 0) or result.get("timed_out"):
         return False
+    if summary["problems"] and len(_test_problem_ids(result)) < summary["problems"]:
+        return False  # Missing/truncated failure evidence cannot be compared.
     return bool(result.get("ok")) or (result.get("exit_code") == 1 and summary["problems"] > 0)
 
 
@@ -515,11 +523,13 @@ def apply_edits(
     # change introduces can never be mistaken for a pre-existing one.
     baseline = load_test_baseline()
     before_summary = None
+    before_problems: set[str] = set()
     if verify:
         before = runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())
         if not _suite_completed(before):
             raise SelfDevError("The pre-edit test suite did not complete with runnable tests; no edit was applied.")
         before_summary = before["summary"]
+        before_problems = _test_problem_ids(before)
         baseline = _record_baseline(root, before_summary)
     snapshot = checkpoint(
         label=f"pre-apply: {reason or 'self-development'}",
@@ -610,6 +620,8 @@ def apply_edits(
                     f"test suite regressed: {summary['problems']} problems "
                     f"(baseline {(baseline or {}).get('problems', 0)})"
                 )
+            elif _test_problem_ids(tests_result) - before_problems:
+                failure = "test suite regressed: a previously passing test now fails"
             else:
                 baseline = _record_baseline(root, summary)
     except Exception as error:
