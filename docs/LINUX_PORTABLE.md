@@ -47,4 +47,4 @@ keystore. See SECURITY.md and docs/KNOWN_LIMITATIONS.md in the source tree.
 llama.cpp is MIT licensed; a copy is in licenses/. PySide6/Qt are LGPL/GPL
 components; consult their upstream license terms before redistributing. The
 model's terms must be reviewed on its Hugging Face model page before use or
-redistribution. This app downloads the model rather than redistributing it. The BabyMind repository has no top-level license file; do not assume permission to redistribute it.
+redistribution. This app downloads the model rather than redistributing it. The BabyMind repository itself is MIT licensed (see the top-level LICENSE and NOTICE files); bundled and referenced third-party components keep their own upstream license terms.
