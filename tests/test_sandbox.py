@@ -98,6 +98,24 @@ class SandboxBoundaryTests(unittest.TestCase):
         self.assertIn("BLOCKED", evidence["checks"]["system_write"]["output"])
         self.assertIn("WRITABLE", evidence["checks"]["workspace_write"]["output"])
 
+    def test_memory_cap_is_enforced_and_reported(self) -> None:
+        # RLIMIT_AS/RLIMIT_DATA cap virtual address space and heap; a process
+        # that tries to allocate far beyond the cap must fail, and a normal
+        # run must not report any LIMIT_FAILED line.
+        over = self.run_in_sandbox(
+            "try:\n"
+            "    blob = bytearray(8 * 1024 * 1024 * 1024)\n"
+            "    print('ALLOCATED')\n"
+            "except MemoryError:\n"
+            "    print('CAPPED')\n",
+            timeout=120,
+        )
+        self.assertIn("CAPPED", over["stdout"], over)
+        self.assertNotIn("LIMIT_FAILED", over["stderr"], over)
+        normal = self.run_in_sandbox("print('OK')")
+        self.assertIn("OK", normal["stdout"], normal)
+        self.assertNotIn("LIMIT_FAILED", normal["stderr"], normal)
+
     def test_network_is_blocked(self) -> None:
         result = self.run_in_sandbox(
             "import socket\n"
