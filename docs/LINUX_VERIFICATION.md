@@ -426,3 +426,30 @@ cover all distinct registered role IDs, not merely a count of 50. Mocked
 regression tests cover these cases; they do not constitute a production-model
 or Ubuntu Desktop test. The expanded 4,200-second hosted real-model test remains
 unrun as of this update.
+
+A subsequent source audit found three safety gaps. A partial mission could start
+a self-edit, the self-edit verifier could accept an empty or interrupted test
+run, and a Python environment under `/tmp` was exposed as a writable sandbox
+bind. The source changes now skip mission self-edit when roles are incomplete
+or cancelled, compare a fresh pre-edit test run against the post-edit run,
+require the sandbox by default for self-development, and mount temporary
+interpreter prefixes read-only. They also reject symbolic-link path components
+before resolution and refuse requests to bypass test verification via the HTTP
+apply endpoint. The sandbox self-test now probes an actual existing file outside
+the workspace and compares network namespace identities instead of checking a
+rewritten HOME path. Regression tests exercise the mount and namespace probes
+on the local Debian host and the other guards using fixtures; this is not a
+clean Ubuntu Desktop or a production-model result. Test counts cannot prove
+unchanged test semantics, and code under test still has write access to the
+designated project root.
+
+On the local Debian host, the revised verifier also copied the actual BabyMind
+source into a disposable directory, passed the Linux namespace probes, and ran
+a 50-role mission with a **fake provider**. The fake provider proposed a small
+change to the copied `src/babymind/__init__.py`; the self-edit transaction
+applied it after the copied project's suite passed (352 tests, 18 skipped), and
+an independent sandboxed behavior test passed with the suite (354 tests, 18
+skipped). This validates the integration and isolation path only: it is not
+proof of real-model quality, useful specialist work, or packaged self-upgrade.
+The revised opt-in hosted harness additionally attempts that real-source-copy
+scenario with the production model; its result must be reported separately.

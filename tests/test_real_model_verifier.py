@@ -30,7 +30,7 @@ class RealModelVerifierTests(unittest.TestCase):
         self.assertIn("hello%0A::error::forged%25message", lines[1])
         self.assertFalse(any(line.startswith("::error::") for line in lines))
 
-    def _exercise(self, *, probe, mission_runs=None, test_error=False):
+    def _exercise(self, *, probe, mission_runs=None, test_error=False, real_success=False):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "home"
             model = home / ".babymind/models/model.gguf"
@@ -59,6 +59,16 @@ class RealModelVerifierTests(unittest.TestCase):
                     SimpleNamespace(response="4"), SimpleNamespace(response="blue"),
                     SimpleNamespace(response="To recover lost data.")]
                 orchestrator.return_value.run_now.return_value = mission
+                if real_success:
+                    def apply_real_edit(brief, *, self_edit):
+                        self.assertTrue(self_edit)
+                        copied = Path(verifier.os.environ["BABYMIND_DEV_ROOT"])
+                        source = copied / "src/babymind/__init__.py"
+                        source.write_text(source.read_text() + "\ndef is_valid_agent_id(value): return True\n")
+                        return {**mission, "self_edit": {"status": "applied", "files": ["src/babymind/__init__.py"]}}
+                    orchestrator.return_value.run_now.side_effect = apply_real_edit
+                    orchestrator.return_value._run_self_edit.return_value = {"status": "no_change"}
+                    run_tests.return_value = {"sandboxed": True, "summary": {"passed": True}}
                 if test_error:
                     run_tests.side_effect = RuntimeError("simulated runner error")
                     def check_cleanup(*args):
@@ -71,6 +81,10 @@ class RealModelVerifierTests(unittest.TestCase):
                 if test_error:
                     self.assertEqual(run_tests.call_count, 1)
                     orchestrator.return_value._run_self_edit.assert_called_once()
+                elif real_success:
+                    self.assertEqual(run_tests.call_count, 2)
+                    self.assertEqual(run_tests.call_args.kwargs["sandbox"], "require")
+                    self.assertIn("babymind-source-copy", str(run_tests.call_args.args[0]))
                 else:
                     run_tests.assert_not_called()
                     orchestrator.return_value._run_self_edit.assert_not_called()
@@ -92,6 +106,13 @@ class RealModelVerifierTests(unittest.TestCase):
     def test_coding_runner_exception_cleans_fixture_before_self_edit(self):
         result = self._exercise(probe=lambda root: {"verified": True}, test_error=True)
         self.assertTrue(any("simulated runner error" in item for item in result["failures"]))
+
+    def test_completed_mission_checks_disposable_real_source_in_sandbox(self):
+        original = (SCRIPT.parents[1] / "src/babymind/__init__.py").read_text()
+        result = self._exercise(probe=lambda root: {"verified": True}, real_success=True)
+        self.assertEqual(result["real_source_self_edit"]["status"], "applied")
+        self.assertTrue(result["real_source_self_edit_test"]["passed"])
+        self.assertEqual((SCRIPT.parents[1] / "src/babymind/__init__.py").read_text(), original)
 
     def test_duplicate_roles_are_not_accepted_as_all_roles(self):
         runs = [{"agent_id": "BM-01", "output": "text", "error": ""} for _ in range(50)]

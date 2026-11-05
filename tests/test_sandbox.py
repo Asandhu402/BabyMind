@@ -6,6 +6,7 @@ behaviour, not configuration.
 """
 from __future__ import annotations
 
+import ast
 import sys
 import unittest
 from pathlib import Path
@@ -26,6 +27,34 @@ class SandboxDetectionTests(unittest.TestCase):
         if not report["available"]:
             self.assertTrue(report["detail"])
             self.assertIn("not enforced", report["mechanisms"]["network"])
+
+    def test_tmp_interpreter_prefix_is_not_a_writable_bind(self) -> None:
+        with patch.object(sandbox.sys, "prefix", "/tmp/test-python-env"), \
+             patch.object(sandbox.sys, "base_prefix", "/usr"):
+            readonly, temp_readonly = sandbox._interpreter_binds()
+        self.assertEqual(temp_readonly, ["/tmp/test-python-env"])
+        self.assertNotIn("/tmp/test-python-env", readonly)
+
+    def test_self_test_uses_existing_outside_marker_and_requires_success(self) -> None:
+        with TemporaryDirectory() as project:
+            calls = []
+            def fake_run(argv, **kwargs):
+                calls.append(argv[-1])
+                if len(calls) == 1:
+                    return {"ok": False, "exit_code": 1,
+                            "stdout": "NAMESPACE_ISOLATED BLOCKED", "stderr": ""}
+                if len(calls) == 2:
+                    marker = Path(ast.literal_eval(argv[-1].splitlines()[0].split("=", 1)[1].strip()))
+                    self.assertTrue(marker.is_file())
+                    self.assertFalse(marker.is_relative_to(Path(project)))
+                    return {"ok": True, "exit_code": 0, "stdout": "BLOCKED", "stderr": ""}
+                return {"ok": True, "exit_code": 0,
+                        "stdout": "BLOCKED" if len(calls) == 3 else "WRITABLE", "stderr": ""}
+            with patch.object(sandbox, "backend", return_value=sandbox.Backend("fixture", True, "fixture")), \
+                 patch.object(runner, "run_command", side_effect=fake_run):
+                evidence = sandbox.self_test(project)
+            self.assertEqual(len(calls), 4)
+            self.assertFalse(evidence["verified"])
 
     def test_other_platforms_are_not_supported(self) -> None:
         with patch("babymind.sandbox.sys.platform", "other"):
@@ -53,6 +82,8 @@ class SandboxBoundaryTests(unittest.TestCase):
         evidence = sandbox.self_test(self.root)
         self.assertTrue(evidence["verified"], evidence)
         self.assertIn("BLOCKED", evidence["checks"]["network"]["output"])
+        self.assertIn("NAMESPACE_ISOLATED", evidence["checks"]["network"]["output"])
+        self.assertTrue(all(check["ok"] for check in evidence["checks"].values()))
         self.assertIn("BLOCKED", evidence["checks"]["host_secret"]["output"])
         self.assertIn("BLOCKED", evidence["checks"]["system_write"]["output"])
         self.assertIn("WRITABLE", evidence["checks"]["workspace_write"]["output"])
@@ -79,12 +110,34 @@ class SandboxBoundaryTests(unittest.TestCase):
         self.assertIn("BLOCKED", result["stdout"], result)
 
     def test_host_secrets_outside_the_root_are_unreadable(self) -> None:
-        result = self.run_in_sandbox(
-            "import os\n"
-            "target = os.path.join(os.path.expanduser('~'), '.babymind', 'memory.key')\n"
-            "print('READABLE' if os.path.exists(target) else 'BLOCKED')\n"
-        )
-        self.assertIn("BLOCKED", result["stdout"], result)
+        with TemporaryDirectory() as outside:
+            secret = Path(outside) / "secret.txt"
+            secret.write_text("host secret")
+            result = self.run_in_sandbox(
+                f"target = {str(secret)!r}\n"
+                "try:\n"
+                "    open(target).read(); print('READABLE')\n"
+                "except OSError:\n"
+                "    print('BLOCKED')\n")
+            self.assertTrue(result["ok"], result)
+            self.assertIn("BLOCKED", result["stdout"], result)
+
+    def test_tmp_interpreter_prefix_is_read_only(self) -> None:
+        with TemporaryDirectory(prefix="babymind-test-venv-") as prefix:
+            target = Path(prefix) / "sentinel"
+            target.write_text("original")
+            # Keep the real interpreter visible while simulating a second
+            # interpreter prefix under /tmp outside the workspace.
+            with patch.object(sandbox, "_interpreter_binds", return_value=([sys.prefix], [prefix])):
+                result = self.run_in_sandbox(
+                    f"p = {str(target)!r}\n"
+                    "try:\n"
+                    "    open(p, 'w').write('changed'); print('WROTE')\n"
+                    "except OSError:\n"
+                    "    print('BLOCKED')\n")
+            self.assertTrue(result["ok"], result)
+            self.assertIn("BLOCKED", result["stdout"], result)
+            self.assertEqual(target.read_text(), "original")
 
     def test_system_paths_are_read_only(self) -> None:
         result = self.run_in_sandbox(

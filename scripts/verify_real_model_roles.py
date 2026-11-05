@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import socket
 import sys
 import tempfile
@@ -51,6 +52,15 @@ def test_project(root: Path) -> None:
         "class Baseline(unittest.TestCase):\n"
         " def test_value(self): self.assertEqual(VALUE, 1)\n"
     )
+
+
+def copy_real_source_checkout(destination: Path) -> str:
+    """Create a disposable copy for a real-source edit; never edit this checkout."""
+    repo = Path(__file__).resolve().parents[1]
+    shutil.copytree(repo, destination, ignore=shutil.ignore_patterns(
+        ".git", ".venv", "venv", "build", "dist", "state", "__pycache__",
+        ".pytest_cache", "node_modules", "*.pyc"))
+    return (destination / "src" / "babymind" / "__init__.py").read_text(encoding="utf-8")
 
 
 def run(args) -> dict:
@@ -147,15 +157,56 @@ def run(args) -> dict:
             else:
                 report["self_edit"] = {"status": "not tested", "reason": "OS sandbox probes failed"}
 
+            # Exercise the actual source on a disposable copy, not a fixture
+            # masquerading as the application's core and never the live checkout.
+            real_root = Path(temp) / "babymind-source-copy"
+            real_content = copy_real_source_checkout(real_root)
+            os.environ["BABYMIND_DEV_ROOT"] = str(real_root)
+            brief = (
+                "Review and improve src/babymind/__init__.py, whose complete current content follows:\n"
+                + real_content + "\nPreserve that existing content and add a function "
+                "is_valid_agent_id(value) that returns True only for strings BM-01 through BM-50 "
+                "inclusive and False for all other values. Edit only src/babymind/__init__.py. "
+                "Give concrete advice and tests; role outputs are suggestions, not actions."
+            )
             # Bounded responses make a full 50-role pass practical on a CPU VM.
             os.environ["BABYMIND_MAX_TOKENS"] = "72"
             def update(_id, role):
                 excerpt = json.dumps((role.output or role.error)[:160], ensure_ascii=True)
                 print(f"ROLE {role.agent_id} {role.status} {role.seconds:.1f}s: {excerpt}", flush=True)
+                if role.agent_id == AGENTS[-1].agent_id:
+                    # The JSON file proposal needs more room than a role reply.
+                    os.environ["BABYMIND_MAX_TOKENS"] = "512"
             worker = Orchestrator(provider, MissionStore(Path(temp) / "mission-records"),
                                   max_seconds=4200, on_update=update)
-            mission = worker.run_now("Review a small Python function that adds two numbers. Give specific advice and tests.")
+            mission = worker.run_now(brief, self_edit=bool(evidence.get("verified")))
             report["mission"] = {key: mission[key] for key in ("status", "counts", "agents_recorded", "runs", "summary")}
+            real_edit = mission.get("self_edit") or {
+                "status": "not tested", "reason": "OS sandbox probes failed or no self-edit was recorded"}
+            report["real_source_self_edit"] = real_edit
+            annotate("Real source mission self-edit", json.dumps(real_edit))
+            if real_edit.get("status") != "applied" or real_edit.get("files") != ["src/babymind/__init__.py"]:
+                report["failures"].append("Mission did not apply the requested edit to the disposable real-source copy.")
+            elif not (real_root / "src" / "babymind" / "__init__.py").read_text(encoding="utf-8").startswith(real_content):
+                report["failures"].append("Real-source edit did not preserve the original file content.")
+            elif evidence.get("verified"):
+                try:
+                    (real_root / "tests" / "test_acceptance_agent_id.py").write_text(
+                        "import unittest\nfrom babymind import is_valid_agent_id, AGENT_COUNT\n"
+                        "class AgentId(unittest.TestCase):\n"
+                        " def test_valid(self):\n"
+                        "  for value in ('BM-01', 'BM-09', 'BM-10', 'BM-50'): self.assertIs(is_valid_agent_id(value), True)\n"
+                        " def test_invalid(self):\n"
+                        "  for value in ('BM-00', 'BM-51', 'BM-1', 'BM-01x', '', None, 1): self.assertIs(is_valid_agent_id(value), False)\n"
+                        " def test_original_constant(self): self.assertEqual(AGENT_COUNT, 50)\n",
+                        encoding="utf-8")
+                    checked = runner.run_unit_tests(real_root, timeout=300, sandbox="require")
+                    report["real_source_self_edit_test"] = checked["summary"]
+                    annotate("Sandboxed real source behavior test", json.dumps(checked["summary"]))
+                    if not checked["sandboxed"] or not checked["summary"]["passed"]:
+                        report["failures"].append("Real-source edit failed independent sandboxed behavior tests.")
+                except Exception as error:
+                    report["failures"].append(f"Real-source self-edit behavior test error: {error}")
             annotate("50-role mission", mission["summary"])
             expected_ids = {agent.agent_id for agent in AGENTS}
             role_ids = [item["agent_id"] for item in mission["runs"]]

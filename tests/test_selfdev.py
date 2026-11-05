@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from babymind import selfdev
+from babymind import sandbox, selfdev
 
 
 def _make_checkout(root: Path) -> None:
@@ -31,12 +31,34 @@ class SelfDevTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {
             "BABYMIND_DEV_ROOT": str(self.root),
             "BABYMIND_SELF_DEVELOPMENT_ENABLED": "true",
+            # Unit fixtures contain only trusted test code; boundary tests are separate.
+            "BABYMIND_SANDBOX": "off",
         })
         self.env.start()
 
     def tearDown(self) -> None:
         self.env.stop()
         self.temp.cleanup()
+
+    def test_default_and_invalid_sandbox_modes_fail_closed(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(selfdev.sandbox_mode(), "require")
+        with patch.dict(os.environ, {"BABYMIND_SANDBOX": "typo"}):
+            self.assertEqual(selfdev.sandbox_mode(), "require")
+
+    def test_self_edit_without_required_sandbox_does_not_write(self) -> None:
+        with patch.dict(os.environ, {"BABYMIND_SANDBOX": "require"}), \
+             patch.object(sandbox, "backend", return_value=sandbox.Backend("none", False, "blocked")):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "not verified"):
+                selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 2\n"}])
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+
+    def test_failed_boundary_probe_does_not_write(self) -> None:
+        with patch.dict(os.environ, {"BABYMIND_SANDBOX": "require"}), \
+             patch.object(sandbox, "self_test", return_value={"verified": False}):
+            with self.assertRaisesRegex(selfdev.SelfDevError, "not verified"):
+                selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 2\n"}])
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
 
     def test_status_reports_real_capabilities(self) -> None:
         report = selfdev.status()
@@ -211,6 +233,37 @@ class SelfDevTests(unittest.TestCase):
             with self.assertRaises(selfdev.SelfDevError):
                 selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 4\n"}])
 
+    def test_purge_bytecode_stays_within_source_and_tests(self) -> None:
+        for relative in ("src/babymind/__pycache__/a.pyc", "tests/__pycache__/b.pyc",
+                         ".venv/lib/__pycache__/keep.pyc", "vendor/__pycache__/keep.pyc",
+                         "state/__pycache__/keep.pyc", "__pycache__/keep.pyc"):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture")
+        selfdev.purge_bytecode(self.root)
+        self.assertFalse((self.root / "src/babymind/__pycache__").exists())
+        self.assertFalse((self.root / "tests/__pycache__").exists())
+        for relative in (".venv/lib/__pycache__/keep.pyc", "vendor/__pycache__/keep.pyc",
+                         "state/__pycache__/keep.pyc", "__pycache__/keep.pyc"):
+            self.assertTrue((self.root / relative).exists(), relative)
+
+    def test_symlink_components_are_rejected_even_within_workspace(self) -> None:
+        protected = self.root / "state" / "private.py"
+        protected.parent.mkdir()
+        protected.write_text("secret = True\n")
+        direct = self.root / "src" / "babymind" / "alias.py"
+        direct.symlink_to(protected)
+        linked_dir = self.root / "src" / "linked"
+        linked_dir.symlink_to(protected.parent, target_is_directory=True)
+        broken = self.root / "src" / "babymind" / "missing.py"
+        broken.symlink_to(self.root / "missing-target.py")
+        for path in ("src/babymind/alias.py", "src/linked/private.py", "src/babymind/missing.py"):
+            with self.subTest(path=path), self.assertRaisesRegex(selfdev.SelfDevError, "Symbolic links"):
+                selfdev.preview_edits([{"path": path, "content": "changed = True\n"}])
+            with self.subTest(path=path), self.assertRaisesRegex(selfdev.SelfDevError, "Symbolic links"):
+                selfdev.read_file(path)
+        self.assertEqual(protected.read_text(), "secret = True\n")
+
     def test_preview_reports_a_diff_without_writing(self) -> None:
         reviewed = selfdev.preview_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 5\n"}])
         self.assertIn("-VALUE = 1", reviewed[0]["diff"])
@@ -231,6 +284,45 @@ class SelfDevTests(unittest.TestCase):
         lines[0] = lines[0].replace('"label": "one"', '"label": "edited"')
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         self.assertFalse(selfdev.verify_audit_chain()["valid"])
+
+    def test_edit_that_removes_all_tests_is_rolled_back(self) -> None:
+        test_path = self.root / "tests" / "test_ok.py"
+        original = test_path.read_text()
+        result = selfdev.apply_edits([{"path": "tests/test_ok.py", "content": "# no tests\n"}])
+        self.assertEqual(result["status"], "rolled_back", result)
+        self.assertIn("runnable tests", result["reason"])
+        self.assertEqual(test_path.read_text(), original)
+
+    def test_edit_that_skips_an_existing_test_is_rolled_back(self) -> None:
+        (self.root / "tests" / "test_extra.py").write_text(
+            "import unittest\nclass Extra(unittest.TestCase):\n def test_more(self): pass\n")
+        test_path = self.root / "tests" / "test_ok.py"
+        original = test_path.read_text()
+        result = selfdev.apply_edits([{"path": "tests/test_ok.py", "content":
+            "import unittest\nclass Ok(unittest.TestCase):\n"
+            " @unittest.skip('disabled')\n def test_ok(self): pass\n"}])
+        self.assertEqual(result["status"], "rolled_back", result)
+        self.assertIn("skipped", result["reason"])
+        self.assertEqual(test_path.read_text(), original)
+
+    def test_crashed_post_edit_test_runner_is_rolled_back(self) -> None:
+        real_run = selfdev.runner.run_unit_tests
+        def run_then_crash(root, **kwargs):
+            result = real_run(root, **kwargs)
+            if (self.root / "src" / "babymind" / "mod.py").read_text() == "VALUE = 2\n":
+                result.update(ok=False, exit_code=-9, timed_out=False)
+            return result
+        with patch.object(selfdev.runner, "run_unit_tests", side_effect=run_then_crash):
+            result = selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 2\n"}])
+        self.assertEqual(result["status"], "rolled_back", result)
+        self.assertIn("did not complete", result["reason"])
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+
+    def test_empty_pre_edit_suite_blocks_write(self) -> None:
+        (self.root / "tests" / "test_ok.py").write_text("# no tests\n")
+        with self.assertRaisesRegex(selfdev.SelfDevError, "pre-edit test suite"):
+            selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 2\n"}])
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
 
     def test_preexisting_failure_does_not_block_a_good_change(self) -> None:
         (self.root / "tests" / "test_known_failure.py").write_text(

@@ -68,6 +68,7 @@ class MissionApiTests(unittest.TestCase):
             "BABYMIND_DEV_ROOT": str(self.checkout),
             "BABYMIND_SELF_DEVELOPMENT_ENABLED": "true",
             "BABYMIND_MISSION_MAX_SECONDS": "120",
+            "BABYMIND_SANDBOX": "off",  # trusted disposable API fixture
         })
         self.env.start()
         server.COORDINATOR.provider = FakeProvider()
@@ -171,6 +172,17 @@ class MissionApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("VALUE = 1", (self.checkout / "src" / "babymind" / "mod.py").read_text())
         self.assertEqual(rolled["status"], "rolled_back")
+
+    def test_dev_apply_cannot_disable_verification(self) -> None:
+        for value in (False, None, 0, "false"):
+            with self.subTest(value=value):
+                status, result = self.request("/api/dev/apply", {
+                    "edits": [{"path": "src/babymind/mod.py", "content": "VALUE = 42\n"}],
+                    "verify": value,
+                })
+                self.assertEqual(status, 400, result)
+                self.assertIn("verified", result["error"])
+                self.assertEqual((self.checkout / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
 
     def test_dev_preview_does_not_write(self) -> None:
         status, body = self.request("/api/dev/preview", {

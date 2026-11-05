@@ -87,9 +87,10 @@ for name, major, minor in (("null", 1, 3), ("zero", 1, 5), ("random", 1, 8), ("u
 
 os.makedirs(newroot + "/tmp", exist_ok=True)
 run("mount", "-t", "tmpfs", "tmpfs", newroot + "/tmp")
-# Re-expose any writable temp trees the command needs (for example a venv in /tmp).
-for path in spec.get("writable_tmp_binds", []):
-    bind(path, path, False)
+# Re-expose interpreter prefixes beneath /tmp after mounting the private tmpfs.
+# They are not part of the writable project and must remain read-only.
+for path in spec.get("temp_readonly_binds", []):
+    bind(path, path, True)
 
 os.makedirs(newroot + "/proc", exist_ok=True)
 run("mount", "-t", "proc", "proc", newroot + "/proc")
@@ -162,22 +163,22 @@ def available() -> bool:
 
 def _interpreter_binds() -> tuple[list[str], list[str]]:
     """Bind the running interpreter so venvs outside /usr still work inside."""
-    readonly, writable_tmp = [], []
+    readonly, readonly_tmp = [], []
     for prefix in dict.fromkeys([sys.prefix, sys.base_prefix]):
         if not prefix or prefix in {"/", "/usr", "/usr/local"}:
             continue
         if prefix.startswith(("/usr/", "/lib/", "/lib64/")):
             readonly.append(prefix)
         elif prefix.startswith("/tmp/"):
-            writable_tmp.append(prefix)
+            readonly_tmp.append(prefix)
         else:
             readonly.append(prefix)
-    return readonly, writable_tmp
+    return readonly, readonly_tmp
 
 
 def _spec(root: Path, cwd: Path, argv: list[str], env: dict[str, str],
           allow_network: bool) -> dict:
-    readonly, writable_tmp = _interpreter_binds()
+    readonly, readonly_tmp = _interpreter_binds()
     newroot = tempfile.mkdtemp(prefix=".babymind-sandbox-")
     return {
         "root": str(root),
@@ -186,7 +187,7 @@ def _spec(root: Path, cwd: Path, argv: list[str], env: dict[str, str],
         "env": env,
         "newroot": newroot,
         "readonly_binds": readonly,
-        "writable_tmp_binds": writable_tmp,
+        "temp_readonly_binds": readonly_tmp,
         "allow_local_network": allow_network,
         "cpu_seconds": DEFAULT_CPU_SECONDS,
         "fsize_bytes": DEFAULT_FSIZE_BYTES,
@@ -252,9 +253,24 @@ def self_test(root: str | Path | None = None) -> dict:
     from . import runner
 
     project = Path(root or Path.cwd()).resolve()
+    try:
+        host_network_ns = os.stat("/proc/self/ns/net").st_ino
+        # A real sentinel outside the project is needed: HOME is deliberately
+        # rewritten inside the sandbox, so probing ~/... proves nothing.
+        marker = tempfile.NamedTemporaryFile(prefix=".babymind-isolation-", dir=project.parent)
+    except OSError as error:
+        return {"verified": False, "backend": status.name, "checks": {},
+                "reason": f"Could not create an outside-workspace isolation probe: {error}"}
+    marker.write(b"sandbox isolation probe"); marker.flush()
+    marker_path = Path(marker.name).resolve()
+    if marker_path.is_relative_to(project):
+        marker.close()
+        return {"verified": False, "backend": status.name, "checks": {},
+                "reason": "Could not place the isolation probe outside the project."}
     probe = {
         "network": (
-            "import socket\n"
+            "import os, socket\n"
+            f"print('NAMESPACE_ISOLATED' if os.stat('/proc/self/ns/net').st_ino != {host_network_ns} else 'HOST_NAMESPACE')\n"
             "s = socket.socket(); s.settimeout(3)\n"
             "try:\n"
             "    s.connect(('1.1.1.1', 53)); print('REACHABLE')\n"
@@ -262,9 +278,11 @@ def self_test(root: str | Path | None = None) -> dict:
             "    print('BLOCKED', type(e).__name__)\n"
         ),
         "host_secret": (
-            "import os\n"
-            "target = os.path.join(os.path.expanduser('~'), '.babymind', 'memory.key')\n"
-            "print('READABLE' if os.path.exists(target) else 'BLOCKED')\n"
+            f"target = {str(marker_path)!r}\n"
+            "try:\n"
+            "    open(target, 'rb').read(); print('READABLE')\n"
+            "except OSError:\n"
+            "    print('BLOCKED')\n"
         ),
         "system_write": (
             "try:\n"
@@ -279,19 +297,24 @@ def self_test(root: str | Path | None = None) -> dict:
         ),
     }
     checks: dict[str, dict] = {}
-    for name, code in probe.items():
-        result = runner.run_command(
-            [sys.executable, "-c", code], cwd=project, allowed_root=project,
-            timeout=60, sandbox=True,
-        )
-        output = (result.get("stdout", "") + result.get("stderr", "")).strip()
-        checks[name] = {
-            "output": output[-300:],
-            "exit_code": result.get("exit_code"),
-            "ok": result.get("ok", False),
-        }
+    try:
+        for name, code in probe.items():
+            result = runner.run_command(
+                [sys.executable, "-c", code], cwd=project, allowed_root=project,
+                timeout=60, sandbox=True,
+            )
+            output = (result.get("stdout", "") + result.get("stderr", "")).strip()
+            checks[name] = {
+                "output": output[-300:],
+                "exit_code": result.get("exit_code"),
+                "ok": result.get("ok", False),
+            }
+    finally:
+        marker.close()
     verified = (
-        "BLOCKED" in checks["network"]["output"]
+        all(check["ok"] for check in checks.values())
+        and "NAMESPACE_ISOLATED" in checks["network"]["output"]
+        and "BLOCKED" in checks["network"]["output"]
         and "BLOCKED" in checks["host_secret"]["output"]
         and "BLOCKED" in checks["system_write"]["output"]
         and "WRITABLE" in checks["workspace_write"]["output"]
