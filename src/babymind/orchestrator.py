@@ -480,7 +480,10 @@ class Orchestrator:
             return {
                 "status": "applied",
                 "detail": (f"{len(result['files'])} file(s) changed and verified on attempt "
-                           f"{outcome['attempts']}; checkpoint {result['checkpoint_id']}."),
+                           f"{outcome['attempts']}; checkpoint {result['checkpoint_id']}."
+                           + (" Staged source only; the running packaged app is unchanged."
+                              if result.get("source_scope") == "staged-copy" else "")),
+                "source_scope": result.get("source_scope", "source-checkout"),
                 "checkpoint_id": result["checkpoint_id"],
                 "files": [item["path"] for item in result["files"]],
                 "tests": (result.get("tests") or {}).get("summary"),

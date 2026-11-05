@@ -203,6 +203,14 @@ def run_command(
     working = _resolve_cwd(cwd, allowed_root)
     command = [executable, *clean[1:]]
     child_env = _scrubbed_environment(env)
+    if getattr(sys, "frozen", False):
+        from . import packaged_dev
+        if Path(executable).resolve() == packaged_dev.python_path().resolve():
+            runtime_env = packaged_dev.python_environment()
+            project_pythonpath = child_env.get("PYTHONPATH")
+            child_env.update(runtime_env)
+            if project_pythonpath:
+                child_env["PYTHONPATH"] = project_pythonpath + os.pathsep + runtime_env["PYTHONPATH"]
 
     mode = _sandbox_mode(sandbox)
     sandboxed = False
@@ -272,7 +280,8 @@ def run_command(
 def venv_python() -> str:
     """Interpreter used for BabyMind's own test and compile commands."""
     if getattr(sys, "frozen", False):
-        raise RuntimeError("Source test execution is unavailable in the portable app; use a source checkout with Python.")
+        from . import packaged_dev
+        return str(packaged_dev.python_path())
     return sys.executable
 
 

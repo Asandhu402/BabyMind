@@ -151,7 +151,11 @@ def _linux_backend() -> Backend:
 
 def backend() -> Backend:
     if getattr(sys, "frozen", False):
-        return Backend("none", False, "The portable application cannot run the Python namespace launcher; use a source checkout.")
+        from . import packaged_dev
+        try:
+            packaged_dev.python_path()
+        except packaged_dev.PackagedDevelopmentError as error:
+            return Backend("none", False, str(error))
     if not sys.platform.startswith("linux"):
         return Backend("none", False, "Only Linux namespaces are supported.")
     return _linux_backend()
@@ -164,7 +168,12 @@ def available() -> bool:
 def _interpreter_binds() -> tuple[list[str], list[str]]:
     """Bind the running interpreter so venvs outside /usr still work inside."""
     readonly, readonly_tmp = [], []
-    for prefix in dict.fromkeys([sys.prefix, sys.base_prefix]):
+    if getattr(sys, "frozen", False):
+        from . import packaged_dev
+        prefixes = [str(packaged_dev.python_path().parents[1])]
+    else:
+        prefixes = [sys.prefix, sys.base_prefix]
+    for prefix in dict.fromkeys(prefixes):
         if not prefix or prefix in {"/", "/usr", "/usr/local"}:
             continue
         if prefix.startswith(("/usr/", "/lib/", "/lib64/")):
@@ -217,8 +226,13 @@ def wrap(argv: list[str], *, root: str | Path, cwd: str | Path | None = None,
     ]
     if not allow_network:
         command.append("--net")
-    command += [sys.executable, str(launcher)]
+    launcher_python = sys.executable
     outer_env = dict(os.environ)
+    if getattr(sys, "frozen", False):
+        from . import packaged_dev
+        launcher_python = str(packaged_dev.python_path())
+        outer_env.update(packaged_dev.python_environment())
+    command += [launcher_python, str(launcher)]
     outer_env["BABYMIND_SANDBOX_SPEC"] = json.dumps(spec)
     outer_env["BABYMIND_SANDBOX_LAUNCHER"] = str(launcher)
     return command, outer_env
@@ -302,7 +316,7 @@ def self_test(root: str | Path | None = None) -> dict:
     try:
         for name, code in probe.items():
             result = runner.run_command(
-                [sys.executable, "-c", code], cwd=project, allowed_root=project,
+                [runner.venv_python(), "-c", code], cwd=project, allowed_root=project,
                 timeout=60, sandbox=True,
             )
             output = (result.get("stdout", "") + result.get("stderr", "")).strip()

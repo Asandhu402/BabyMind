@@ -75,6 +75,8 @@ jobs:
           dist/BabyMind/llama.cpp/llama-server --version
           dist/BabyMind/BabyMind --check-package
           dist/BabyMind/BabyMind --check-desktop-deps
+      - name: Exercise packaged source staging in an isolated workspace
+        run: dist/BabyMind/BabyMind --check-dev-staging
       - name: Archive without losing executable permissions
         run: tar -C dist -czf dist/BabyMind-Linux-x86_64.tar.gz BabyMind
       - uses: actions/upload-artifact@v4

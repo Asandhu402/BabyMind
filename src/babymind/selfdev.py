@@ -69,6 +69,12 @@ def _flag_disabled() -> bool:
 
 def dev_root() -> Path:
     """Return the source checkout BabyMind may develop."""
+    if getattr(sys, "frozen", False):
+        from . import packaged_dev
+        try:
+            return packaged_dev.workspace()
+        except (OSError, packaged_dev.PackagedDevelopmentError) as error:
+            raise SelfDevError(str(error)) from error
     configured = os.getenv("BABYMIND_DEV_ROOT", "").strip()
     if configured:
         try:
@@ -92,8 +98,6 @@ def available() -> bool:
 
 
 def selfdev_enabled() -> bool:
-    if getattr(sys, "frozen", False):
-        return False
     if _flag_disabled():
         return False
     if _flag_enabled():
@@ -129,7 +133,7 @@ def _normalise(path: str) -> PurePosixPath:
         raise SelfDevError(f"Paths must be relative to the project: {path}")
     if any(part in {"", ".", ".."} for part in candidate.parts):
         raise SelfDevError(f"Paths cannot contain '.', '..', or empty segments: {path}")
-    if PROTECTED_PARTS & set(candidate.parts):
+    if PROTECTED_PARTS & set(candidate.parts) or ".babymind-development-workspace.json" in candidate.parts:
         raise SelfDevError(f"Protected path: {path}")
     if candidate.suffix.lower() in PROTECTED_SUFFIXES:
         raise SelfDevError(f"Binary, key, or database files are never edited: {path}")
@@ -503,8 +507,8 @@ def apply_edits(
     test_timeout: int = 300,
 ) -> dict:
     """Apply a validated multi-file transaction and verify it, or roll it back."""
-    if getattr(sys, "frozen", False):
-        raise SelfDevError("Self-development edits are unavailable in the portable app; use a source checkout with Python.")
+    if getattr(sys, "frozen", False) and not verify:
+        raise SelfDevError("Packaged source edits must be verified.")
     root = dev_root()
     require("repo.write", agent_id)
     if not selfdev_enabled():
@@ -668,6 +672,8 @@ def apply_edits(
     })
     return {
         "status": "applied",
+        "source_scope": "staged-copy" if getattr(sys, "frozen", False) else "source-checkout",
+        "updates_running_app": False if getattr(sys, "frozen", False) else None,
         "checkpoint_id": snapshot["id"],
         "files": [{"path": item["path"], "bytes_before": item["bytes_before"],
                    "bytes_after": item["bytes_after"], "created": not item["exists"]}
@@ -679,6 +685,8 @@ def apply_edits(
         "notice": (
             "Change applied and verified against the project's own test suite baseline. "
             f"Roll back with checkpoint {snapshot['id']} if needed."
+            + (" This is a staged source copy; the running packaged app is unchanged."
+               if getattr(sys, "frozen", False) else "")
         ),
     }
 
@@ -739,6 +747,8 @@ def status() -> dict:
         "enabled": enabled,
         "available": available(),
         "root": str(root) if root else None,
+        "source_scope": "staged-copy" if getattr(sys, "frozen", False) else "source-checkout",
+        "updates_running_app": False if getattr(sys, "frozen", False) else None,
         "can_read_source": enabled,
         "can_write_source": enabled,
         "automatic_verification": enabled,
@@ -767,6 +777,8 @@ def status() -> dict:
         "notice": (
             "Changes are checkpointed, compiled, and tested. A failing change is rolled back "
             "automatically. The engine runs with your user account's privileges."
+            + (" The packaged app edits a staged source copy only; it does not rebuild or update the running app."
+               if getattr(sys, "frozen", False) else "")
         ),
     }
 
@@ -796,6 +808,8 @@ def read_file(relative: str) -> dict:
 
 def sandbox_mode() -> str:
     """off | auto | require, from BABYMIND_SANDBOX (default require)."""
+    if getattr(sys, "frozen", False):
+        return "require"
     value = os.getenv("BABYMIND_SANDBOX", "require").strip().lower()
     return value if value in {"off", "auto", "require"} else "require"
 

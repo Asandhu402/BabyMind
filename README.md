@@ -51,13 +51,12 @@ desktop target.
   read-only GitHub research, and optional integrations exist. A review is model
   output, not independent verification; the autonomous development platform is
   not complete. See [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md).
-- Desktop command execution defaults to `BABYMIND_SANDBOX=require`, which
-  refuses execution because the Python-based namespace launcher is unavailable
-  in the frozen app. The source runner's
-  `auto` mode can fall back to unsandboxed execution; do not use it for untrusted
-  code. The portable executable is not a Python interpreter: source test runs
-  generated Python execution, and self-development edits are unavailable in the
-  portable app.
+- The portable build includes a Python helper and source seed for sandboxed
+  edits to a staged source copy. These edits do **not** rebuild or update the
+  running packaged app. The helper requires a verified Linux namespace sandbox;
+  it fails closed if the sandbox is unavailable. The source runner's `auto`
+  mode can fall back to unsandboxed execution; do not use it for untrusted code.
+  Packaged generated-app execution remains unavailable.
 - Data is in `~/.babymind` (or `BABYMIND_HOME`). Conversation and memory text
   are encrypted, but on Linux the key is a local file readable by your user;
   protect the account and back up databases **and** keys. Encryption is not a

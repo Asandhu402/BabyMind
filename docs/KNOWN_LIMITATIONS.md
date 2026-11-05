@@ -8,7 +8,7 @@ missing, not what is planned.
 - The supported portable target is Linux x86-64 with glibc 2.35+ and a graphical desktop. A hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response; a clean Ubuntu Desktop session and broader capabilities remain unverified.
 - There is no auto-updater, code signing, or self-repair supervisor.
 - Linux x86-64 is the sole supported desktop target.
-- The portable executable is not a Python interpreter. Source tests and generated Python app execution are unavailable in the portable build.
+- The portable executable is not itself a Python interpreter. A bundled Python helper supports sandboxed staged-source tests; generated Python app execution is still unavailable.
 
 ## Sandboxing and execution
 
@@ -18,9 +18,10 @@ missing, not what is planned.
   loopback. `self_test()` proves each of those four claims against the live
   kernel, and the sandboxed suite runs the same green result as an unsandboxed
   one.
-- **The frozen app cannot launch the namespace helper.** `BABYMIND_SANDBOX=require`
-  refuses commands there. In source mode, `auto` may fall back to unsandboxed
-  execution; never use that fallback for untrusted code.
+- The frozen app uses a bundled interpreter for the namespace helper. Packaged
+  self-development requires a successful boundary probe and fails closed when
+  unavailable. In source mode, `auto` may fall back to unsandboxed execution;
+  never use that fallback for untrusted code.
 - **Nested sandboxes fail closed to plain execution.** The kernel forbids user
   namespaces inside a user namespace, so a verification run started *by* a
   sandboxed process reports the backend as unavailable and executes inside the
@@ -39,9 +40,10 @@ missing, not what is planned.
 - **50 roles are 50 prompts over one model**, executed sequentially by default.
   There is no multi-model parallelism, no debate protocol beyond the shared
   digest, and no learned routing.
-- A mission only edits source when started with `self_edit: true`, in a source
-  checkout; the frozen desktop cannot self-edit. The loop attempts a patch
-  proposed by the Coding Agent, verified by compile and tests. After a failed
+- A mission only edits source when started with `self_edit: true`. The frozen
+  desktop edits a staged copy; it does not rebuild or activate those edits in the
+  running application. The loop attempts a patch proposed by the Coding Agent,
+  verified by compile and tests. After a failed
   verification it can request one repair and retry; malformed or unsafe proposals
   can stop the loop earlier. This is not an unrestricted iterative engineer.
 - The patch comes from a 4B-class local model. Expect small, local changes, not

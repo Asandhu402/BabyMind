@@ -143,8 +143,10 @@
       const isolation = box.available
         ? `Verification runs in the ${box.backend} sandbox (no network, system files read-only).`
         : `No OS sandbox on this platform (${box.detail || "backend unavailable"}); results say so.`;
+      const scope = report.source_scope === "staged-copy"
+        ? "Staged source only: changes do not update the running packaged app. " : "";
       selfdevStatus.textContent = report.enabled
-        ? `Enabled · ${report.root} · changes are checkpointed, compiled, tested and auto-rolled back on failure. ${isolation} Audit log ${report.audit.valid ? "intact" : "BROKEN"}.`
+        ? `Enabled · ${report.root} · ${scope}changes are checkpointed, compiled, tested and auto-rolled back on failure. ${isolation} Audit log ${report.audit.valid ? "intact" : "BROKEN"}.`
         : `Disabled${report.problem ? " · " + report.problem : ""}. Set BABYMIND_SELF_DEVELOPMENT_ENABLED=true in a source checkout.`;
       checkpointList.innerHTML = (report.checkpoints || []).map((item) =>
         `<div class="checkpoint-row"><span><strong>${escapeHTML(item.label || item.id)}</strong><small>${escapeHTML(item.created_at || "")} · ${item.file_count} files</small></span>

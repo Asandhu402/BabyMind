@@ -15,19 +15,21 @@ class FrozenSafetyTests(unittest.TestCase):
         self.assertFalse(result['ran'])
         self.assertIn('portable', result['reason'])
 
-    def test_no_frozen_interpreter_for_source_checks(self):
-        with patch.object(sys, 'frozen', True, create=True):
-            with self.assertRaisesRegex(RuntimeError, 'unavailable'):
+    def test_missing_bundled_interpreter_fails_closed(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(sys, 'frozen', True, create=True), \
+             patch('babymind.packaged_dev.app_directory', return_value=Path(root)):
+            with self.assertRaisesRegex(RuntimeError, 'missing or invalid'):
                 runner.venv_python()
 
-    def test_namespace_launcher_not_claimed_available(self):
-        with patch.object(sys, 'frozen', True, create=True):
+    def test_namespace_launcher_not_claimed_available_without_helper(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(sys, 'frozen', True, create=True), \
+             patch('babymind.packaged_dev.app_directory', return_value=Path(root)):
             self.assertFalse(sandbox.backend().available)
 
-    def test_self_edit_refused_before_files_touched(self):
+    def test_unverified_frozen_self_edit_refused_before_files_touched(self):
         with patch.object(sys, 'frozen', True, create=True), patch.object(selfdev, 'dev_root') as root:
-            with self.assertRaisesRegex(selfdev.SelfDevError, 'portable app'):
-                selfdev.apply_edits([])
+            with self.assertRaisesRegex(selfdev.SelfDevError, 'must be verified'):
+                selfdev.apply_edits([], verify=False)
             root.assert_not_called()
 
 class ModelDownloadSafetyTests(unittest.TestCase):

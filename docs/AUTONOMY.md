@@ -55,8 +55,9 @@ transaction has begun does not guarantee interruption of that transaction.
 
 The loop attempts at most two patches per mission, never bypasses verification,
 and records the outcome (`applied`, `rolled_back`, `no_change`, `rejected`,
-`skipped`). A malformed or unsafe patch changes nothing. This feature is
-unavailable in the frozen desktop application.
+`skipped`). A malformed or unsafe patch changes nothing. In the frozen desktop,
+the feature operates only on a managed staged source copy. It does not rebuild,
+replace, activate, or update the running application.
 
 The loop is still bounded by the model. A 4B model's patch that compiles and
 passes the suite is kept even if it is not the improvement you wanted; that is
@@ -145,7 +146,9 @@ backend uses:
 
 `GET /api/sandbox` reports the backend and mechanisms; `POST
 /api/sandbox/self-test` runs four live probes (network, host secret, system
-write, workspace write) and returns the raw output. The portable application cannot launch the namespace helper and `require` refuses to run commands there.
+write, workspace write) and returns the raw output. The portable build uses its
+bundled Python helper for the namespace launcher; packaged self-edits require
+the probes to pass and fail closed if they cannot.
 
 Two honest limits. Nested user namespaces are not permitted on this kernel, so a
 test run started from inside the sandbox reports the backend unavailable and

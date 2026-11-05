@@ -460,3 +460,30 @@ scenario with the production model; its result must be reported separately.
 The local Debian source-suite follow-up ran **355 tests, OK, 2 skipped** after
 these later changes. Its sandbox and model-verifier regression tests do not
 substitute for the ongoing hosted production-model runs.
+
+## Extended Ubuntu real-model follow-up
+
+[Run 41936720077](https://github.com/Asandhu402/BabyMind/actions/runs/41936720077)
+passed overall on commit `3a2350a`: the hosted Ubuntu 22.04 installer and
+virtual-display GUI returned `4`, the production model answered the three
+source-mode chat questions, and the generated `add` function and a disposable
+fixture source edit passed their independent sandboxed behavior tests. All 50
+roles returned nonempty text in 3,601.3 seconds. The role outputs were not
+independently verified work: several repeated each other and the final role
+claimed a nonexistent implementation was verified. This does not establish
+role competence or a ready self-upgrading desktop application.
+
+## Packaged source-staging development
+
+The Linux build now includes a dedicated Python helper and a source seed for a
+managed staging workspace. Packaged self-edit remains sandbox-required and
+will not fall back to unsandboxed execution. On the local Debian host, a
+simulated frozen process using the actual bundled helper passed live namespace
+probes, applied a deterministic edit to a temporary staged source copy, ran its
+source suite (359 tests, 18 skipped), and passed an independent sandboxed
+behavior check. This simulation used no model and did not exercise the actual
+PyInstaller executable. The local source suite later ran 360 tests, 2 skipped.
+
+The stage is not an application upgrade: no build, promotion, restart, or
+activation of modified code is implemented. In particular, these results do not
+show that the packaged app can safely modify the code it is currently running.

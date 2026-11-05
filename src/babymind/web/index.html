@@ -99,7 +99,7 @@
             <label for="missionBrief">Mission brief</label>
             <textarea id="missionBrief" class="integration-input" rows="4" maxlength="8000" placeholder="Build a complete inventory management application with a database, user accounts, reporting and backup."></textarea>
             <button class="task-primary" id="startMission" type="button">Start mission across 50 roles</button>
-            <label class="toggle-label mission-toggle" title="In a source checkout, attempt a patch with compile and test checks; the packaged desktop cannot self-edit"><input type="checkbox" id="missionSelfEdit"><span class="toggle"></span> Attempt a tested self-edit (source checkout only)</label>
+            <label class="toggle-label mission-toggle" title="Attempt a patch with compile and test checks. In the packaged app edits affect staged source only, not the running application."><input type="checkbox" id="missionSelfEdit"><span class="toggle"></span> Attempt a tested source edit</label>
             <button class="task-refresh" id="cancelMission" type="button" disabled>Cancel</button>
             <div class="setting-status" id="missionStatus">No mission running.</div>
             <div class="mission-progress"><div id="missionBar"></div></div>
@@ -107,7 +107,7 @@
           </article>
           <article class="settings-card">
             <div class="settings-icon">⟲</div><h3>Self-development</h3>
-            <p>In source mode, BabyMind can attempt edits that are checkpointed, compiled, and tested; failed checks trigger rollback. The packaged desktop cannot edit its own source. Passing tests do not prove an improvement is correct.</p>
+            <p>BabyMind can attempt source edits that are checkpointed, compiled, and tested; failed checks trigger rollback. The packaged desktop edits a staged source copy only and does not rebuild or update the running app. Passing tests do not prove an improvement is correct.</p>
             <div class="setting-status" id="selfdevStatus">Checking self-development engine…</div>
             <div class="checkpoint-list" id="checkpointList"></div>
             <button class="task-refresh" id="runTests" type="button">Run the test suite now</button>
