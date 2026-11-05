@@ -114,9 +114,10 @@
     status.textContent = "Queuing all 50 roles…";
     try {
       const selfEdit = Boolean($("#missionSelfEdit") && $("#missionSelfEdit").checked);
+      const graphMode = Boolean($("#missionGraphMode") && $("#missionGraphMode").checked);
       const created = await api("/api/missions", {
         method: "POST",
-        body: JSON.stringify({ brief: text, self_edit: selfEdit }),
+        body: JSON.stringify({ brief: text, self_edit: selfEdit, mode: graphMode ? "graph" : "batched" }),
       });
       cancelButton.disabled = false;
       status.textContent = `Running · mission ${created.id}`;
@@ -215,6 +216,25 @@
       ].filter(Boolean).join("\n");
       loadSelfDev();
     } catch (error) { resultBox.textContent = error.message; }
+  });
+
+  $("#verifyNow")?.addEventListener("click", async () => {
+    const output = $("#testOutput");
+    output.hidden = false;
+    output.textContent = "Verifying source (compile + tests + sandboxed behavior + sandbox boundary)…";
+    try {
+      const report = await api("/api/verify/run", { method: "POST", body: "{}" });
+      const tests = report.tests || {};
+      output.textContent = [
+        `Verification ${report.passed ? "PASSED" : "FAILED"} at ${report.root}`,
+        `Compile: ${report.compile_ok ? "ok" : "FAILED"}`,
+        `Tests: ran ${tests.ran || 0}, failures ${tests.failures || 0}, errors ${tests.errors || 0}`,
+        `Behavior: ${report.behavior.ok ? "ok" : "FAILED"} (${report.behavior.checked || 0} app(s) checked)`,
+        `Sandbox boundary: ${report.security.ok ? "verified" : "NOT verified"} (${report.security.backend})`,
+        report.fulfilment ? `Fulfilment review (preliminary): ${report.fulfilment.fulfilled ? "fulfilled" : "gaps found"} — ${report.fulfilment.gaps || report.fulfilment.evidence}` : "",
+      ].filter(Boolean).join("\n");
+      loadSelfDev();
+    } catch (error) { output.textContent = error.message; }
   });
 
   $("#previewWindow")?.addEventListener("click", async () => {
