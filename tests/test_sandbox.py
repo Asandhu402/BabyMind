@@ -28,6 +28,13 @@ class SandboxDetectionTests(unittest.TestCase):
             self.assertTrue(report["detail"])
             self.assertIn("not enforced", report["mechanisms"]["network"])
 
+    def test_non_system_interpreter_prefixes_are_read_only(self) -> None:
+        with patch.object(sandbox.sys, "prefix", "/work/venv"), \
+             patch.object(sandbox.sys, "base_prefix", "/opt/python"):
+            readonly, temp_readonly = sandbox._interpreter_binds()
+        self.assertEqual(readonly, ["/work/venv", "/opt/python"])
+        self.assertEqual(temp_readonly, [])
+
     def test_tmp_interpreter_prefix_is_not_a_writable_bind(self) -> None:
         with patch.object(sandbox.sys, "prefix", "/tmp/test-python-env"), \
              patch.object(sandbox.sys, "base_prefix", "/usr"):
@@ -129,9 +136,11 @@ class SandboxBoundaryTests(unittest.TestCase):
         with TemporaryDirectory(prefix="babymind-test-venv-") as prefix:
             target = Path(prefix) / "sentinel"
             target.write_text("original")
-            # Keep the real interpreter visible while simulating a second
-            # interpreter prefix under /tmp outside the workspace.
-            with patch.object(sandbox, "_interpreter_binds", return_value=([sys.prefix], [prefix])):
+            # Keep both the venv and its base interpreter visible; hosted Python
+            # can have a base prefix under /opt rather than /usr.
+            readonly, temp_readonly = sandbox._interpreter_binds()
+            with patch.object(sandbox, "_interpreter_binds",
+                              return_value=(readonly, temp_readonly + [prefix])):
                 result = self.run_in_sandbox(
                     f"p = {str(target)!r}\n"
                     "try:\n"
