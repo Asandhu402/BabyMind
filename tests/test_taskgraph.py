@@ -1,0 +1,84 @@
+"""Tests for the parallel task-graph runner."""
+from __future__ import annotations
+
+import threading
+import time
+import unittest
+
+from babymind.taskgraph import Task, TaskGraphError, TaskGraphRunner, validate_graph
+
+
+def sample_tasks():
+    return [
+        Task("a", "BM-01", "task a"),
+        Task("b", "BM-02", "task b"),
+        Task("c", "BM-03", "task c", depends_on=["a", "b"]),
+        Task("d", "BM-04", "task d", depends_on=["c"]),
+    ]
+
+
+class TaskGraphValidationTests(unittest.TestCase):
+    def test_cycle_is_rejected(self):
+        with self.assertRaises(TaskGraphError):
+            validate_graph([Task("a", "BM-01", "x", depends_on=["b"]),
+                            Task("b", "BM-02", "y", depends_on=["a"])])
+
+    def test_unknown_dependency_is_rejected(self):
+        with self.assertRaises(TaskGraphError):
+            validate_graph([Task("a", "BM-01", "x", depends_on=["nope"])])
+
+    def test_duplicate_ids_are_rejected(self):
+        with self.assertRaises(TaskGraphError):
+            validate_graph([Task("a", "BM-01", "x"), Task("a", "BM-02", "y")])
+
+
+class TaskGraphRunnerTests(unittest.TestCase):
+    def test_independent_tasks_run_in_parallel(self):
+        running = 0
+        peak = 0
+        lock = threading.Lock()
+
+        def worker(task, context):
+            nonlocal running, peak
+            with lock:
+                running += 1
+                peak = max(peak, running)
+            time.sleep(0.15)
+            with lock:
+                running -= 1
+            return f"done-{task.task_id}"
+
+        result = TaskGraphRunner(worker, max_workers=4).run(sample_tasks())
+        self.assertEqual(result["completed"], 4)
+        self.assertGreaterEqual(peak, 2, "independent tasks should overlap")
+        outputs = {t["task_id"]: t["output"] for t in result["tasks"]}
+        self.assertEqual(outputs["d"], "done-d")
+
+    def test_dependency_receives_completed_context(self):
+        seen = {}
+
+        def worker(task, context):
+            seen[task.task_id] = sorted(context)
+            return task.task_id
+
+        result = TaskGraphRunner(worker, max_workers=2).run(sample_tasks())
+        self.assertEqual(seen["c"], ["a", "b"])
+        self.assertEqual(seen["d"], ["a", "b", "c"])
+        self.assertEqual(result["completed"], 4)
+
+    def test_failed_dependency_skips_dependents(self):
+        def worker(task, context):
+            if task.task_id == "a":
+                raise RuntimeError("boom")
+            return task.task_id
+
+        result = TaskGraphRunner(worker, max_workers=2).run(sample_tasks())
+        self.assertEqual(result["failed"], 1)
+        statuses = {t["task_id"]: t["status"] for t in result["tasks"]}
+        self.assertEqual(statuses["c"], "skipped")
+        self.assertEqual(statuses["d"], "skipped")
+        self.assertEqual(statuses["b"], "completed")
+
+
+if __name__ == "__main__":
+    unittest.main()

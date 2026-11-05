@@ -863,6 +863,33 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/dev/tests":
                 from .selfdev import run_tests
                 self.send_json(run_tests(timeout=min(int(payload.get("timeout", 300) or 300), 600)))
+            elif path == "/api/taskgraph/run":
+                from .taskgraph import Task, TaskGraphRunner
+                raw = payload.get("tasks")
+                if not isinstance(raw, list):
+                    raise ValueError("Provide a 'tasks' list.")
+                tasks = [
+                    Task(task_id=str(t.get("id", "")), agent_id=str(t.get("agent_id", "BM-01")),
+                         brief=str(t.get("brief", "")), depends_on=[str(d) for d in t.get("depends_on", [])])
+                    for t in raw
+                ]
+                def worker(task, context):
+                    digest = "\n".join(f"- {tid}: {res.output[:200]}" for tid, res in context.items())
+                    prompt = task.brief + ("\n\nCompleted dependencies:\n" + digest if digest else "")
+                    return COORDINATOR.ask(task.agent_id, prompt).response
+                graph_runner = TaskGraphRunner(worker, max_workers=min(int(payload.get("max_workers", 4) or 4), 8))
+                self.send_json(graph_runner.run(tasks))
+            elif path == "/api/verify/run":
+                from . import verifier
+                from .selfdev import dev_root
+                root = str(payload.get("root", "")).strip() or str(dev_root())
+                self.send_json(verifier.verify(root, timeout=min(int(payload.get("timeout", 300) or 300), 600)))
+            elif path == "/api/verify/debug":
+                from . import verifier
+                report = payload.get("report")
+                if not isinstance(report, dict):
+                    raise ValueError("Provide the verification 'report' to debug.")
+                self.send_json(verifier.debug(report, coordinator=COORDINATOR))
             elif path == "/api/dev/preview-window":
                 from .upgrade import start_preview
                 self.send_json(start_preview())

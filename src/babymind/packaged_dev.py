@@ -93,9 +93,10 @@ def verify_packaged_staging() -> None:
                     or result.get("source_scope") != "staged-copy"
                     or not (result.get("tests") or {}).get("summary", {}).get("passed")):
                 raise PackagedDevelopmentError(f"Staged self-edit did not pass: {result.get('status')} {result.get('reason', '')}")
-            check = runner.run_command(
+            from . import broker
+            check = broker.execute(
                 [runner.venv_python(), "-c", "from babymind import _packaged_test_value; assert _packaged_test_value() == 42"],
-                cwd=root, allowed_root=root, timeout=60, env={"PYTHONPATH": str(root / "src")}, sandbox="require")
+                cwd=root, allowed_root=root, timeout=60, env={"PYTHONPATH": str(root / "src")}, sandbox_mode="require")
             if not check["ok"] or not check["sandboxed"]:
                 raise PackagedDevelopmentError("Independent sandboxed staged-source behavior check failed: " + check.get("stderr", "")[-1000:])
             if (app_directory() / "dev-source-seed/src/babymind/__init__.py").read_text(encoding="utf-8") != seed_original:

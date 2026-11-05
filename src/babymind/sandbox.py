@@ -361,9 +361,10 @@ def self_test(root: str | Path | None = None) -> dict:
     checks: dict[str, dict] = {}
     try:
         for name, code in probe.items():
-            result = runner.run_command(
+            from . import broker
+            result = broker.execute(
                 [runner.venv_python(), "-c", code], cwd=project, allowed_root=project,
-                timeout=60, sandbox=True,
+                timeout=60, sandbox_mode=True,
             )
             output = (result.get("stdout", "") + result.get("stderr", "")).strip()
             checks[name] = {

@@ -22,7 +22,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from . import runner
+from . import broker, runner
 from .agents import require
 
 STATE_DIRNAME = "state"
@@ -529,7 +529,7 @@ def apply_edits(
     before_summary = None
     before_problems: set[str] = set()
     if verify:
-        before = runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())
+        before = broker.run_unit_tests(root, timeout=test_timeout, sandbox_mode=sandbox_mode())
         if not _suite_completed(before):
             raise SelfDevError("The pre-edit test suite did not complete with runnable tests; no edit was applied.")
         before_summary = before["summary"]
@@ -602,14 +602,14 @@ def apply_edits(
 
     try:
         purge_bytecode(root)
-        compile_result = runner.run_compile_check(root, sandbox=sandbox_mode())
+        compile_result = broker.run_compile_check(root, sandbox_mode=sandbox_mode())
         tests_result = None
         failure = ""
         if not compile_result["ok"]:
             failure = "compile check failed"
         elif verify:
             purge_bytecode(root)  # never verify against stale bytecode
-            tests_result = runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())
+            tests_result = broker.run_unit_tests(root, timeout=test_timeout, sandbox_mode=sandbox_mode())
             summary = tests_result["summary"]
             # A pre-existing broken test in this environment must not block every
             # change forever; only a *new* problem counts as a regression.
@@ -726,7 +726,7 @@ def purge_bytecode(root: Path) -> int:
 
 def run_tests(timeout: int = 300) -> dict:
     root = dev_root()
-    result = runner.run_unit_tests(root, timeout=timeout, sandbox=sandbox_mode())
+    result = broker.run_unit_tests(root, timeout=timeout, sandbox_mode=sandbox_mode())
     _append_audit(root, {"action": "run_tests", "passed": result["summary"]["passed"],
                          "ran": result["summary"]["ran"]})
     return result
