@@ -32,6 +32,9 @@ def make_checkout(root: Path, *, broken: bool = False) -> None:
 
 class VerifierTests(unittest.TestCase):
     def test_verify_passes_on_healthy_checkout(self):
+        from babymind import sandbox
+        if not sandbox.available():
+            self.skipTest("no OS sandbox backend in this environment")
         with TemporaryDirectory() as tmp:
             make_checkout(Path(tmp))
             report = verifier.verify(tmp, timeout=120)
@@ -39,6 +42,9 @@ class VerifierTests(unittest.TestCase):
             self.assertTrue(report["sandboxed"])
 
     def test_verify_fails_on_broken_checkout(self):
+        from babymind import sandbox
+        if not sandbox.available():
+            self.skipTest("no OS sandbox backend in this environment")
         with TemporaryDirectory() as tmp:
             make_checkout(Path(tmp), broken=True)
             report = verifier.verify(tmp, timeout=120)
@@ -65,6 +71,9 @@ if __name__ == "__main__":
 
 class VerifierDepthTests(unittest.TestCase):
     def test_verify_includes_security_and_behavior_sections(self):
+        from babymind import sandbox
+        if not sandbox.available():
+            self.skipTest("no OS sandbox backend in this environment")
         with TemporaryDirectory() as tmp:
             make_checkout(Path(tmp))
             report = verifier.verify(tmp, timeout=120)
@@ -74,6 +83,9 @@ class VerifierDepthTests(unittest.TestCase):
             self.assertTrue(report["behavior"]["ok"])
 
     def test_fulfilment_check_uses_coordinator_and_never_self_attests(self):
+        from babymind import sandbox
+        if not sandbox.available():
+            self.skipTest("no OS sandbox backend in this environment")
         with TemporaryDirectory() as tmp:
             make_checkout(Path(tmp))
             verdict = '{"fulfilled": true, "evidence": "tests pass", "gaps": ""}'
@@ -85,6 +97,9 @@ class VerifierDepthTests(unittest.TestCase):
 
 class VerifierBehaviorAllAppsTests(unittest.TestCase):
     def test_behavior_check_covers_all_generated_apps(self):
+        from babymind import sandbox
+        if not sandbox.available():
+            self.skipTest("no OS sandbox backend in this environment")
         with TemporaryDirectory() as tmp:
             make_checkout(Path(tmp))
             apps = Path(tmp) / "apps"
