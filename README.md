@@ -65,4 +65,4 @@ desktop target.
   assess them before redistribution. This repository currently has no top-level
   license file. No license to redistribute the project is implied.
 
-See [security policy](SECURITY.md) and [known limitations](docs/KNOWN_LIMITATIONS.md). Research answers follow the [source-quality and citation policy](docs/RESEARCH_SOURCE_POLICY.md).
+See [security policy](SECURITY.md), [known limitations](docs/KNOWN_LIMITATIONS.md), and the [production readiness programme](docs/PRODUCTION_READINESS.md). Research answers follow the [source-quality and citation policy](docs/RESEARCH_SOURCE_POLICY.md).
