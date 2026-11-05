@@ -53,3 +53,20 @@ class BrokerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BrokerAuditTests(unittest.TestCase):
+    def test_unit_test_wrapper_records_decision(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src" / "babymind").mkdir(parents=True)
+            (root / "tests").mkdir()
+            (root / "src" / "babymind" / "__init__.py").write_text("", encoding="utf-8")
+            (root / "tests" / "test_ok.py").write_text(
+                "import unittest\n\nclass Ok(unittest.TestCase):\n    def test_ok(self): pass\n",
+                encoding="utf-8")
+            before = broker.status()["decisions_total"]
+            broker.run_unit_tests(root, timeout=60, sandbox_mode="off")
+            after = broker.status()
+            self.assertGreater(after["decisions_total"], before)
+            self.assertEqual(after["recent_decisions"][-1]["decision"], "allowed")

@@ -82,3 +82,30 @@ class TaskGraphRunnerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TaskGraphCancellationTests(unittest.TestCase):
+    def test_registered_graph_can_be_cancelled_by_id(self):
+        from babymind import taskgraph
+        started = threading.Event()
+
+        def worker(task, context):
+            started.set()
+            time.sleep(5)
+            return task.task_id
+
+        runner = TaskGraphRunner(worker, max_workers=1)
+        result_box = {}
+
+        def run():
+            result_box["result"] = runner.run([Task("only", "BM-01", "slow")], graph_id="g1")
+
+        t = threading.Thread(target=run)
+        t.start()
+        started.wait(5)
+        outcome = taskgraph.cancel_running("g1")
+        self.assertTrue(outcome["cancelled"])
+        t.join(10)
+        self.assertFalse(t.is_alive())
+        self.assertTrue(result_box["result"]["cancelled"])
+        self.assertEqual(taskgraph.cancel_running("g1")["cancelled"], False)

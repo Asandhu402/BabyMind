@@ -326,3 +326,21 @@ class SelfEditLoopTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GraphMissionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory()
+        self.store = MissionStore(self.temp.name)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_graph_mode_records_all_50_roles(self) -> None:
+        provider = FakeProvider()
+        orchestrator = Orchestrator(provider, self.store, max_seconds=300)
+        mission = orchestrator.run_now(BRIEF, mode="graph")
+        self.assertEqual(mission["status"], "completed")
+        self.assertEqual(mission["agents_recorded"], 50)
+        self.assertIn("task-graph mode", mission["summary"])
+        self.assertEqual(provider.calls, 50)

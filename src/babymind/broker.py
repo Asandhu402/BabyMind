@@ -66,12 +66,30 @@ def execute(argv: list[str], *, cwd: str | Path | None = None,
 
 def run_unit_tests(root, *, timeout: int = DEFAULT_TIMEOUT, sandbox_mode: str = "require") -> dict:
     """Gateway wrapper: unit tests only run through the broker, sandboxed by default."""
-    return runner.run_unit_tests(root, timeout=timeout, sandbox=sandbox_mode)
+    try:
+        result = runner.run_unit_tests(root, timeout=timeout, sandbox=sandbox_mode)
+        _record({"ts": time.time(), "argv": [f"unittest:{root}"], "decision": "allowed",
+                 "sandboxed": result.get("sandboxed"), "sandbox": result.get("sandbox"),
+                 "exit_code": 0 if result.get("summary", {}).get("passed") else 1})
+        return result
+    except runner.CommandRejected as error:
+        _record({"ts": time.time(), "argv": [f"unittest:{root}"], "decision": "refused",
+                 "reason": str(error), "sandboxed": False})
+        raise
 
 
 def run_compile_check(root, *, sandbox_mode: str = "require") -> dict:
     """Gateway wrapper: compile checks only run through the broker, sandboxed by default."""
-    return runner.run_compile_check(root, sandbox=sandbox_mode)
+    try:
+        result = runner.run_compile_check(root, sandbox=sandbox_mode)
+        _record({"ts": time.time(), "argv": [f"compileall:{root}"], "decision": "allowed",
+                 "sandboxed": result.get("sandboxed"), "sandbox": result.get("sandbox"),
+                 "exit_code": result.get("exit_code")})
+        return result
+    except runner.CommandRejected as error:
+        _record({"ts": time.time(), "argv": [f"compileall:{root}"], "decision": "refused",
+                 "reason": str(error), "sandboxed": False})
+        raise
 
 
 def status() -> dict:

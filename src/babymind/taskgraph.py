@@ -13,7 +13,30 @@ from concurrent.futures import ThreadPoolExecutor, Future, wait, FIRST_COMPLETED
 from dataclasses import dataclass, field
 
 MAX_TASKS = 50
-MAX_DEPENDS = 10
+MAX_DEPENDS = 60  # a phase-to-phase graph can depend on a whole previous phase
+
+# Registry of in-flight graphs so HTTP callers can cancel them by id.
+_RUNNING: dict[str, "TaskGraphRunner"] = {}
+_REGISTRY_LOCK = threading.Lock()
+
+
+def register(graph_id: str, runner: "TaskGraphRunner") -> None:
+    with _REGISTRY_LOCK:
+        _RUNNING[graph_id] = runner
+
+
+def cancel_running(graph_id: str) -> dict:
+    with _REGISTRY_LOCK:
+        runner = _RUNNING.get(graph_id)
+    if runner is None:
+        return {"cancelled": False, "notice": f"No running task graph with id {graph_id}."}
+    runner.cancel()
+    return {"cancelled": True, "notice": "Cancellation requested; running tasks finish or hit their timeout, pending tasks are skipped."}
+
+
+def unregister(graph_id: str) -> None:
+    with _REGISTRY_LOCK:
+        _RUNNING.pop(graph_id, None)
 
 
 class TaskGraphError(ValueError):
@@ -86,8 +109,17 @@ class TaskGraphRunner:
     def cancel(self) -> None:
         self._cancelled = True
 
-    def run(self, tasks: list[Task]) -> dict:
+    def run(self, tasks: list[Task], *, graph_id: str | None = None) -> dict:
         validate_graph(tasks)
+        if graph_id:
+            register(graph_id, self)
+        try:
+            return self._execute(tasks)
+        finally:
+            if graph_id:
+                unregister(graph_id)
+
+    def _execute(self, tasks: list[Task]) -> dict:
         by_id = {t.task_id: t for t in tasks}
         results: dict[str, TaskResult] = {}
         pending = set(by_id)
