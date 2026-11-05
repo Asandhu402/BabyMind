@@ -191,6 +191,24 @@ def available() -> bool:
     return backend().available
 
 
+def nested_sandbox_detected() -> bool:
+    """True when BabyMind itself appears to run inside a container/VM sandbox.
+
+    Namespaces created inside an existing sandbox are weaker (no cgroup or
+    device isolation from the outer boundary); this only detects and reports
+    the nesting, it does not remove it.
+    """
+    if os.path.exists("/.dockerenv"):
+        return True
+    if os.environ.get("container"):
+        return True
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return any(marker in cgroup for marker in ("docker", "containerd", "kubepods", "lxc"))
+
+
 def _interpreter_binds() -> tuple[list[str], list[str]]:
     """Bind the running interpreter so venvs outside /usr still work inside."""
     readonly, readonly_tmp = [], []
@@ -380,6 +398,7 @@ def status(probe: bool = False) -> dict:
         "backend": record.name,
         "available": record.available,
         "detail": record.detail,
+        "nested_sandbox_detected": nested_sandbox_detected(),
         "mechanisms": {
             "filesystem": "separate mount namespace with a tmpfs root, read-only system binds, "
                           "and only the project directory writable"

@@ -123,8 +123,9 @@ without passing verification.
 `runner.py` enforces an allowlist (Python, Node, Git, CMake, pytest by default),
 requires the working directory to be inside the allowed root, scrubs the
 environment to non-secret variables, caps output at 40,000 characters, and kills
-the process tree on timeout. On POSIX it also sets CPU, file-size, and
-open-file rlimits.
+the process tree on timeout. On POSIX it also sets CPU, file-size, open-file,
+address-space (RLIMIT_AS), heap (RLIMIT_DATA) and process-count (RLIMIT_NPROC)
+rlimits.
 
 Self-development compile and test runs default to `BABYMIND_SANDBOX=require`
 and fail if the OS sandbox is unavailable. Explicitly setting `auto` allows
@@ -140,9 +141,12 @@ backend uses:
   connections fail with `OSError`.
 - `/proc` is a fresh procfs; `/dev` holds `null`, `zero`, `random`, `urandom`;
   `/tmp` is an empty tmpfs.
-- RLIMIT_CPU (300 s), RLIMIT_FSIZE (128 MB) and RLIMIT_NOFILE are set, the pid
-  namespace kills leftover children, and the launcher file is removed in a
-  `finally` block.
+- RLIMIT_CPU (300 s), RLIMIT_FSIZE (128 MB), RLIMIT_NOFILE (512), RLIMIT_AS and
+  RLIMIT_DATA (2 GiB address-space/heap cap by default, overridable with
+  `BABYMIND_SANDBOX_MEM_BYTES`) and RLIMIT_NPROC (256) are set; each soft cap is
+  clamped to the inherited hard limit and any limit the kernel refuses is
+  reported on stderr as `LIMIT_FAILED`. The pid namespace kills leftover
+  children, and the launcher file is removed in a `finally` block.
 
 `GET /api/sandbox` reports the backend and mechanisms; `POST
 /api/sandbox/self-test` runs four live probes (network, host secret, system
@@ -150,10 +154,12 @@ write, workspace write) and returns the raw output. The portable build uses its
 bundled Python helper for the namespace launcher; packaged self-edits require
 the probes to pass and fail closed if they cannot.
 
-Two honest limits. Nested user namespaces are not permitted on this kernel, so a
-test run started from inside the sandbox reports the backend unavailable and
-falls back to a plain child process — still inside the outer namespace, but not a
-second layer of isolation. And the limits are rlimits, not cgroup memory caps.
+Two honest limits. Nested sandbox operation (BabyMind running inside a
+container/VM) is now detected and reported by `sandbox.status()` and
+`/api/broker/status`, but nested user namespaces still provide no second layer
+of isolation — an inner sandbox remains weaker than a non-nested one. And the
+limits are rlimits, not cgroups: RLIMIT_AS/RLIMIT_DATA cap virtual address space
+and heap, not physical RAM, which would require cgroup memory delegation.
 
 ## Research and open-source reuse
 

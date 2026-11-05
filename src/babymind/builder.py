@@ -336,20 +336,20 @@ def _run_entry(app_dir: Path, entry: str) -> dict:
         return {"ran": False, "reason": "Running generated code is unavailable in the portable app; a frozen executable is not a Python interpreter."}
     if not entry.endswith(".py"):
         return {"ran": False, "reason": "No Python entry point in this plan."}
+    from . import broker
     from . import runner
-    from . import sandbox as sandboxing
 
     shown = f"{Path(sys.executable).name} -u {entry}"
     try:
-        result = runner.run_command(
+        result = broker.execute(
             [sys.executable, "-u", entry],
             cwd=app_dir,
             allowed_root=app_dir,
             timeout=BUILD_TIMEOUT_SECONDS,
             env=_scrubbed_environment(),
-            sandbox="require",
+            sandbox_mode="require",
         )
-    except runner.CommandRejected as error:
+    except (runner.CommandRejected, broker.BrokerError) as error:
         return {
             "ran": False,
             "command": shown,
