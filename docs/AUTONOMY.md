@@ -47,10 +47,17 @@ self-edit**) closes the loop:
    compile → test → keep, or automatic rollback. After a failed verification,
    the model can receive the failure and propose one repair attempt.
 
+If a role errors, the time budget expires, or the mission is cancelled before
+self-edit begins, the self-edit is skipped and recorded; it is not attempted
+with a partial set of role responses. A complete set is still unverified model
+text, not proof of competent independent review. Cancellation after a patch
+transaction has begun does not guarantee interruption of that transaction.
+
 The loop attempts at most two patches per mission, never bypasses verification,
 and records the outcome (`applied`, `rolled_back`, `no_change`, `rejected`,
-`skipped`). A malformed or unsafe patch changes nothing. This feature is
-unavailable in the frozen desktop application.
+`skipped`). A malformed or unsafe patch changes nothing. In the frozen desktop,
+the feature operates only on a managed staged source copy. It does not rebuild,
+replace, activate, or update the running application.
 
 The loop is still bounded by the model. A 4B model's patch that compiles and
 passes the suite is kept even if it is not the improvement you wanted; that is
@@ -66,7 +73,10 @@ Every write to BabyMind's own source follows the same path:
    SHA-256 manifest.
 3. Write each file atomically (`os.replace`), never through a symlink.
 4. Run `python -m compileall -q src tests`.
-5. Run the project's own unittest suite (`python -m unittest discover`).
+5. Run the project's own unittest suite (`python -m unittest discover`). The
+   pre-edit and post-edit runs must complete with runnable tests; fewer tests,
+   fewer non-skipped tests, or a newly failing test is a regression. Existing
+   failures are compared using unittest's reported failure headings.
 6. On any failure: **restore the checkpoint automatically**, remove files the
    transaction created, and append `auto_rollback` to the audit log.
 7. On success: append `applied` with the changed files and test count.
@@ -98,8 +108,12 @@ without passing verification.
   the code it writes.
 - It does not understand its own architecture magically. The model proposes; the
   test suite decides.
-- It cannot recover a change that passes the tests but is wrong. Tests are
-  necessary, not sufficient.
+- It cannot recover a change that passes the tests but is wrong. Test counts
+  do not prove that assertions or test identities were preserved, and model
+  output is not independent verification. Tests are necessary, not sufficient.
+- Tests run with write access to the designated project root. A hostile test
+  can change other files there; rollback of an edit does not restore unrelated
+  changes. Use a disposable checkout and keep independent backups.
 - Rollback restores the checkpoint. If a transaction crashes between writing a
   file and recording the checkpoint's `created` list, a newly created file can
   survive a rollback; its contents are still recorded in the audit log.
@@ -112,9 +126,11 @@ environment to non-secret variables, caps output at 40,000 characters, and kills
 the process tree on timeout. On POSIX it also sets CPU, file-size, and
 open-file rlimits.
 
-Every command, compile check, and test run goes through `sandbox.py` when a
-backend exists (`BABYMIND_SANDBOX=auto` by default, `require` to fail closed,
-`off` to disable). On Linux the backend is real:
+Self-development compile and test runs default to `BABYMIND_SANDBOX=require`
+and fail if the OS sandbox is unavailable. Explicitly setting `auto` allows
+an unsandboxed fallback, and `off` disables it; neither is safe for untrusted
+code. Other command-runner callers choose their own policy. On Linux the
+backend uses:
 
 - `unshare --user --map-root-user --mount --pid --fork --kill-child --net`, a
   generated launcher, then `chroot` into a fresh tmpfs root.
@@ -130,7 +146,9 @@ backend exists (`BABYMIND_SANDBOX=auto` by default, `require` to fail closed,
 
 `GET /api/sandbox` reports the backend and mechanisms; `POST
 /api/sandbox/self-test` runs four live probes (network, host secret, system
-write, workspace write) and returns the raw output. The portable application cannot launch the namespace helper and `require` refuses to run commands there.
+write, workspace write) and returns the raw output. The portable build uses its
+bundled Python helper for the namespace launcher; packaged self-edits require
+the probes to pass and fail closed if they cannot.
 
 Two honest limits. Nested user namespaces are not permitted on this kernel, so a
 test run started from inside the sandbox reports the backend unavailable and

@@ -69,6 +69,12 @@ def _flag_disabled() -> bool:
 
 def dev_root() -> Path:
     """Return the source checkout BabyMind may develop."""
+    if getattr(sys, "frozen", False):
+        from . import packaged_dev
+        try:
+            return packaged_dev.workspace()
+        except (OSError, packaged_dev.PackagedDevelopmentError) as error:
+            raise SelfDevError(str(error)) from error
     configured = os.getenv("BABYMIND_DEV_ROOT", "").strip()
     if configured:
         try:
@@ -92,8 +98,6 @@ def available() -> bool:
 
 
 def selfdev_enabled() -> bool:
-    if getattr(sys, "frozen", False):
-        return False
     if _flag_disabled():
         return False
     if _flag_enabled():
@@ -129,7 +133,7 @@ def _normalise(path: str) -> PurePosixPath:
         raise SelfDevError(f"Paths must be relative to the project: {path}")
     if any(part in {"", ".", ".."} for part in candidate.parts):
         raise SelfDevError(f"Paths cannot contain '.', '..', or empty segments: {path}")
-    if PROTECTED_PARTS & set(candidate.parts):
+    if PROTECTED_PARTS & set(candidate.parts) or ".babymind-development-workspace.json" in candidate.parts:
         raise SelfDevError(f"Protected path: {path}")
     if candidate.suffix.lower() in PROTECTED_SUFFIXES:
         raise SelfDevError(f"Binary, key, or database files are never edited: {path}")
@@ -141,15 +145,18 @@ def _normalise(path: str) -> PurePosixPath:
 def resolve_path(root: Path, relative: str) -> Path:
     """Resolve a project-relative path, refusing anything outside the root."""
     candidate = _normalise(relative)
-    target = (root / Path(*candidate.parts)).resolve()
-    if not target.is_relative_to(root.resolve()):
-        raise SelfDevError("The resolved path is outside the development root.")
-    for parent in [target, *target.parents]:
-        if parent == root.resolve():
-            break
-        if parent.exists() and parent.is_symlink():
+    resolved_root = root.resolve()
+    target = resolved_root
+    # Inspect the original components before resolving: resolve() erases the
+    # symlink evidence, including links to protected paths inside the root.
+    for part in candidate.parts:
+        target = target / part
+        if target.is_symlink():
             raise SelfDevError("Symbolic links are not supported in the development workspace.")
-    return target
+    resolved_target = target.resolve()
+    if not resolved_target.is_relative_to(resolved_root):
+        raise SelfDevError("The resolved path is outside the development root.")
+    return resolved_target
 
 
 # --------------------------------------------------------------------------- audit
@@ -171,6 +178,26 @@ def load_test_baseline() -> dict | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def _test_problem_ids(result: dict) -> set[str]:
+    """Extract unittest's failure/error headings for baseline comparison."""
+    import re
+    return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", result.get("stderr") or "", re.MULTILINE))
+
+
+def _suite_completed(result: dict) -> bool:
+    """Reject empty, interrupted and unaccounted-for test runs.
+
+    An ordinary unittest exit of 1 can be a known failing baseline. A timeout,
+    crash or an empty/all-skipped suite is not evidence of verification.
+    """
+    summary = result["summary"]
+    if summary["ran"] <= summary.get("skipped", 0) or result.get("timed_out"):
+        return False
+    if summary["problems"] and len(_test_problem_ids(result)) < summary["problems"]:
+        return False  # Missing/truncated failure evidence cannot be compared.
+    return bool(result.get("ok")) or (result.get("exit_code") == 1 and summary["problems"] > 0)
 
 
 def _record_baseline(root: Path, summary: dict) -> dict:
@@ -480,19 +507,34 @@ def apply_edits(
     test_timeout: int = 300,
 ) -> dict:
     """Apply a validated multi-file transaction and verify it, or roll it back."""
-    if getattr(sys, "frozen", False):
-        raise SelfDevError("Self-development edits are unavailable in the portable app; use a source checkout with Python.")
+    if getattr(sys, "frozen", False) and not verify:
+        raise SelfDevError("Packaged source edits must be verified.")
     root = dev_root()
     require("repo.write", agent_id)
     if not selfdev_enabled():
         raise SelfDevError("Self-development is disabled by configuration.")
     reviewed = preview_edits(edits)
+    if sandbox_mode() == "require":
+        from . import sandbox
+        try:
+            evidence = sandbox.self_test(root)
+        except Exception as error:
+            raise SelfDevError(f"Sandbox boundary probe failed; no edit was applied: {error}") from error
+        if not evidence.get("verified"):
+            raise SelfDevError("Sandbox boundary was not verified; no edit was applied: "
+                               + str(evidence.get("reason") or "one or more probes failed"))
     # Establish the expected baseline BEFORE the change lands, so a failure the
     # change introduces can never be mistaken for a pre-existing one.
     baseline = load_test_baseline()
-    if verify and baseline is None:
-        baseline = _record_baseline(
-            root, runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())["summary"])
+    before_summary = None
+    before_problems: set[str] = set()
+    if verify:
+        before = runner.run_unit_tests(root, timeout=test_timeout, sandbox=sandbox_mode())
+        if not _suite_completed(before):
+            raise SelfDevError("The pre-edit test suite did not complete with runnable tests; no edit was applied.")
+        before_summary = before["summary"]
+        before_problems = _test_problem_ids(before)
+        baseline = _record_baseline(root, before_summary)
     snapshot = checkpoint(
         label=f"pre-apply: {reason or 'self-development'}",
         reason=reason,
@@ -571,13 +613,19 @@ def apply_edits(
             summary = tests_result["summary"]
             # A pre-existing broken test in this environment must not block every
             # change forever; only a *new* problem counts as a regression.
-            if summary["ran"] == 0 and not summary["passed"]:
-                failure = "test suite could not run"
+            if not _suite_completed(tests_result):
+                failure = "test suite did not complete with runnable tests"
+            elif (summary["ran"] < before_summary["ran"]
+                  or summary["ran"] - summary.get("skipped", 0)
+                  < before_summary["ran"] - before_summary.get("skipped", 0)):
+                failure = "test suite regressed: fewer tests ran or more tests were skipped"
             elif summary["problems"] > (baseline or {}).get("problems", 0):
                 failure = (
                     f"test suite regressed: {summary['problems']} problems "
                     f"(baseline {(baseline or {}).get('problems', 0)})"
                 )
+            elif _test_problem_ids(tests_result) - before_problems:
+                failure = "test suite regressed: a previously passing test now fails"
             else:
                 baseline = _record_baseline(root, summary)
     except Exception as error:
@@ -624,6 +672,8 @@ def apply_edits(
     })
     return {
         "status": "applied",
+        "source_scope": "staged-copy" if getattr(sys, "frozen", False) else "source-checkout",
+        "updates_running_app": False if getattr(sys, "frozen", False) else None,
         "checkpoint_id": snapshot["id"],
         "files": [{"path": item["path"], "bytes_before": item["bytes_before"],
                    "bytes_after": item["bytes_after"], "created": not item["exists"]}
@@ -635,32 +685,42 @@ def apply_edits(
         "notice": (
             "Change applied and verified against the project's own test suite baseline. "
             f"Roll back with checkpoint {snapshot['id']} if needed."
+            + (" This is a staged source copy; the running packaged app is unchanged."
+               if getattr(sys, "frozen", False) else "")
         ),
     }
 
 
 def purge_bytecode(root: Path) -> int:
-    """Delete cached bytecode so verification can never read a stale module.
+    """Delete source/test bytecode caches to avoid stale verification.
 
     Python validates a cached .pyc with the source's mtime (whole seconds) and
     size. A same-size edit inside the same second would otherwise be verified
     against the previous bytecode.
     """
     removed = 0
-    for directory, subdirectories, names in os.walk(root):
-        current = Path(directory)
-        if "__pycache__" in subdirectories:
-            target = current / "__pycache__"
-            shutil.rmtree(target, ignore_errors=True)
-            subdirectories.remove("__pycache__")
-            removed += 1
-        for name in names:
-            if name.endswith(".pyc"):
-                try:
-                    (current / name).unlink()
+    # Verification imports only source and test modules. Do not touch caches in
+    # user environments, vendor trees, state, or other unrelated directories.
+    for scope in (root / "src", root / "tests"):
+        if not scope.is_dir() or scope.is_symlink():
+            continue
+        for directory, subdirectories, names in os.walk(scope):
+            current = Path(directory)
+            if "__pycache__" in subdirectories:
+                target = current / "__pycache__"
+                if not target.is_symlink():
+                    shutil.rmtree(target, ignore_errors=True)
                     removed += 1
-                except OSError:
-                    pass
+                subdirectories.remove("__pycache__")
+            subdirectories[:] = [name for name in subdirectories
+                                 if name not in PROTECTED_PARTS and not (current / name).is_symlink()]
+            for name in names:
+                if name.endswith(".pyc"):
+                    try:
+                        (current / name).unlink()
+                        removed += 1
+                    except OSError:
+                        pass
     return removed
 
 
@@ -687,6 +747,8 @@ def status() -> dict:
         "enabled": enabled,
         "available": available(),
         "root": str(root) if root else None,
+        "source_scope": "staged-copy" if getattr(sys, "frozen", False) else "source-checkout",
+        "updates_running_app": False if getattr(sys, "frozen", False) else None,
         "can_read_source": enabled,
         "can_write_source": enabled,
         "automatic_verification": enabled,
@@ -715,6 +777,8 @@ def status() -> dict:
         "notice": (
             "Changes are checkpointed, compiled, and tested. A failing change is rolled back "
             "automatically. The engine runs with your user account's privileges."
+            + (" The packaged app edits a staged source copy only; it does not rebuild or update the running app."
+               if getattr(sys, "frozen", False) else "")
         ),
     }
 
@@ -743,9 +807,11 @@ def read_file(relative: str) -> dict:
 
 
 def sandbox_mode() -> str:
-    """off | auto | require, from BABYMIND_SANDBOX (default auto)."""
-    value = os.getenv("BABYMIND_SANDBOX", "auto").strip().lower()
-    return value if value in {"off", "auto", "require"} else "auto"
+    """off | auto | require, from BABYMIND_SANDBOX (default require)."""
+    if getattr(sys, "frozen", False):
+        return "require"
+    value = os.getenv("BABYMIND_SANDBOX", "require").strip().lower()
+    return value if value in {"off", "auto", "require"} else "require"
 
 
 def failure_context(result: dict, limit: int = 2_500) -> str:

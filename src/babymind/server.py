@@ -802,11 +802,13 @@ class Handler(BaseHTTPRequestHandler):
                 ]})
             elif path == "/api/dev/apply":
                 from .selfdev import apply_edits
+                if "verify" in payload and payload["verify"] is not True:
+                    raise ValueError("Self-development edits must be verified.")
                 result = apply_edits(
                     payload.get("edits"),
                     reason=str(payload.get("reason", "")),
                     agent_id=str(payload.get("agent_id", "BM-03")),
-                    verify=bool(payload.get("verify", True)),
+                    verify=True,
                     test_timeout=min(int(payload.get("test_timeout", 300) or 300), 600),
                 )
                 self.send_json(result, 201 if result["status"] == "applied" else 200)

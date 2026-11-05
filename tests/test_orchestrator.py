@@ -74,6 +74,38 @@ class OrchestratorTests(unittest.TestCase):
         errored = [run for run in mission["runs"] if run["status"] == "error"]
         self.assertIn("simulated provider failure", errored[0]["error"])
 
+    def test_partial_mission_does_not_attempt_self_edit(self) -> None:
+        orchestrator = Orchestrator(FakeProvider(fail_at=7), self.store, max_seconds=300)
+        with patch.object(orchestrator, "_run_self_edit") as self_edit:
+            mission = orchestrator.run_now(BRIEF, self_edit=True)
+        self_edit.assert_not_called()
+        self.assertEqual(mission["status"], "partial")
+        self.assertEqual(mission["self_edit"]["status"], "skipped")
+        self.assertEqual(mission["counts"].get("error"), 1)
+
+    def test_budget_exhaustion_does_not_attempt_self_edit(self) -> None:
+        orchestrator = Orchestrator(FakeProvider(), self.store, max_seconds=300)
+        orchestrator.on_update = lambda _id, _run: setattr(orchestrator, "max_seconds", 0)
+        with patch.object(orchestrator, "_run_self_edit") as self_edit:
+            mission = orchestrator.run_now(BRIEF, self_edit=True)
+        self_edit.assert_not_called()
+        self.assertEqual(mission["status"], "partial")
+        self.assertGreater(mission["counts"].get("deferred", 0), 0)
+        self.assertEqual(mission["self_edit"]["status"], "skipped")
+
+    def test_cancellation_during_final_role_does_not_attempt_self_edit(self) -> None:
+        orchestrator = Orchestrator(FakeProvider(), self.store, max_seconds=300)
+        def cancel_at_final(mission_id, run):
+            if run.agent_id == AGENTS[-1].agent_id:
+                self.store.request_cancel(mission_id)
+        orchestrator.on_update = cancel_at_final
+        with patch.object(orchestrator, "_run_self_edit") as self_edit:
+            mission = orchestrator.run_now(BRIEF, self_edit=True)
+        self_edit.assert_not_called()
+        self.assertEqual(mission["status"], "cancelled")
+        self.assertEqual(mission["self_edit"]["status"], "skipped")
+        self.assertEqual(mission["agents_recorded"], 50)
+
     def test_empty_contributions_count_as_errors(self) -> None:
         mission = Orchestrator(EmptyProvider(), self.store, max_seconds=300).run_now(BRIEF)
         self.assertEqual(mission["status"], "failed")
@@ -168,6 +200,7 @@ class SelfEditLoopTests(unittest.TestCase):
         self.env = patch.dict(os.environ, {
             "BABYMIND_DEV_ROOT": str(self.root),
             "BABYMIND_SELF_DEVELOPMENT_ENABLED": "true",
+            "BABYMIND_SANDBOX": "off",  # trusted disposable unit-test fixture
         })
         self.env.start()
         self.store = MissionStore(str(self.root / ".missions"))

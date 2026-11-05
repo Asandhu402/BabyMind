@@ -413,3 +413,87 @@ not a guarantee against false claims. The next opt-in test was configured with
 a 4,200-second mission budget and shorter responses, but it has not yet run.
 The actual desktop default remains bounded and may also defer roles. All-role
 competence and packaged self-upgrade remain unverified or unavailable.
+
+## Follow-up acceptance-harness safeguards
+
+A local harness audit found that a sandbox-probe exception previously stopped
+all remaining role checks, and that an exception during the coding test could
+leave generated fixture files in place for the later self-edit test. The harness
+now treats probe exceptions as a failed sandbox check, does not execute generated
+code without a verified sandbox, continues the read-only role checks, and
+removes the coding fixture in a `finally` block. It also checks that the results
+cover all distinct registered role IDs, not merely a count of 50. Mocked
+regression tests cover these cases; they do not constitute a production-model
+or Ubuntu Desktop test. The expanded 4,200-second hosted real-model test remains
+unrun as of this update.
+
+A subsequent source audit found three safety gaps. A partial mission could start
+a self-edit, the self-edit verifier could accept an empty or interrupted test
+run, and a Python environment under `/tmp` was exposed as a writable sandbox
+bind. The source changes now skip mission self-edit when roles are incomplete
+or cancelled, compare a fresh pre-edit test run against the post-edit run,
+require the sandbox by default for self-development, and mount temporary
+interpreter prefixes read-only. They also reject symbolic-link path components
+before resolution and refuse requests to bypass test verification via the HTTP
+apply endpoint. The sandbox self-test now probes an actual existing file outside
+the workspace and compares network namespace identities instead of checking a
+rewritten HOME path. Regression tests exercise the mount and namespace probes
+on the local Debian host and the other guards using fixtures; this is not a
+clean Ubuntu Desktop or a production-model result. Test counts cannot prove
+unchanged test semantics, and code under test still has write access to the
+designated project root. A later local follow-up also compares reported test
+failure identities (so a new failure cannot replace a known one unnoticed),
+uses unique sandbox-probe files, and requires the requested short arithmetic
+and color answers rather than merely searching for expected words.
+
+On the local Debian host, the revised verifier also copied the actual BabyMind
+source into a disposable directory, passed the Linux namespace probes, and ran
+a 50-role mission with a **fake provider**. The fake provider proposed a small
+change to the copied `src/babymind/__init__.py`; the self-edit transaction
+applied it after the copied project's suite passed (352 tests, 18 skipped), and
+an independent sandboxed behavior test passed with the suite (354 tests, 18
+skipped). This validates the integration and isolation path only: it is not
+proof of real-model quality, useful specialist work, or packaged self-upgrade.
+The revised opt-in hosted harness additionally attempts that real-source-copy
+scenario with the production model; its result must be reported separately.
+
+The local Debian source-suite follow-up ran **355 tests, OK, 2 skipped** after
+these later changes. Its sandbox and model-verifier regression tests do not
+substitute for the ongoing hosted production-model runs.
+
+## Extended Ubuntu real-model follow-up
+
+[Run 41936720077](https://github.com/Asandhu402/BabyMind/actions/runs/41936720077)
+passed overall on commit `3a2350a`: the hosted Ubuntu 22.04 installer and
+virtual-display GUI returned `4`, the production model answered the three
+source-mode chat questions, and the generated `add` function and a disposable
+fixture source edit passed their independent sandboxed behavior tests. All 50
+roles returned nonempty text in 3,601.3 seconds. The role outputs were not
+independently verified work: several repeated each other and the final role
+claimed a nonexistent implementation was verified. This does not establish
+role competence or a ready self-upgrading desktop application.
+
+## Packaged source-staging development
+
+The Linux build now includes a dedicated Python helper and a source seed for a
+managed staging workspace. Packaged self-edit remains sandbox-required and
+will not fall back to unsandboxed execution. On the local Debian host, a
+simulated frozen process using the actual bundled helper passed live namespace
+probes, applied a deterministic edit to a temporary staged source copy, ran its
+source suite (359 tests, 18 skipped), and passed an independent sandboxed
+behavior check. This simulation used no model and did not exercise the actual
+PyInstaller executable. The local source suite later ran 360 tests, 2 skipped.
+
+The stage is not an application upgrade: no build, promotion, restart, or
+activation of modified code is implemented. In particular, these results do not
+show that the packaged app can safely modify the code it is currently running.
+
+[Run 41939836348](https://github.com/Asandhu402/BabyMind/actions/runs/41939836348)
+**failed** its real-source-copy self-edit acceptance. All 50 roles returned
+nonempty text (4,234.8 seconds), and the isolated small coding and fixture edit
+behavior tests passed. However, when asked to edit the disposable copy of
+BabyMind's actual `src/babymind/__init__.py`, the model produced malformed,
+unterminated JSON; the mission recorded `no_change` and did not apply an edit.
+The independent real-source behavior test therefore did not run. Some role
+reasoning was repetitive or incorrect. This run does not establish reliable
+self-development or packaged update activation.

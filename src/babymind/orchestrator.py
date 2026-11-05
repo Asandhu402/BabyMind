@@ -401,6 +401,8 @@ class Orchestrator:
 
         contributed = sum(1 for run in recorded if run.status == "contributed")
         errors = sum(1 for run in recorded if run.status == "error")
+        # Cancellation can arrive while the final model call is in flight.
+        cancelled = cancelled or self.store.is_cancelled(mission_id)
         if cancelled:
             status = "cancelled"
         elif contributed == 0:
@@ -411,8 +413,19 @@ class Orchestrator:
             status = "completed"
         summary = self._summarise(mission_id, status, contributed, errors, deferred,
                                   round(time.monotonic() - started, 1))
-        if self_edit and status in {"completed", "partial"}:
-            report = self._run_self_edit(mission_id, brief, recorded)
+        if self_edit:
+            # Do not edit after an incomplete or cancelled mission: all roles
+            # must have returned text before a patch is even proposed. Their
+            # text remains unverified and does not imply competent review.
+            if status == "completed" and not self.store.is_cancelled(mission_id):
+                report = self._run_self_edit(mission_id, brief, recorded)
+            else:
+                if self.store.is_cancelled(mission_id) and status != "cancelled":
+                    status = "cancelled"
+                    summary = self._summarise(mission_id, status, contributed, errors, deferred,
+                                              round(time.monotonic() - started, 1))
+                report = {"status": "skipped", "detail":
+                          "Mission was incomplete or cancelled; no self-edit was attempted."}
             self.store.set_self_edit(mission_id, report)
             summary = _clip(summary + "\n\nSelf-edit: " + report["status"] + " — " + report["detail"],
                             MAX_SUMMARY_CHARS)
@@ -467,7 +480,10 @@ class Orchestrator:
             return {
                 "status": "applied",
                 "detail": (f"{len(result['files'])} file(s) changed and verified on attempt "
-                           f"{outcome['attempts']}; checkpoint {result['checkpoint_id']}."),
+                           f"{outcome['attempts']}; checkpoint {result['checkpoint_id']}."
+                           + (" Staged source only; the running packaged app is unchanged."
+                              if result.get("source_scope") == "staged-copy" else "")),
+                "source_scope": result.get("source_scope", "source-checkout"),
                 "checkpoint_id": result["checkpoint_id"],
                 "files": [item["path"] for item in result["files"]],
                 "tests": (result.get("tests") or {}).get("summary"),

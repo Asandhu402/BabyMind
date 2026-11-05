@@ -32,11 +32,15 @@ host for compatibility with Ubuntu 22.04; newer build hosts may produce binaries
 that require newer glibc. The archive and build dependencies are not vendored.
 The first model download has not been verified in restricted/offline networks. See docs/LINUX_VERIFICATION.md in the source tree for the actual test status.
 
-The desktop defaults to `BABYMIND_SANDBOX=require`, which refuses command
-execution because the frozen app cannot run the Python-based namespace launcher. Use a source checkout to access that backend, and do not override this for untrusted code. The portable build cannot run source-checkout self-development
-tests or generated Python applications with its frozen executable; use a source
-checkout and a real Python interpreter for that; portable self-development edits are disabled. Review and mission results
-are model-generated and are not proof of independent work or security. On Linux
+The portable build includes a Python helper and bundled source seed. It can stage
+source edits under `~/.babymind/development-source`, with checkpointing and tests
+in a required Linux namespace sandbox. **Staged changes do not rebuild, replace,
+or update the running packaged application.** The sandbox must be available and
+its boundary probes must pass; there is no unsandboxed fallback for packaged
+self-edits. A workspace from a different package version is left untouched.
+Generated Python application execution remains unavailable in the frozen app.
+Review and mission results are model-generated and are not proof of independent
+work or security. On Linux
 local encryption keys are files readable by your user account, not a hardware
 keystore. See SECURITY.md and docs/KNOWN_LIMITATIONS.md in the source tree.
 
