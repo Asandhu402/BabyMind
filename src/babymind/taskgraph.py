@@ -107,10 +107,14 @@ class TaskGraphRunner:
         self._cancelled = False
 
     def cancel(self) -> None:
+        """Request cancellation: pending futures are cancelled and running
+        tasks are asked to stop at their next checkpoint (should_cancel)."""
         self._cancelled = True
 
-    def run(self, tasks: list[Task], *, graph_id: str | None = None) -> dict:
+    def run(self, tasks: list[Task], *, graph_id: str | None = None,
+            should_cancel=None) -> dict:
         validate_graph(tasks)
+        self._should_cancel = should_cancel
         if graph_id:
             register(graph_id, self)
         try:
@@ -118,6 +122,12 @@ class TaskGraphRunner:
         finally:
             if graph_id:
                 unregister(graph_id)
+
+    def _is_cancelled(self) -> bool:
+        if self._cancelled:
+            return True
+        checker = getattr(self, "_should_cancel", None)
+        return bool(checker and checker())
 
     def _execute(self, tasks: list[Task]) -> dict:
         by_id = {t.task_id: t for t in tasks}
@@ -127,9 +137,20 @@ class TaskGraphRunner:
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             while pending or futures:
-                if self._cancelled:
+                if self._is_cancelled():
                     for future in futures:
                         future.cancel()
+                    for task_id in pending:
+                        results[task_id] = TaskResult(
+                            task_id, by_id[task_id].agent_id, "skipped", error="Cancelled.")
+                    pending.clear()
+                    for future in list(futures):
+                        task_id = futures.pop(future)
+                        if not future.done():
+                            results[task_id] = TaskResult(
+                                task_id, by_id[task_id].agent_id, "skipped", error="Cancelled.")
+                        else:
+                            results[task_id] = future.result()
                     break
                 # Launch every task whose dependencies are satisfied.
                 for task_id in sorted(pending):
@@ -159,12 +180,12 @@ class TaskGraphRunner:
             "completed": sum(1 for r in results.values() if r.status == "completed"),
             "failed": sum(1 for r in results.values() if r.status == "failed"),
             "skipped": sum(1 for r in results.values() if r.status == "skipped"),
-            "cancelled": self._cancelled,
+            "cancelled": self._is_cancelled(),
         }
 
     def _run_one(self, task: Task, context: dict[str, TaskResult]) -> TaskResult:
         started = time.monotonic()
-        if self._cancelled:
+        if self._is_cancelled():
             return TaskResult(task.task_id, task.agent_id, "skipped",
                               error="Cancelled.", started_at=started,
                               finished_at=time.monotonic())

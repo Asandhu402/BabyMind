@@ -174,19 +174,30 @@ Based on the repository's current `AUTONOMY.md`,
 `AUTONOMOUS_PLATFORM_AUDIT.md`, `KNOWN_LIMITATIONS.md`, and
 `LINUX_VERIFICATION.md`:
 
-- The 50 roles are sequential prompts over one shared small local model, not
-  independently capable agents.
-- The existing runner is not itself an OS security boundary.
-- The current sandbox has documented nested-isolation and memory-limit gaps.
-- Source-mode execution can be configured to fall back to an unsandboxed mode.
+- The 50 roles are role-guided prompts over one shared small local model, not
+  independently capable agents. Sequential mode remains the default; a
+  phase-parallel task-graph mode (`mode="graph"`, `/api/taskgraph/run`) exists
+  **[implemented, verified]**, but typed inputs/outputs and durable graph
+  state remain **[partial]**.
+- The runner is not itself an OS boundary; all privileged execution goes
+  through the broker into the Linux namespace sandbox
+  **[implemented, verified]**, with adversarial escape probes
+  (`tests/test_sandbox_escape.py`).
+- The sandbox still has documented nested-isolation limits (detected and
+  reported, but single-layer) and uses rlimits rather than cgroup memory caps
+  (RLIMIT_AS/RLIMIT_DATA cap virtual memory, not physical RAM)
+  **[partial]**.
 - Packaged self-edit stages source but does not build, promote, restart, or
-  activate an updated application.
-- Generated app execution is not safely available in the portable package.
+  activate an updated application; the upgrade path copies the staged source
+  into the package seed with a backup **[implemented]**; generated app
+  execution in the portable package remains disabled (fail closed).
 - The production model has only limited real-world acceptance evidence; role
   outputs have included unsupported claims, and a real-source self-edit test
   has failed on malformed JSON.
 - Clean desktop acceptance, signed releases, auto-update, and independent
-  security assessment are not complete.
+  security assessment are not complete. The fulfilment review in
+  `verifier.py` is preliminary (same shared model), not independent
+  inspection.
 
 These blockers must be fixed in code and verified; changing documentation or
 renaming components does not close a gate.
@@ -195,7 +206,7 @@ renaming components does not close a gate.
 
 1. Make execution and workspace access fail-closed behind a single broker.
 2. Add adversarial sandbox tests and enforce resource limits, including memory.
-3. Replace sequential role prompting with a typed, resumable task-graph runtime.
+3. Complete the task-graph runtime: typed inputs/outputs, durable/resumable graph state (parallel graph mode already exists).
 4. Build the worktree-based coding loop and independent verification pipeline.
 5. Add real-model evaluation, failure analysis, and regression thresholds.
 6. Complete packaging, signed updates, backup/restore, observability, and

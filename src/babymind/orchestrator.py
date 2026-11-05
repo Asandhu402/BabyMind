@@ -468,7 +468,7 @@ class Orchestrator:
             return run.output or run.error or ""
 
         runner = TaskGraphRunner(worker, max_workers=4)
-        result = runner.run(tasks)
+        result = runner.run(tasks, should_cancel=lambda: self.store.is_cancelled(mission_id))
         if self.store.is_cancelled(mission_id) or result["cancelled"]:
             status = "cancelled"
         elif result["failed"] == 0 and result["skipped"] == 0:
@@ -481,6 +481,22 @@ class Orchestrator:
                                   result["failed"],
                                   [t["task_id"] for t in result["tasks"] if t["status"] == "skipped"],
                                   round(time.monotonic() - started, 1))
+        if self_edit:
+            with lock:
+                rows = list(self.store.get(mission_id)["runs"])
+            recorded = [
+                AgentRun(row["agent_id"], row["agent_name"], row["phase"], row["status"],
+                         output=row.get("output") or "", error=row.get("error") or "")
+                for row in rows
+            ]
+            if status == "completed" and not self.store.is_cancelled(mission_id):
+                report = self._run_self_edit(mission_id, brief, recorded)
+            else:
+                report = {"status": "skipped", "detail":
+                          "Mission was incomplete or cancelled; no self-edit was attempted."}
+            self.store.set_self_edit(mission_id, report)
+            summary = _clip(summary + "\n\nSelf-edit: " + report["status"] + " — " + report["detail"],
+                            MAX_SUMMARY_CHARS)
         self.store.set_status(mission_id, status, summary + " (task-graph mode, parallel within phases)")
 
     def _run_self_edit(self, mission_id: str, brief: str, recorded: list[AgentRun]) -> dict:
