@@ -761,7 +761,8 @@ class Handler(BaseHTTPRequestHandler):
                 })
             elif path == "/api/missions":
                 brief = str(payload.get("brief", ""))
-                mission_id = orchestrator().start(brief, self_edit=bool(payload.get("self_edit")))
+                mode = "graph" if str(payload.get("mode", "")) == "graph" else "batched"
+                mission_id = orchestrator().start(brief, mode=mode, self_edit=bool(payload.get("self_edit")))
                 self.send_json({
                     "id": mission_id, "status": "running", "agents": 50,
                     "self_edit": bool(payload.get("self_edit")),

@@ -37,7 +37,7 @@ function setView(name) {
   if(name==="memory") loadMemory();
   if(name==="tasks") loadTasks();
   if(name==="development") loadDevelopmentReviews();
-  if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); }
+  if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); loadBrokerStatus(); }
   if(name==="mission" && window.babymindLoadMission) window.babymindLoadMission();
 }
 function renderAgentSelect() {
@@ -220,6 +220,23 @@ async function exportConversation(){
     const url=URL.createObjectURL(blob);const link=document.createElement("a");
     link.href=url;link.download="babymind-conversation.md";link.click();URL.revokeObjectURL(url);
   }catch(error){toast(error.message);}
+}
+async function loadBrokerStatus(){
+  const status=$("#brokerStatus"), details=$("#brokerDetails");
+  if(!status||!details)return;
+  try{
+    const report=await api("/api/broker/status");
+    status.textContent=(report.backend_available?"Sandbox active: "+report.backend:"Fail-closed: no sandbox backend")+
+      " · policy: "+report.policy.split(" ")[0]+(report.nested_sandbox_detected?" · nested sandbox detected":"")+
+      " · decisions logged: "+report.decisions_total+" ("+report.refused_total+" refused)";
+    details.innerHTML=[
+      "Backend: "+escapeHTML(report.backend)+" — "+escapeHTML(report.backend_detail||""),
+      "Limits: "+escapeHTML(String(report.limits||"")),
+      report.nested_sandbox_detected?"Running inside a container/VM: inner namespaces add no second isolation layer.":"Not nested.",
+    ].map(item=>"<li>"+item+"</li>").join("");
+  }catch(error){
+    status.textContent="Broker status unavailable: "+error.message;
+  }
 }
 async function loadWorkspaceReadiness(){
   const status=$("#workspaceReadinessStatus"), details=$("#workspaceReadinessDetails");
