@@ -32,6 +32,14 @@ class InstalledDesktopVerifierTests(unittest.TestCase):
             self.assertIn("FAIL: test_bad", annotation)
             self.assertIn("Traceback: broken", annotation)
 
+    def test_source_failure_annotation_handles_interleaved_separator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "log"
+            path.write_text("[server output] FAIL: test_bad (example.Test)\nTraceback: broken\n" + "x" * 8000)
+            annotation = diagnostics.annotation(path, "Source tests", "1")
+            self.assertIn("FAIL: test_bad", annotation)
+            self.assertIn("Traceback: broken", annotation)
+
     def test_failure_annotation_escapes_workflow_commands(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "log"
