@@ -124,6 +124,27 @@ if failed_limits:
     sys.stderr.write("LIMIT_FAILED " + ",".join(failed_limits) + "\n")
     sys.stderr.flush()
 
+# Best-effort cgroup v2 physical-memory cap. RLIMIT_AS bounds virtual address
+# space; a delegated cgroup memory.max also bounds physical RAM. If the
+# cgroup filesystem is not delegated, report and continue with rlimits only.
+try:
+    cgroup_root = "/sys/fs/cgroup"
+    if os.path.isdir(cgroup_root) and os.path.exists(cgroup_root + "/cgroup.controllers"):
+        if "memory" in open(cgroup_root + "/cgroup.controllers").read():
+            sub = cgroup_root + "/babymind-sandbox-" + str(os.getpid())
+            os.makedirs(sub, exist_ok=True)
+            open(sub + "/memory.max", "w").write(str(spec["mem_bytes"]))
+            open(sub + "/cgroup.procs", "w").write(str(os.getpid()))
+            sys.stderr.write("CGROUP_MEM_SET " + str(spec["mem_bytes"]) + "\n")
+        else:
+            sys.stderr.write("CGROUP_MEM_UNAVAILABLE no-memory-controller\n")
+    else:
+        sys.stderr.write("CGROUP_MEM_UNAVAILABLE no-cgroup-v2\n")
+    sys.stderr.flush()
+except Exception as error:
+    sys.stderr.write("CGROUP_MEM_UNAVAILABLE " + str(error) + "\n")
+    sys.stderr.flush()
+
 os.execvpe(spec["argv"][0], spec["argv"], spec["env"])
 '''
 

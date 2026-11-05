@@ -173,7 +173,17 @@ def _sandbox_mode(value: bool | str) -> str:
     if isinstance(value, bool):
         return "require" if value else "off"
     text = str(value or "off").strip().lower()
-    return text if text in {"off", "auto", "require"} else "off"
+    if text not in {"off", "auto", "require"}:
+        return "off"
+    if text == "auto" and not _unsandboxed_auto_allowed():
+        # "auto" must never silently downgrade untrusted execution to a
+        # same-user subprocess; without an explicit opt-in it fails closed.
+        return "require"
+    return text
+
+
+def _unsandboxed_auto_allowed() -> bool:
+    return os.getenv("BABYMIND_ALLOW_UNSANDBOXED_AUTO", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def run_command(

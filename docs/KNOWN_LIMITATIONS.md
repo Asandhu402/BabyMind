@@ -20,8 +20,13 @@ missing, not what is planned.
   one.
 - The frozen app uses a bundled interpreter for the namespace helper. Packaged
   self-development requires a successful boundary probe and fails closed when
-  unavailable. In source mode, `auto` may fall back to unsandboxed execution;
-  never use that fallback for untrusted code.
+  unavailable. In source mode, `auto` now **fails closed** (treated as
+  `require`) unless `BABYMIND_ALLOW_UNSANDBOXED_AUTO=true` is set explicitly;
+  never set that for untrusted code.
+- Memory is capped by RLIMIT_AS/RLIMIT_DATA (virtual address space/heap) and,
+  when cgroup v2 delegation is available, an additional best-effort
+  `memory.max` cgroup cap (reported as `CGROUP_MEM_SET`/`CGROUP_MEM_UNAVAILABLE`
+  on stderr). Physical-RAM cgroup limits are not guaranteed on every kernel.
 - **Nested sandboxes are detected but still single-layer.** Running BabyMind
   inside a container/VM is reported by `sandbox.status()` and
   `/api/broker/status` (`nested_sandbox_detected`), but user namespaces inside
