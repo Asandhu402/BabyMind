@@ -487,3 +487,13 @@ PyInstaller executable. The local source suite later ran 360 tests, 2 skipped.
 The stage is not an application upgrade: no build, promotion, restart, or
 activation of modified code is implemented. In particular, these results do not
 show that the packaged app can safely modify the code it is currently running.
+
+[Run 41939836348](https://github.com/Asandhu402/BabyMind/actions/runs/41939836348)
+**failed** its real-source-copy self-edit acceptance. All 50 roles returned
+nonempty text (4,234.8 seconds), and the isolated small coding and fixture edit
+behavior tests passed. However, when asked to edit the disposable copy of
+BabyMind's actual `src/babymind/__init__.py`, the model produced malformed,
+unterminated JSON; the mission recorded `no_change` and did not apply an edit.
+The independent real-source behavior test therefore did not run. Some role
+reasoning was repetitive or incorrect. This run does not establish reliable
+self-development or packaged update activation.
