@@ -897,6 +897,35 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(report, dict):
                     raise ValueError("Provide the verification 'report' to debug.")
                 self.send_json(verifier.debug(report, coordinator=COORDINATOR))
+            elif path == "/api/verify/fix":
+                from . import verifier
+                from .selfdev import dev_root, apply_with_repair
+                from .orchestrator import _extract_json
+                root = str(payload.get("root", "")).strip() or str(dev_root())
+                report = verifier.verify(root, timeout=min(int(payload.get("timeout", 300) or 300), 600))
+                if report["passed"]:
+                    self.send_json({"status": "passed", "verification": report,
+                                    "note": "Nothing to fix."})
+                    return
+                brief = ("Fix the failing verification of " + root + ":\n"
+                         + verifier.extract_failures(report))
+                attempts = max(1, min(int(payload.get("attempts", 2) or 2), 3))
+
+                def propose(attempt, failure):
+                    user = "BRIEF:\n" + brief + (
+                        "\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. Verification output:\n" + failure
+                        if failure else "")
+                    proposal = json.loads(_extract_json(COORDINATOR.provider.complete(
+                        "Return ONLY JSON: {\"reason\": \"...\", \"edits\": [{\"path\": ..., \"content\": ...}]}. "
+                        "Paths are relative to the project root; never touch .git, state, keys, or databases.",
+                        user)))
+                    return proposal.get("edits") or []
+
+                outcome = apply_with_repair(propose, attempts=attempts, reason=brief[:200],
+                                            agent_id="BM-03", verify=True, test_timeout=600)
+                self.send_json({"status": outcome["status"], "verification": report,
+                                "repair": outcome,
+                                "note": "Auto-fix applied only if checkpoint+compile+tests passed; otherwise rolled back."})
             elif path == "/api/dev/preview-window":
                 from .upgrade import start_preview
                 self.send_json(start_preview())

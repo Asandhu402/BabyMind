@@ -62,6 +62,25 @@ desktop target.
 
 ## Safety and capabilities
 
+Current capability status (honest, matches the code):
+
+1. **Build digital applications** — *partially supported*: the opt-in app
+   builder plans, writes, and sandboxed-runs one generated app, then runs an
+   automatic behavior check on the result. Packaged builds cannot execute
+   generated code (fail closed).
+2. **Automatically fix errors** — *limited*: `/api/verify/fix` verifies
+   (compile + tests + sandboxed behavior + sandbox boundary), then runs a
+   bounded propose→verify→rollback repair loop. Fixes are only kept when all
+   checks pass.
+3. **Research internet and GitHub** — *limited*: web search/page-read and
+   read-only GitHub metadata research exist; page content is treated as
+   untrusted. No autonomous browsing or repo cloning.
+4. **Fully autonomous development** — *incomplete*: missions (sequential or
+   phase-parallel graph mode), checkpointed self-edits with rollback, and
+   independent verification exist, but there is no typed task-graph state,
+   worktree isolation, or signed/auto-updating release — not yet an
+   autonomous platform. See [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md).
+
 - Chat, history, local memory, advisory development review, mission control,
   read-only GitHub research, and optional integrations exist. A review is model
   output, not independent verification; the autonomous development platform is
