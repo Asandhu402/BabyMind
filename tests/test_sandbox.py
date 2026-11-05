@@ -7,6 +7,7 @@ behaviour, not configuration.
 from __future__ import annotations
 
 import ast
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -210,11 +211,21 @@ class SandboxPolicyTests(unittest.TestCase):
             with self.assertRaises(runner.CommandRejected):
                 runner.run_command([sys.executable, "-c", "print(1)"], timeout=10, sandbox="require")
 
-    def test_auto_falls_back_and_says_so(self) -> None:
+    def test_auto_fails_closed_without_opt_in(self) -> None:
         with patch("babymind.sandbox.backend",
                    return_value=sandbox.Backend("none", False, "no backend in this test")):
-            result = runner.run_command([sys.executable, "-c", "print('ran')"],
-                                        timeout=20, sandbox="auto")
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("BABYMIND_ALLOW_UNSANDBOXED_AUTO", None)
+                with self.assertRaises(runner.CommandRejected):
+                    runner.run_command([sys.executable, "-c", "print('ran')"],
+                                       timeout=20, sandbox="auto")
+
+    def test_auto_falls_back_only_with_explicit_opt_in(self) -> None:
+        with patch("babymind.sandbox.backend",
+                   return_value=sandbox.Backend("none", False, "no backend in this test")):
+            with patch.dict(os.environ, {"BABYMIND_ALLOW_UNSANDBOXED_AUTO": "true"}):
+                result = runner.run_command([sys.executable, "-c", "print('ran')"],
+                                            timeout=20, sandbox="auto")
         self.assertTrue(result["ok"])
         self.assertFalse(result["sandboxed"])
         self.assertEqual(result["sandbox"], "unavailable")

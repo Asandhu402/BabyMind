@@ -11,6 +11,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, Future, wait, FIRST_COMPLETED
 from dataclasses import dataclass, field
+from pathlib import Path
 
 MAX_TASKS = 50
 MAX_DEPENDS = 60  # a phase-to-phase graph can depend on a whole previous phase
@@ -49,6 +50,7 @@ class Task:
     agent_id: str
     brief: str
     depends_on: list[str] = field(default_factory=list)
+    input: dict = field(default_factory=dict)  # typed input payload for the worker
 
 
 @dataclass
@@ -112,13 +114,20 @@ class TaskGraphRunner:
         self._cancelled = True
 
     def run(self, tasks: list[Task], *, graph_id: str | None = None,
-            should_cancel=None) -> dict:
+            should_cancel=None, store: "TaskGraphStore | None" = None,
+            resume: bool = False) -> dict:
         validate_graph(tasks)
         self._should_cancel = should_cancel
+        prior: dict[str, TaskResult] = {}
+        if resume and store is not None and graph_id:
+            prior = store.completed_results(graph_id)
         if graph_id:
             register(graph_id, self)
         try:
-            return self._execute(tasks)
+            result = self._execute(tasks, prior)
+            if store is not None and graph_id:
+                store.save(graph_id, tasks, result)
+            return result
         finally:
             if graph_id:
                 unregister(graph_id)
@@ -129,10 +138,10 @@ class TaskGraphRunner:
         checker = getattr(self, "_should_cancel", None)
         return bool(checker and checker())
 
-    def _execute(self, tasks: list[Task]) -> dict:
+    def _execute(self, tasks: list[Task], prior: dict[str, TaskResult] | None = None) -> dict:
         by_id = {t.task_id: t for t in tasks}
-        results: dict[str, TaskResult] = {}
-        pending = set(by_id)
+        results: dict[str, TaskResult] = dict(prior or {})
+        pending = set(by_id) - set(results)
         futures: dict[Future, str] = {}
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
@@ -196,3 +205,52 @@ class TaskGraphRunner:
         except Exception as error:  # a failing task must not kill the graph
             return TaskResult(task.task_id, task.agent_id, "failed", error=str(error),
                               started_at=started, finished_at=time.monotonic())
+
+
+class TaskGraphStore:
+    """Durable, resumable graph state: every run is persisted as JSON under
+    ``<root>/state/taskgraph/`` so a crashed or cancelled graph can resume
+    without re-running completed tasks."""
+
+    def __init__(self, root) -> None:
+        self.dir = Path(root) / "state" / "taskgraph"
+        self.dir.mkdir(parents=True, exist_ok=True)
+
+    def _path(self, graph_id: str) -> Path:
+        safe = "".join(c for c in graph_id if c.isalnum() or c in {"-", "_"})[:64]
+        return self.dir / f"{safe or 'graph'}.json"
+
+    def save(self, graph_id: str, tasks: list[Task], result: dict) -> None:
+        import json
+        payload = {
+            "id": graph_id,
+            "saved_at": time.time(),
+            "tasks": [t.__dict__ for t in tasks],
+            "result": result,
+        }
+        tmp = self._path(graph_id).with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp.replace(self._path(graph_id))
+
+    def load(self, graph_id: str) -> dict | None:
+        import json
+        path = self._path(graph_id)
+        if not path.is_file():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    def completed_results(self, graph_id: str) -> dict[str, TaskResult]:
+        record = self.load(graph_id)
+        if not record:
+            return {}
+        out = {}
+        for item in record.get("result", {}).get("tasks", []):
+            if item.get("status") == "completed":
+                out[item["task_id"]] = TaskResult(
+                    item["task_id"], item["agent_id"], "completed",
+                    output=item.get("output", ""), error=item.get("error", ""),
+                    started_at=item.get("started_at", 0.0), finished_at=item.get("finished_at", 0.0))
+        return out

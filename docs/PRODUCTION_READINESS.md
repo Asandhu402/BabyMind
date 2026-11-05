@@ -74,9 +74,14 @@ artifact and an owner-approved result.
   writes outside the approved root.
 - Commands run in a separately verified Linux isolation boundary with
   resource limits (CPU/FSIZE/NOFILE/RLIMIT_AS/RLIMIT_DATA/NPROC, with
-  `LIMIT_FAILED` reporting), network policy, process cleanup, and a
-  disposable tmpfs root **[implemented, verified]**. Cgroup physical-memory
-  caps and per-kernel escape-probe matrices remain **[partial]**.
+  `LIMIT_FAILED` reporting, plus best-effort cgroup v2 `memory.max` when
+  delegated), network policy, process cleanup, and a disposable tmpfs root
+  **[implemented, verified]**. Guaranteed physical-memory cgroup caps and
+  per-kernel escape-probe matrices remain **[partial]**.
+- Self-development edits can be pre-verified in a disposable `git worktree`
+  (`BABYMIND_SELF_EDIT_WORKTREE=true`) before the primary checkout is touched
+  **[implemented, verified]**; making worktrees the *default* edit path remains
+  **[partial]**.
 - Sandbox self-tests include adversarial escape attempts
   (`tests/test_sandbox_escape.py`) **[implemented, verified]** on this
   kernel/container configuration.
@@ -177,12 +182,14 @@ Based on the repository's current `AUTONOMY.md`,
 - The 50 roles are role-guided prompts over one shared small local model, not
   independently capable agents. Sequential mode remains the default; a
   phase-parallel task-graph mode (`mode="graph"`, `/api/taskgraph/run`) exists
-  **[implemented, verified]**, but typed inputs/outputs and durable graph
-  state remain **[partial]**.
+  **[implemented, verified]**, now with typed task inputs, HTTP cancellation,
+  and durable resumable graph state (`TaskGraphStore`) **[implemented,
+  verified]**; typed output schemas remain **[partial]**.
 - The runner is not itself an OS boundary; all privileged execution goes
   through the broker into the Linux namespace sandbox
   **[implemented, verified]**, with adversarial escape probes
-  (`tests/test_sandbox_escape.py`).
+  (`tests/test_sandbox_escape.py`). The `auto` sandbox mode now fails closed
+  unless `BABYMIND_ALLOW_UNSANDBOXED_AUTO=true` **[implemented, verified]**.
 - The sandbox still has documented nested-isolation limits (detected and
   reported, but single-layer) and uses rlimits rather than cgroup memory caps
   (RLIMIT_AS/RLIMIT_DATA cap virtual memory, not physical RAM)

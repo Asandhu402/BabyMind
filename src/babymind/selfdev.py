@@ -498,6 +498,30 @@ def preview_edits(edits: list[dict]) -> list[dict]:
     return reviewed
 
 
+def _worktree_preverify(root: Path, reviewed: list[dict], test_timeout: int) -> None:
+    """Opt-in worktree isolation: apply and verify the change in a disposable
+    git worktree first; the primary checkout is untouched if it fails."""
+    from . import worktree
+    if not worktree.worktree_enabled() or not worktree.is_git_repo(root):
+        return
+    tree = worktree.create_worktree(root)
+    try:
+        for item in reviewed:
+            target = resolve_path(tree, item["path"])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(item["content"], encoding="utf-8")
+        compile_result = broker.run_compile_check(tree, sandbox_mode=sandbox_mode())
+        if not compile_result["ok"]:
+            raise SelfDevError("Worktree pre-verification failed at compile; the primary "
+                               "checkout was not modified. " + (compile_result.get("stderr") or "")[-1000:])
+        tests_result = broker.run_unit_tests(tree, timeout=test_timeout, sandbox_mode=sandbox_mode())
+        if not _suite_completed(tests_result) or not tests_result["summary"].get("passed"):
+            raise SelfDevError("Worktree pre-verification failed tests; the primary checkout "
+                               "was not modified. " + (tests_result.get("stderr") or "")[-1000:])
+    finally:
+        worktree.discard_worktree(root, tree)
+
+
 def apply_edits(
     edits: list[dict],
     *,
@@ -514,6 +538,7 @@ def apply_edits(
     if not selfdev_enabled():
         raise SelfDevError("Self-development is disabled by configuration.")
     reviewed = preview_edits(edits)
+    _worktree_preverify(root, reviewed, test_timeout)
     if sandbox_mode() == "require":
         from . import sandbox
         try:
