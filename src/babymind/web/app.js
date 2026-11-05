@@ -97,7 +97,7 @@ async function newConversation() {
 async function sendMessage(message) {
   const text=message.trim();if(!text||state.busy)return;
   const attachment=state.attachment;
-  const submitted=attachment ? text+"\n\nAttached file ("+attachment.name+"):\n"+attachment.content : text;
+  let submitted=attachment ? text+"\n\nAttached file ("+attachment.name+"):\n"+attachment.content : text;
   state.busy=true;$("#sendButton").disabled=true;$("#messageInput").value="";resizeInput();
   addMessage("user",attachment?text+"\n\n📎 "+attachment.name:text);showTyping();
   try {
