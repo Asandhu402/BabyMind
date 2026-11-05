@@ -860,6 +860,18 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/dev/tests":
                 from .selfdev import run_tests
                 self.send_json(run_tests(timeout=min(int(payload.get("timeout", 300) or 300), 600)))
+            elif path == "/api/dev/preview-window":
+                from .upgrade import start_preview
+                self.send_json(start_preview())
+            elif path == "/api/dev/preview-window/stop":
+                from .upgrade import stop_preview
+                self.send_json(stop_preview())
+            elif path == "/api/dev/preview-window/status":
+                from .upgrade import preview_state
+                self.send_json(preview_state())
+            elif path == "/api/dev/upgrade":
+                from .upgrade import upgrade
+                self.send_json(upgrade(str(payload.get("confirmation", ""))))
             elif path == "/api/builder/plan":
                 self.handle_builder_plan(payload)
             elif path == "/api/builder/build":

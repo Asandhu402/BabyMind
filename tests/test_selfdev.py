@@ -434,3 +434,20 @@ class SelfDevTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UpgradeTests(unittest.TestCase):
+    def test_upgrade_requires_confirmation(self):
+        from babymind import upgrade
+        with self.assertRaises(upgrade.UpgradeError):
+            upgrade.upgrade("not the confirmation")
+
+    def test_upgrade_source_checkout_reports_already_live(self):
+        from babymind import upgrade
+        result = upgrade.upgrade(upgrade.UPGRADE_CONFIRMATION)
+        self.assertFalse(result["upgraded"])
+        self.assertIn("source checkout", result["notice"])
+
+    def test_preview_state_when_not_running(self):
+        from babymind import upgrade
+        self.assertEqual(upgrade.preview_state(), {"running": False})

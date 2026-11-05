@@ -13,6 +13,7 @@
   const agentSummary = $("#missionAgentSummary");
   const selfdevStatus = $("#selfdevStatus");
   const checkpointList = $("#checkpointList");
+  const upgradeStatus = $("#upgradeStatus");
   if (!brief || !startButton) return;
 
   let poller = null;
@@ -214,6 +215,41 @@
       ].filter(Boolean).join("\n");
       loadSelfDev();
     } catch (error) { resultBox.textContent = error.message; }
+  });
+
+  $("#previewWindow")?.addEventListener("click", async () => {
+    const button = $("#previewWindow");
+    button.disabled = true;
+    upgradeStatus.textContent = "Starting a preview window with the current (possibly patched) source…";
+    try {
+      const result = await api("/api/dev/preview-window", { method: "POST", body: "{}" });
+      upgradeStatus.textContent = `Preview window running at ${result.url} (separate data folder; the running app is unchanged).`;
+      window.open(result.url, "_blank", "noopener");
+    } catch (error) { upgradeStatus.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+
+  $("#previewStop")?.addEventListener("click", async () => {
+    try {
+      const result = await api("/api/dev/preview-window/stop", { method: "POST", body: "{}" });
+      upgradeStatus.textContent = result.notice;
+    } catch (error) { upgradeStatus.textContent = error.message; }
+  });
+
+  $("#upgradeApp")?.addEventListener("click", async () => {
+    const confirmation = $("#upgradeConfirmation").value.trim();
+    if (confirmation !== "UPGRADE BABYMIND") { upgradeStatus.textContent = "Type UPGRADE BABYMIND to confirm."; return; }
+    if (!confirm("Copy the checkpointed, tested staged source into the downloaded package's source code? A backup of the original is kept. The running app is not modified; restart BabyMind afterwards.")) return;
+    const button = $("#upgradeApp");
+    button.disabled = true;
+    upgradeStatus.textContent = "Upgrading the downloaded source seed…";
+    try {
+      const result = await api("/api/dev/upgrade", { method: "POST", body: JSON.stringify({ confirmation }) });
+      upgradeStatus.textContent = result.notice + (result.backup ? ` Backup: ${result.backup}` : "");
+      if (result.upgraded) $("#upgradeConfirmation").value = "";
+      loadSelfDev();
+    } catch (error) { upgradeStatus.textContent = error.message; }
+    finally { button.disabled = false; }
   });
 
   window.babymindLoadMission = function loadMissionView() {

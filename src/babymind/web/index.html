@@ -112,6 +112,13 @@
             <div class="checkpoint-list" id="checkpointList"></div>
             <button class="task-refresh" id="runTests" type="button">Run the test suite now</button>
             <pre class="builder-output" id="testOutput" hidden></pre>
+            <p>Try checkpointed upgrades in a separate preview window first, then promote them into the downloaded code.</p>
+            <button class="task-primary" id="previewWindow" type="button">Preview in new window</button>
+            <button class="task-refresh" id="previewStop" type="button">Stop preview window</button>
+            <label for="upgradeConfirmation">To upgrade the downloaded code, type UPGRADE BABYMIND</label>
+            <input id="upgradeConfirmation" class="integration-input" maxlength="32" placeholder="UPGRADE BABYMIND">
+            <button class="task-primary" id="upgradeApp" type="button">Upgrade downloaded main code</button>
+            <div class="setting-status" id="upgradeStatus">Preview and upgrade are available when the self-development engine is enabled.</div>
           </article>
         </div>
         <article class="settings-card mission-edit-card">
