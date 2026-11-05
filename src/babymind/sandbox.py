@@ -101,18 +101,28 @@ loopback_up()
 os.chroot(newroot)
 os.chdir(spec["cwd"])
 
-try:
-    import resource
-    for limit, value in (
-        (resource.RLIMIT_CPU, spec["cpu_seconds"]),
-        (resource.RLIMIT_FSIZE, spec["fsize_bytes"]),
-        (resource.RLIMIT_NOFILE, 512),
-        (resource.RLIMIT_AS, spec["mem_bytes"]),
-        (resource.RLIMIT_NPROC, spec["nproc"]),
-    ):
-        resource.setrlimit(limit, (value, value))
-except Exception:
-    pass
+import resource
+failed_limits = []
+for name, limit, value in (
+    ("CPU", resource.RLIMIT_CPU, spec["cpu_seconds"]),
+    ("FSIZE", resource.RLIMIT_FSIZE, spec["fsize_bytes"]),
+    ("NOFILE", resource.RLIMIT_NOFILE, 512),
+    ("AS", resource.RLIMIT_AS, spec["mem_bytes"]),
+    ("DATA", resource.RLIMIT_DATA, spec["mem_bytes"]),
+    ("NPROC", resource.RLIMIT_NPROC, spec["nproc"]),
+):
+    try:
+        # A user namespace cannot raise a hard limit above the inherited one;
+        # clamp to the hard max so the soft cap is still enforced.
+        hard = resource.getrlimit(limit)[1]
+        soft = value if hard == resource.RLIM_INFINITY else min(value, hard)
+        resource.setrlimit(limit, (soft, hard))
+    except (ValueError, OSError) as error:
+        failed_limits.append(name + ":" + str(error))
+if failed_limits:
+    # Surface enforcement failures instead of silently continuing.
+    sys.stderr.write("LIMIT_FAILED " + ",".join(failed_limits) + "\n")
+    sys.stderr.flush()
 
 os.execvpe(spec["argv"][0], spec["argv"], spec["env"])
 '''
@@ -377,8 +387,9 @@ def status(probe: bool = False) -> dict:
             "network": "separate network namespace (loopback only)" if record.available else "not enforced",
             "process": "separate PID namespace with --kill-child" if record.available else "not enforced",
             "privileges": "unprivileged user namespace; no host capabilities" if record.available else "not enforced",
-            "limits": "RLIMIT_CPU / RLIMIT_FSIZE / RLIMIT_NOFILE / RLIMIT_AS (memory cap) / "
-                      "RLIMIT_NPROC inside the sandbox"
+            "limits": "RLIMIT_CPU / RLIMIT_FSIZE / RLIMIT_NOFILE / RLIMIT_AS + RLIMIT_DATA "
+                      "(address-space and heap caps) / RLIMIT_NPROC inside the sandbox; "
+                      "any limit the kernel refuses is reported on stderr as LIMIT_FAILED"
             if record.available else "not enforced",
             "environment": "rebuilt from a non-secret allowlist",
         },
