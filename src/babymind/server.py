@@ -385,6 +385,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/workspace/readiness":
             from .workspace_readiness import workspace_readiness
             self.send_json(workspace_readiness())
+        elif path == "/api/broker/status":
+            from . import broker
+            self.send_json(broker.status())
         elif path == "/api/builder/status":
             from .builder import builder_status
             self.send_json(builder_status())

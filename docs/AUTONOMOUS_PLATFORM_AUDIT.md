@@ -16,11 +16,16 @@ security boundary. This is a status summary, not an acceptance report.
   (RLIMIT_AS)/process (RLIMIT_NPROC) limits. When no OS sandbox backend is
   available, running generated code is refused (fail closed). It still cannot
   run generated code in the portable app. Review code regardless.
-- There is no production workspace broker or independently verified security
-  boundary. Same-user processes are not sandboxes; the builder and
-  self-development engine share the one sandboxed runner, but that is a single
-  choke point, not a verified broker. Checkpoints do not back up databases,
-  keys, the model or every Git state.
+- There is still no *formally verified* security boundary, but all untrusted
+  execution now funnels through one broker (`babymind.broker.execute`, exposed
+  at `/api/broker/status`) with a fail-closed `sandbox=require` policy and an
+  auditable decision log. Same-user processes are still not sandboxes.
+  Adversarial escape probes live in `tests/test_sandbox_escape.py` (host file
+  access, proc-based escapes, ptrace of host pids, unix sockets, network,
+  module loading). Nested-sandbox operation (BabyMind inside a container/VM)
+  is detected and reported but inner namespaces remain weaker than a
+  non-nested boundary. Checkpoints do not back up databases, keys, the model
+  or every Git state.
 - Local llama.cpp, the pinned model and Linux packaging exist, but real GUI,
   model download and inference acceptance have not been completed in this
   environment. See [Linux verification](LINUX_VERIFICATION.md).
