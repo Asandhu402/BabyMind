@@ -878,12 +878,19 @@ class Handler(BaseHTTPRequestHandler):
                     prompt = task.brief + ("\n\nCompleted dependencies:\n" + digest if digest else "")
                     return COORDINATOR.ask(task.agent_id, prompt).response
                 graph_runner = TaskGraphRunner(worker, max_workers=min(int(payload.get("max_workers", 4) or 4), 8))
-                self.send_json(graph_runner.run(tasks))
+                graph_id = str(payload.get("id", "")).strip() or secrets.token_urlsafe(8)
+                self.send_json({"id": graph_id, **graph_runner.run(tasks, graph_id=graph_id)})
+            elif path == "/api/taskgraph/cancel":
+                from .taskgraph import cancel_running
+                self.send_json(cancel_running(str(payload.get("id", "")).strip()))
             elif path == "/api/verify/run":
                 from . import verifier
                 from .selfdev import dev_root
                 root = str(payload.get("root", "")).strip() or str(dev_root())
-                self.send_json(verifier.verify(root, timeout=min(int(payload.get("timeout", 300) or 300), 600)))
+                brief = str(payload.get("brief", "")).strip()
+                report = verifier.verify(root, timeout=min(int(payload.get("timeout", 300) or 300), 600),
+                                         coordinator=COORDINATOR if brief else None, brief=brief)
+                self.send_json(report)
             elif path == "/api/verify/debug":
                 from . import verifier
                 report = payload.get("report")

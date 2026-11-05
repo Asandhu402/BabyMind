@@ -6,6 +6,11 @@ BabyMind must earn production status through repeatable evidence on a clean,
 supported Linux installation. A successful unit-test run, a completed 50-role
 mission, or a model-generated claim is not acceptance evidence by itself.
 
+Gate items below are tagged: **[implemented]** (code exists), **[partial]**
+(some behaviour exists but gaps remain), **[verified]** (covered by automated
+tests/escape probes, not just code review). "Implemented" never implies
+"verified".
+
 ## Product objective
 
 Build a local-first Linux AI software engineer that can understand a user's
@@ -59,30 +64,40 @@ artifact and an owner-approved result.
 
 ### G1 — Runtime and workspace broker
 
-- One broker is the only path to filesystem, process, network, browser, and
-  GitHub actions.
+- One broker is the only path to process execution and privileged workspace
+  commands **[implemented, verified]** (`broker.execute`, decision log at
+  `/api/broker/status`); browser and GitHub *action* capabilities remain
+  read-only **[partial]**.
 - Per-task capability grants are scoped to exact paths, operations, hosts,
   and expiry; deny by default.
 - Workspace operations reject traversal, symlink races, special files, and
   writes outside the approved root.
 - Commands run in a separately verified Linux isolation boundary with
-  resource limits (including memory), network policy, process cleanup, and
-  disposable writable layers.
-- Sandbox self-tests include adversarial escape attempts and run on each
-  supported kernel/container configuration.
+  resource limits (CPU/FSIZE/NOFILE/RLIMIT_AS/RLIMIT_DATA/NPROC, with
+  `LIMIT_FAILED` reporting), network policy, process cleanup, and a
+  disposable tmpfs root **[implemented, verified]**. Cgroup physical-memory
+  caps and per-kernel escape-probe matrices remain **[partial]**.
+- Sandbox self-tests include adversarial escape attempts
+  (`tests/test_sandbox_escape.py`) **[implemented, verified]** on this
+  kernel/container configuration.
 - If isolation cannot be verified, generated code execution and self-edit are
   disabled rather than downgraded to same-user subprocess execution.
 
 ### G2 — Reliable agent runtime
 
-- Replace role-prompt counting with explicit task graphs, typed inputs/outputs,
-  dependency scheduling, bounded parallelism, cancellation, and durable state.
+- Explicit task graphs with dependency scheduling, bounded parallelism, and
+  HTTP cancellation exist (`taskgraph.py`, `/api/taskgraph/run`,
+  `/api/taskgraph/cancel`, graph mode in missions) **[implemented, verified]**;
+  typed inputs/outputs and durable graph state remain **[partial]**.
 - Distinguish planner, researcher, coder, executor, verifier, and approver
   capabilities. Agents receive only the tools needed for their role.
 - Require schema-validated outputs; malformed output is a typed failure, not
   an implicit success.
-- Use independent verification paths for code changes (tests, static checks,
-  runtime behavior, and review); model self-attestation never passes a gate.
+- Independent verification runs compile, the full test suite, a sandboxed
+  runtime-behavior check, live sandbox escape probes, and (with a brief) an
+  acceptance-judgement record — model self-attestation never passes a gate
+  (`verifier.py`, `/api/verify/run`) **[implemented, verified]**; security-
+  scanner integration remains **[partial]**.
 - Track provenance for every assertion and action, including source URLs,
   commit IDs, file diffs, command records, and test artifacts.
 - Support resumable missions and deterministic handling of retries, timeouts,

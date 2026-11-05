@@ -17,25 +17,82 @@ from . import broker, runner
 MAX_FAILURE_CHARS = 12_000
 
 
-def verify(root: str | Path, *, timeout: int = 300) -> dict:
-    """Run compile + unit tests for ``root`` through the sandboxed broker."""
+def verify(root: str | Path, *, timeout: int = 300, coordinator=None, brief: str = "") -> dict:
+    """Independently verify ``root``: compile, tests, runtime behavior, and
+    (when a sandbox backend exists) the security boundary itself. With a
+    coordinator and brief, also judge requirement fulfilment — model
+    self-attestation is never treated as a pass."""
     root = Path(root).resolve()
     if not (root / "src" / "babymind").is_dir():
         raise ValueError("The verification root does not contain src/babymind.")
     compile_result = broker.run_compile_check(root, sandbox_mode="require")
     tests_result = broker.run_unit_tests(root, timeout=timeout, sandbox_mode="require")
     summary = tests_result.get("summary", {})
-    passed = bool(compile_result.get("ok")) and bool(summary.get("passed"))
-    return {
+    report = {
         "root": str(root),
-        "passed": passed,
         "compile_ok": bool(compile_result.get("ok")),
         "compile_stderr": (compile_result.get("stderr") or "")[-MAX_FAILURE_CHARS:],
         "tests": summary,
         "test_stdout": (tests_result.get("stdout") or "")[-MAX_FAILURE_CHARS:],
         "test_stderr": (tests_result.get("stderr") or "")[-MAX_FAILURE_CHARS:],
         "sandboxed": bool(compile_result.get("sandboxed") and tests_result.get("sandboxed")),
+        "behavior": _behavior_check(root),
+        "security": _security_check(root),
+        "fulfilment": None,
     }
+    report["passed"] = (
+        report["compile_ok"] and bool(summary.get("passed"))
+        and report["behavior"]["ok"] and report["security"]["ok"]
+    )
+    if coordinator is not None and brief:
+        report["fulfilment"] = _fulfilment_check(coordinator, root, brief)
+        report["passed"] = report["passed"] and bool(report["fulfilment"]["fulfilled"])
+    return report
+
+
+def _behavior_check(root: Path) -> dict:
+    """Run a generated app entry point (if any) inside the sandbox and check
+    that it produces output and exits cleanly — runtime behavior, not just
+    compile/tests."""
+    apps = root / "apps"
+    entries = sorted(apps.glob("*/*/app.py")) + sorted(apps.glob("*/app.py")) if apps.is_dir() else []
+    if not entries:
+        return {"ok": True, "detail": "No generated app entry point present; behavior check not applicable."}
+    entry = entries[0]
+    app_dir = entry.parent
+    result = broker.execute([__import__("sys").executable, "-u", entry.name],
+                            cwd=app_dir, allowed_root=app_dir, timeout=60,
+                            sandbox_mode="require")
+    ok = result["exit_code"] == 0 and bool(result["stdout"].strip()) and result["sandboxed"]
+    return {"ok": ok, "entry": str(entry.relative_to(root)),
+            "exit_code": result["exit_code"], "stdout": result["stdout"][-2000:],
+            "sandboxed": result["sandboxed"]}
+
+
+def _security_check(root: Path) -> dict:
+    """Prove the sandbox boundary with the live adversarial self-test."""
+    from . import sandbox
+    if not sandbox.available():
+        return {"ok": False, "detail": "No OS sandbox backend; security properties cannot be verified."}
+    evidence = sandbox.self_test(root)
+    return {"ok": bool(evidence["verified"]), "backend": evidence["backend"],
+            "checks": {k: v.get("ok") for k, v in evidence["checks"].items()}}
+
+
+def _fulfilment_check(coordinator, root: Path, brief: str) -> dict:
+    """Ask the model to judge whether the implementation fulfils the brief.
+    Recorded as evidence, never as a self-attested pass."""
+    import json
+    from .orchestrator import _extract_json
+    tree = [str(p.relative_to(root)) for p in sorted(root.rglob("*")) if p.is_file()][:200]
+    system = ("You are an independent acceptance reviewer. Return ONLY JSON: "
+              '{"fulfilled": true|false, "evidence": "...", "gaps": "..."}. '
+              "Judge against the brief and the actual files; do not trust claims.")
+    user = f"BRIEF:\n{brief}\n\nFILES:\n" + "\n".join(tree)
+    verdict = json.loads(_extract_json(coordinator.provider.complete(system, user)))
+    return {"fulfilled": bool(verdict.get("fulfilled")),
+            "evidence": str(verdict.get("evidence", ""))[:1000],
+            "gaps": str(verdict.get("gaps", ""))[:1000]}
 
 
 def extract_failures(report: dict) -> str:

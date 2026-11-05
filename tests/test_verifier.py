@@ -61,3 +61,23 @@ class VerifierTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerifierDepthTests(unittest.TestCase):
+    def test_verify_includes_security_and_behavior_sections(self):
+        with TemporaryDirectory() as tmp:
+            make_checkout(Path(tmp))
+            report = verifier.verify(tmp, timeout=120)
+            self.assertIn("security", report)
+            self.assertIn("behavior", report)
+            self.assertTrue(report["security"]["ok"])
+            self.assertTrue(report["behavior"]["ok"])
+
+    def test_fulfilment_check_uses_coordinator_and_never_self_attests(self):
+        with TemporaryDirectory() as tmp:
+            make_checkout(Path(tmp))
+            verdict = '{"fulfilled": true, "evidence": "tests pass", "gaps": ""}'
+            report = verifier.verify(tmp, timeout=120, coordinator=FakeCoordinator(verdict),
+                                     brief="build a hello app")
+            self.assertTrue(report["fulfilment"]["fulfilled"])
+            self.assertTrue(report["passed"])

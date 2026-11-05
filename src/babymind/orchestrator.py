@@ -363,6 +363,9 @@ class Orchestrator:
 
     # -- execution ---------------------------------------------------------
     def _run(self, mission_id: str, brief: str, mode: str, self_edit: bool = False) -> None:
+        if mode == "graph":
+            self._run_graph(mission_id, brief, self_edit)
+            return
         started = time.monotonic()
         recorded: list[AgentRun] = []
         deferred: list[str] = []
@@ -431,6 +434,54 @@ class Orchestrator:
             summary = _clip(summary + "\n\nSelf-edit: " + report["status"] + " — " + report["detail"],
                             MAX_SUMMARY_CHARS)
         self.store.set_status(mission_id, status, summary)
+
+    def _run_graph(self, mission_id: str, brief: str, self_edit: bool = False) -> None:
+        """Run the 50 roles as a dependency graph: each phase depends on the
+        previous one, roles within a phase run in parallel."""
+        from .taskgraph import Task, TaskGraphRunner
+
+        started = time.monotonic()
+        tasks: list[Task] = []
+        previous: list[str] = []
+        for phase in PHASES:
+            members = agents_in_phase(phase)
+            for agent in members:
+                tasks.append(Task(agent.agent_id, agent.agent_id, brief,
+                                  depends_on=list(previous)))
+            previous = [agent.agent_id for agent in members]
+
+        lock = threading.Lock()
+
+        def worker(task, context):
+            agent = AGENT_BY_ID[task.agent_id]
+            with lock:
+                rows = list(self.store.get(mission_id)["runs"])
+            recorded = [
+                AgentRun(row["agent_id"], row["agent_name"], row["phase"], row["status"],
+                         output=row.get("output") or "", error=row.get("error") or "")
+                for row in rows
+            ]
+            run = self._run_agent(agent, brief, recorded)
+            self.store.add_run(mission_id, run)
+            if self.on_update:
+                self.on_update(mission_id, run)
+            return run.output or run.error or ""
+
+        runner = TaskGraphRunner(worker, max_workers=4)
+        result = runner.run(tasks)
+        if self.store.is_cancelled(mission_id) or result["cancelled"]:
+            status = "cancelled"
+        elif result["failed"] == 0 and result["skipped"] == 0:
+            status = "completed"
+        elif result["completed"] > 0:
+            status = "partial"
+        else:
+            status = "failed"
+        summary = self._summarise(mission_id, status, result["completed"],
+                                  result["failed"],
+                                  [t["task_id"] for t in result["tasks"] if t["status"] == "skipped"],
+                                  round(time.monotonic() - started, 1))
+        self.store.set_status(mission_id, status, summary + " (task-graph mode, parallel within phases)")
 
     def _run_self_edit(self, mission_id: str, brief: str, recorded: list[AgentRun]) -> dict:
         """Ask the coding role for a patch and apply it under the engine's guards.
