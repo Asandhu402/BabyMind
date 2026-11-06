@@ -98,12 +98,7 @@ python_version_ok "$python" || fail \
 if [[ $python == /usr/bin/python3.* ]] && { ! python_has_venv "$python" || ! python_has_shared_library "$python"; }; then
   python_suffix=${python#/usr/bin/python}
   if [[ $python_suffix != 3 ]]; then
-    case $PM in
-      apt-get) sudo apt-get install -y "python${python_suffix}-venv" "python${python_suffix}-pip" "python${python_suffix}-dev" ;;
-      dnf) sudo dnf install -y "python${python_suffix}-devel" "python${python_suffix}-pip" ;;
-      zypper) sudo zypper --non-interactive install "python${python_suffix//./}" "python${python_suffix//./}-devel" ;;
-      pacman) ;;
-    esac
+    sudo apt-get install -y "python${python_suffix}-venv" "python${python_suffix}-pip" "python${python_suffix}-dev"
   fi
 fi
 python_has_venv "$python" || fail "$python cannot create virtual environments; install its venv package (for example python3.13-venv) and re-run."
