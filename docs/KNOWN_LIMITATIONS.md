@@ -23,6 +23,14 @@ missing, not what is planned.
   unavailable. In source mode, `auto` now **fails closed** (treated as
   `require`) unless `BABYMIND_ALLOW_UNSANDBOXED_AUTO=true` is set explicitly;
   never set that for untrusted code.
+- **Ubuntu 24.04 and newer restrict unprivileged user namespaces** through
+  AppArmor (`kernel.apparmor_restrict_unprivileged_userns=1`). On such hosts
+  `sandbox.backend()` reports `none` and every sandboxed path - packaged
+  self-edits, generated apps and the sandboxed test suite - fails closed.
+  BabyMind does not change kernel settings for you; CI re-enables them with
+  `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` on a
+  disposable runner, and a desktop user who wants those features must decide
+  that for their own machine.
 - Memory is capped by RLIMIT_AS/RLIMIT_DATA (virtual address space/heap) and,
   when cgroup v2 delegation is available, an additional best-effort
   `memory.max` cgroup cap (reported as `CGROUP_MEM_SET`/`CGROUP_MEM_UNAVAILABLE`
