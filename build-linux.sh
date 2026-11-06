@@ -23,8 +23,17 @@ if not name or not (libdir / name).is_file():
 PYTHON
 mkdir -p build
 archive=build/llama-b11960.tar.gz
+# curl's --retry only covers timeouts and 4xx/5xx responses; a transfer failure
+# such as an HTTP/2 stream error (curl exit 92) aborts immediately and takes the
+# whole build with it, which is what happened on a hosted runner. Retry those
+# too when this curl supports it (--retry-all-errors needs curl 7.71+).
+retry_all=''
+if curl --help all 2>/dev/null | grep -q -- '--retry-all-errors'; then
+  retry_all='--retry-all-errors --retry-delay 2'
+fi
 if [[ ! -f $archive ]]; then
-  curl --fail --location --retry 3 --output "$archive.part" https://codeload.github.com/ggml-org/llama.cpp/tar.gz/refs/tags/b11960
+  # shellcheck disable=SC2086  # $retry_all holds flags only and must word-split
+  curl --fail --location --retry 3 $retry_all --output "$archive.part" https://codeload.github.com/ggml-org/llama.cpp/tar.gz/refs/tags/b11960
   mv "$archive.part" "$archive"
 fi
 echo '2b37ffa871595f90b94164f6c510ad9a34bd7f94da21557cc9878587e163af37  '"$archive" | sha256sum --check

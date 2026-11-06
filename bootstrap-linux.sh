@@ -139,8 +139,17 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1; then
-  download() { curl -fsSL --retry 3 --connect-timeout 20 "$1"; }
-  download_to() { curl -fsSL --retry 3 --connect-timeout 20 --output "$2" "$1"; }
+  # --retry only covers timeouts and 4xx/5xx; a transfer failure such as an
+  # HTTP/2 stream error (curl exit 92) aborts on the first try without this.
+  # The flag needs curl 7.71+, so only use it when this curl knows it.
+  curl_retry_all=''
+  if curl --help all 2>/dev/null | grep -q -- '--retry-all-errors'; then
+    curl_retry_all='--retry-all-errors --retry-delay 2'
+  fi
+  # shellcheck disable=SC2086  # $curl_retry_all holds flags only and must word-split
+  download() { curl -fsSL --retry 3 $curl_retry_all --connect-timeout 20 "$1"; }
+  # shellcheck disable=SC2086
+  download_to() { curl -fsSL --retry 3 $curl_retry_all --connect-timeout 20 --output "$2" "$1"; }
 elif command -v wget >/dev/null 2>&1; then
   download() { wget -qO- --tries=3 --timeout=20 "$1"; }
   download_to() { wget -q --tries=3 --timeout=20 --output-document="$2" "$1"; }

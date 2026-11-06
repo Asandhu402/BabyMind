@@ -665,3 +665,34 @@ real model will produce an acceptable patch: the harness's real-source
 self-edit still has to pass on a hosted run with the pinned model, and the
 repair only handles raw control characters - a reply with genuinely unescaped
 inner quotes still needs the second attempt to succeed.
+
+## Portable-build download aborted by a transient HTTP/2 error (2026-11-06)
+
+Run [42242814978](https://github.com/Asandhu402/BabyMind/actions/runs/42242814978)
+failed `linux (24.04, 3.13)` at the **Build Linux portable directory** step with
+the check annotation `Process completed with exit code 92`; "Test source" was
+skipped, so no test ran. `build-linux.sh` runs under `set -euo pipefail` and its
+only exit-92 candidate is the pinned llama.cpp download:
+
+```
+curl --fail --location --retry 3 --output "$archive.part" \
+  https://codeload.github.com/ggml-org/llama.cpp/tar.gz/refs/tags/b11960
+```
+
+curl's status 92 is an HTTP/2 stream error, and `--retry` does not retry it:
+`--retry` covers timeouts and 4xx/5xx responses only, so the transfer failure
+aborted the build on the first attempt. The job log itself could not be
+retrieved here - GitHub's log host is not reachable from this environment - so
+this is read from the annotation plus the script, not from the build output.
+`linux (24.04, 3.14)` and `3.15` on the same commit were still building when
+this was written.
+
+`build-linux.sh` and `bootstrap-linux.sh` now pass `--retry-all-errors
+--retry-delay 2` to curl. The flag needs curl 7.71+, so both scripts detect it
+with `curl --help all` and omit it on an older curl rather than failing with
+"option is unknown". A regression test extracts each real detection block and
+runs it against a stub curl that advertises the flag and one that does not.
+
+This does not make the build immune to a codeload outage, and it is not
+evidence about the model: the portable build compiles llama.cpp and packages the
+desktop, and does not download or run the pinned model.
