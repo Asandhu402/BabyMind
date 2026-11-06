@@ -151,7 +151,8 @@ raises the model's reasoning ceiling.
 
 Chat's opt-in **Deep research** mode searches multiple queries, reads public
 pages, and produces a numbered-source report with visible retrieval and citation
-warnings. The Memory view provides a user-edited, encrypted context card used
+warnings. **Research document** analyzes selected excerpts from one small text
+attachment without web search. The Memory view provides a user-edited, encrypted context card used
 only when **Use memory** is enabled. Neither feature guarantees factual accuracy
 or automatically learns. Search queries leave the device. See
 [research and context card](docs/RESEARCH_ENGINE.md) for privacy, limits and

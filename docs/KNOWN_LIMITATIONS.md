@@ -163,3 +163,9 @@ queries leave the device. The user-edited context card is opt-in at inference,
 not autonomous learning. Real-model, public search, desktop, and Ubuntu 26.10
 acceptance have not been completed for this feature. See
 [research and context card](RESEARCH_ENGINE.md).
+
+Research document mode accepts only one small text attachment, sends selected
+excerpts to the configured model, and performs no web search. It is not PDF or
+multi-document research; citation checks do not verify claims. Independent
+research agents and autonomous learning remain unimplemented. See
+[research and context card](RESEARCH_ENGINE.md).

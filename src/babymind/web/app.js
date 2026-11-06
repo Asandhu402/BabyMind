@@ -129,8 +129,10 @@ async function newConversation() {
 async function sendMessage(message) {
   const text=message.trim();if(!text||state.busy)return;
   const attachment=state.attachment;
+  const documentResearch=$("#documentResearchToggle").checked;
   if($("#deepResearchToggle").checked && attachment){toast("Deep research sends the question to a public search provider; remove the attachment first.");return;}
-  let submitted=attachment ? text+"\n\nAttached file ("+attachment.name+"):\n"+attachment.content : text;
+  if(documentResearch && !attachment){toast("Attach a text document to research it.");return;}
+  let submitted=attachment && !documentResearch ? text+"\n\nAttached file ("+attachment.name+"):\n"+attachment.content : text;
   state.busy=true;$("#sendButton").disabled=true;$("#messageInput").value="";resizeInput();
   addMessage("user",attachment?text+"\n\n📎 "+attachment.name:text);showTyping();
   try {
@@ -156,7 +158,8 @@ async function sendMessage(message) {
     const chatPayload = () => ({
       message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId || "",
       collaborate:$("#collaborateToggle").checked,use_memory:$("#memoryToggle").checked,
-      remember:$("#rememberToggle").checked,deep_research:$("#deepResearchToggle").checked
+      remember:$("#rememberToggle").checked,deep_research:$("#deepResearchToggle").checked,
+      document_research:documentResearch,...(documentResearch ? {research_document:attachment} : {})
     });
     let result;
     try {
@@ -380,14 +383,20 @@ async function init() {
   $("#chatForm").addEventListener("submit",event=>{event.preventDefault();sendMessage($("#messageInput").value);});
   const pageReadToggle=$("#webPageReadToggle");
   const syncPageReadToggle=()=>{pageReadToggle.disabled=!$("#webResearchToggle").checked;if(pageReadToggle.disabled)pageReadToggle.checked=false;};
-  $("#webResearchToggle").addEventListener("change",()=>{if($("#webResearchToggle").checked) $("#deepResearchToggle").checked=false;syncPageReadToggle();});
+  $("#webResearchToggle").addEventListener("change",()=>{if($("#webResearchToggle").checked){$("#deepResearchToggle").checked=false;$("#documentResearchToggle").checked=false;}syncPageReadToggle();});
   $("#deepResearchToggle").addEventListener("change",()=>{
     if($("#deepResearchToggle").checked){
-      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#collaborateToggle").checked=false;
+      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#collaborateToggle").checked=false;$("#documentResearchToggle").checked=false;
       toast("Deep research sends your question and model-generated queries to a public search provider.");
     }
   });
-  $("#collaborateToggle").addEventListener("change",()=>{if($("#collaborateToggle").checked) $("#deepResearchToggle").checked=false;});
+  $("#documentResearchToggle").addEventListener("change",()=>{
+    if($("#documentResearchToggle").checked){
+      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#deepResearchToggle").checked=false;$("#collaborateToggle").checked=false;
+      toast("Document research sends selected excerpts to your configured model, not web search.");
+    }
+  });
+  $("#collaborateToggle").addEventListener("change",()=>{if($("#collaborateToggle").checked){$("#deepResearchToggle").checked=false;$("#documentResearchToggle").checked=false;}});
   syncPageReadToggle();
   $("#messageInput").addEventListener("input",resizeInput);
   $("#messageInput").addEventListener("keydown",event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();$("#chatForm").requestSubmit();}});

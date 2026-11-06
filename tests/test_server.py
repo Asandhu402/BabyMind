@@ -459,6 +459,38 @@ class BabyMindWebTests(unittest.TestCase):
             stored = connection.execute('SELECT content FROM messages ORDER BY id').fetchall()
         self.assertTrue(all(row['content'].startswith('bmenc:v1:') for row in stored))
 
+    def test_document_research_uses_selected_text_without_web_and_persists_report(self) -> None:
+        class Provider:
+            def __init__(self): self.calls = []
+            def complete(self, system, prompt):
+                self.calls.append((system, prompt))
+                return "The record states a fact [1]."
+        provider = Provider()
+        with patch.object(server.COORDINATOR, 'provider', provider), \
+             patch('babymind.research.search_web') as search, patch('babymind.research.fetch_page') as fetch:
+            status, _, body = self.request('/api/chat', {'message':'What is in this record?',
+                'document_research':True, 'research_document':{'name':'records.txt', 'content':'PRIVATE-DOCUMENT-CONTENT'}})
+        self.assertEqual(status, 200, body)
+        search.assert_not_called()
+        fetch.assert_not_called()
+        data = json.loads(body)
+        self.assertEqual(data['research']['status'], 'completed')
+        self.assertIn('PRIVATE-DOCUMENT-CONTENT', provider.calls[0][1])
+        self.assertIn('records.txt', data['response'])
+        self.assertNotIn('PRIVATE-DOCUMENT-CONTENT', json.dumps(data))
+        stored = json.loads(self.request('/api/conversations/' + data['conversation_id'])[2])
+        self.assertEqual(stored[0]['content'], 'What is in this record?')
+        self.assertEqual(stored[1]['content'], data['response'])
+
+    def test_document_research_rejects_missing_input_and_conflicting_modes(self) -> None:
+        with patch.object(server.COORDINATOR, 'provider') as provider, patch('babymind.research.search_web') as search:
+            self.assertEqual(self.request('/api/chat', {'message':'question', 'document_research':True})[0], 400)
+            self.assertEqual(self.request('/api/chat', {'message':'question', 'document_research':True, 'deep_research':True})[0], 400)
+        provider.complete.assert_not_called()
+        search.assert_not_called()
+        with server.db() as connection:
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM conversations').fetchone()[0], 0)
+
     def test_deep_research_rejects_conflicting_mode_without_search_or_save(self) -> None:
         with patch('babymind.research.search_web') as search:
             status, _, body = self.request('/api/chat', {'message': 'question', 'deep_research': True,
