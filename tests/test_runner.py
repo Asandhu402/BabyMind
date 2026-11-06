@@ -129,6 +129,23 @@ class UnitTestRecordingTests(unittest.TestCase):
         self.assertEqual(set(result["problem_ids"]), scraped)
         self.assertEqual(len(result["problem_ids"]), 2)
 
+    def test_subtest_failures_are_recorded_as_problem_ids(self) -> None:
+        # Parametrized subTest failures are counted in the summary but reported
+        # through addSubTest; without recording them, attribution never completes
+        # and the pre-edit verification gate refuses every sandboxed suite.
+        (self.root / "tests" / "test_mix.py").unlink()
+        (self.root / "tests" / "test_params.py").write_text(
+            "import unittest\n\n\nclass Params(unittest.TestCase):\n"
+            "    def test_matrix(self):\n"
+            "        for value in ('a', 'b', 'c'):\n"
+            "            with self.subTest(value=value):\n"
+            "                self.assertEqual(value, 'a')\n")
+        result = runner.run_unit_tests(self.root, timeout=120)
+        self.assertEqual(result["summary"]["problems"], 2, result["summary"])
+        self.assertEqual(len(result["problem_ids"]), result["summary"]["problems"])
+        self.assertTrue(any("value='b'" in p for p in result["problem_ids"]))
+        self.assertTrue(any("value='c'" in p for p in result["problem_ids"]))
+
     def test_generated_driver_and_report_do_not_survive_the_run(self) -> None:
         runner.run_unit_tests(self.root, timeout=120)
         leftovers = sorted(path.name for path in self.root.glob(".babymind-unittest-*"))

@@ -61,6 +61,14 @@ class _RecordingResult(unittest.TextTestResult):
         super().addError(test, err)
         self._record(test)
 
+    def addSubTest(self, test, subtest, err):
+        # Parametrized subTest failures are counted in the suite summary but
+        # are reported through addSubTest, not addFailure/addError, so they
+        # must be recorded here or the failing set is never attributable.
+        super().addSubTest(test, subtest, err)
+        if err is not None:
+            self._record(subtest)
+
 
 def main() -> int:
     top = sys.argv[1] if len(sys.argv) > 1 else "tests"

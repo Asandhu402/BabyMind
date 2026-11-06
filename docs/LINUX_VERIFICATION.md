@@ -782,3 +782,42 @@ migration only configures the workflow for hosted 26.04 runners. Whether the
 jobs pass will be known only after they execute. Xvfb is not an Ubuntu Desktop
 session. Treat 26.04 support as unverified in the same way 26.10 was, and the
 clean Ubuntu Desktop session remains unverified separately.
+
+## First Ubuntu 26.04 CI runs (2026-11-06, evening)
+
+The first hosted Ubuntu 26.04 runs executed, and their results are recorded
+here rather than asserted.
+
+- PR #84 and its merge push (`main`, `3d6e610`): `bootstrap`,
+  `bootstrap-plan`, `source-latest` and `ui-diagnostics` passed on all runs.
+  The `linux` matrix (Python 3.13, 3.14, 3.15) **failed** at the step
+  "Exercise packaged source staging in an isolated workspace"
+  (`dist/BabyMind/BabyMind --check-dev-staging`) — deterministically, on
+  every matrix leg of both runs. `real-model-installer` was cancelled on the
+  failed main run and has never completed anywhere; no 26.04
+  real-model/installer/GUI acceptance result is recorded.
+- Failure evidence (from the CI failure annotations): inside the sandboxed
+  staged self-edit verification, the suite reported 23 problems on 3.14 and
+  55 on 3.13 and 3.15, and every leg is exactly four ids short of complete
+  attribution. The same suite passed outside the sandbox on the same runners.
+  The in-sandbox failures are the known pre-existing classes — fixtures that
+  exec the bootstrap as uid 0 (user namespaces map the caller to root) and
+  fixtures that require a nested OS sandbox — which `apply_edits` already
+  tolerates as pre-existing problems. The pre-edit gate
+  (`selfdev._suite_completed`) additionally requires every problem to be
+  individually attributable, and parametrized subTest failures were counted
+  in the summary but never recorded as ids (unittest reports them through
+  `addSubTest`, not `addFailure`/`addError`), so attribution never completed
+  and the staged check refused every matrix leg.
+- Fix (PR branch `arena/38aca05c-babymind`): the sandboxed suite runner
+  records subTest failures as problem ids, with a regression test
+  (`tests/test_runner.py::UnitTestRecordingTests`). On this Debian host the
+  sandboxed suite then reports problems=23 with 23 recorded ids and the
+  pre-edit gate accepts the result. The 3.13/3.15 legs additionally showed
+  more pre-existing in-sandbox failures (55); under the fix those become
+  fully attributable (51 recorded + 4 subTest ids) and, being pre-existing,
+  are tolerated by the staged check, which refuses only *new* regressions.
+- This does **not** verify Ubuntu 26.04 support. Whether the matrix and the
+  real-model-installer job pass on hosted 26.04 is known only after a run
+  completes on the merged tree. Xvfb is not a desktop session. The clean
+  Ubuntu Desktop session remains unverified separately.
