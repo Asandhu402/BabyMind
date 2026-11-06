@@ -260,8 +260,9 @@ class TaskGraphStore:
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _path(self, graph_id: str) -> Path:
-        safe = "".join(c for c in graph_id if c.isalnum() or c in {"-", "_"})[:64]
-        return self.dir / f"{safe or 'graph'}.json"
+        safe = "".join(c for c in graph_id if c.isalnum() or c in {"-", "_"})[:32]
+        digest = hashlib.sha256(graph_id.encode("utf-8")).hexdigest()[:16]
+        return self.dir / f"{safe or 'graph'}-{digest}.json"
 
     def save(self, graph_id: str, tasks: list[Task], result: dict) -> None:
         import json
@@ -300,23 +301,28 @@ class TaskGraphStore:
             return None
         try:
             stored = path.read_text(encoding="utf-8")
-            if stored.startswith("bmenc:v1:"):
-                return json.loads(self.secure.decrypt(stored))
+        except OSError:
+            return None
+        if stored.startswith("bmenc:v1:"):
+            # Authentication/key failures must propagate: silently treating
+            # them as an empty checkpoint could rerun already completed work.
+            return json.loads(self.secure.decrypt(stored))
+        try:
             # Migrate legacy plaintext graph files immediately. They remain
             # readable, but every subsequent on-disk representation is
             # authenticated ciphertext under the installation key.
             record = json.loads(stored)
-            encrypted = self.secure.encrypt(json.dumps(record, indent=2))
-            tmp = path.with_suffix(f".{threading.get_ident()}.migrate")
-            with self._lock:
-                with tmp.open("w", encoding="utf-8") as stream:
-                    stream.write(encrypted)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                tmp.replace(path)
-            return record
-        except (OSError, ValueError, RuntimeError):
+        except ValueError:
             return None
+        encrypted = self.secure.encrypt(json.dumps(record, indent=2))
+        tmp = path.with_suffix(f".{threading.get_ident()}.migrate")
+        with self._lock:
+            with tmp.open("w", encoding="utf-8") as stream:
+                stream.write(encrypted)
+                stream.flush()
+                os.fsync(stream.fileno())
+            tmp.replace(path)
+        return record
 
     def completed_results(self, graph_id: str,
                           tasks: list[Task] | None = None) -> dict[str, TaskResult]:
