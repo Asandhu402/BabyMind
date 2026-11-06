@@ -186,9 +186,38 @@ def load_test_baseline() -> dict | None:
 
 
 def _test_problem_ids(result: dict) -> set[str]:
-    """Extract unittest's failure/error headings for baseline comparison."""
+    """Return the failing tests, for baseline comparison.
+
+    The runner records these as data, which is the authoritative source: the
+    console tail is capped and kept from the end, so on a large failing suite
+    the earliest headings are missing and the recovered set undercounts the
+    real one. Scraping is only a fallback for results produced before that
+    recording existed, and it reads both streams because the suite summary is
+    parsed from stdout + stderr and unittest's report can be redirected by a
+    runner or test harness.
+    """
+    recorded = result.get("problem_ids")
+    if isinstance(recorded, list):
+        return set(recorded)
     import re
-    return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", result.get("stderr") or "", re.MULTILINE))
+    output = "\n".join((result.get("stderr") or "", result.get("stdout") or ""))
+    return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", output, re.MULTILINE))
+
+
+def _suite_diagnosis(result: dict) -> str:
+    """One line of evidence explaining why a suite result was rejected.
+
+    "_suite_completed" has three independent reasons to say no, and a hosted run
+    gives no way to re-run the suite and find out which one fired. Report the
+    counters that decide it, so a failure names its own cause.
+    """
+    summary = result.get("summary") or {}
+    return (
+        f"ran={summary.get('ran', 0)} skipped={summary.get('skipped', 0)} "
+        f"problems={summary.get('problems', 0)} identified={len(_test_problem_ids(result))} "
+        f"exit={result.get('exit_code')} timed_out={result.get('timed_out')} "
+        f"truncated={result.get('truncated')} output_chars={len(result.get('stderr') or '') + len(result.get('stdout') or '')}"
+    )
 
 
 def _suite_completed(result: dict) -> bool:
@@ -561,7 +590,10 @@ def apply_edits(
     if verify:
         before = broker.run_unit_tests(root, timeout=test_timeout, sandbox_mode=sandbox_mode())
         if not _suite_completed(before):
-            raise SelfDevError("The pre-edit test suite did not complete with runnable tests; no edit was applied.")
+            raise SelfDevError(
+                "The pre-edit test suite did not complete with runnable tests; no edit was applied. "
+                f"[{_suite_diagnosis(before)}]"
+            )
         before_summary = before["summary"]
         before_problems = _test_problem_ids(before)
         baseline = _record_baseline(root, before_summary)
@@ -644,7 +676,7 @@ def apply_edits(
             # A pre-existing broken test in this environment must not block every
             # change forever; only a *new* problem counts as a regression.
             if not _suite_completed(tests_result):
-                failure = "test suite did not complete with runnable tests"
+                failure = f"test suite did not complete with runnable tests [{_suite_diagnosis(tests_result)}]"
             elif (summary["ran"] < before_summary["ran"]
                   or summary["ran"] - summary.get("skipped", 0)
                   < before_summary["ran"] - before_summary.get("skipped", 0)):

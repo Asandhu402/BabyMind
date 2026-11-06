@@ -320,9 +320,86 @@ class SelfDevTests(unittest.TestCase):
 
     def test_empty_pre_edit_suite_blocks_write(self) -> None:
         (self.root / "tests" / "test_ok.py").write_text("# no tests\n")
-        with self.assertRaisesRegex(selfdev.SelfDevError, "pre-edit test suite"):
+        with self.assertRaisesRegex(selfdev.SelfDevError, "pre-edit test suite") as caught:
             selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 2\n"}])
+        # The refusal must name its own cause: a hosted run cannot be re-run to
+        # find out which of the three gate conditions fired.
+        message = str(caught.exception)
+        for field in ("ran=", "skipped=", "problems=", "identified=", "timed_out=", "truncated="):
+            self.assertIn(field, message)
         self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+
+    def test_suite_diagnosis_reports_the_counters_the_gate_uses(self) -> None:
+        diagnosis = selfdev._suite_diagnosis({
+            "summary": {"ran": 12, "skipped": 3, "problems": 2},
+            "exit_code": 1,
+            "timed_out": False,
+            "truncated": True,
+            "stderr": "FAIL: one.test\nERROR: two.test\n" + "noise" * 40,
+        })
+        self.assertIn("ran=12", diagnosis)
+        self.assertIn("skipped=3", diagnosis)
+        self.assertIn("problems=2", diagnosis)
+        self.assertIn("identified=2", diagnosis)
+        self.assertIn("exit=1", diagnosis)
+        self.assertIn("timed_out=False", diagnosis)
+        self.assertIn("truncated=True", diagnosis)
+        # 15 + 16 + 200 bytes of stderr; the point is that the real length is
+        # reported, not a recomputed stand-in for it.
+        self.assertIn("output_chars=231", diagnosis)
+
+    def test_test_problem_ids_reads_both_output_streams(self) -> None:
+        result = {
+            "stderr": "FAIL: stderr_failure (tests.test_one)\n",
+            "stdout": "ERROR: stdout_error (tests.test_two)\n",
+        }
+        self.assertEqual(
+            selfdev._test_problem_ids(result),
+            {"stderr_failure (tests.test_one)", "stdout_error (tests.test_two)"},
+        )
+        # The gate must accept complete failure evidence regardless of which
+        # stream the host runner used for unittest's report.
+        result.update(
+            summary={"ran": 10, "skipped": 0, "problems": 2},
+            ok=False, exit_code=1, timed_out=False,
+        )
+        self.assertTrue(selfdev._suite_completed(result))
+
+    def test_suite_diagnosis_survives_a_result_without_counters(self) -> None:
+        diagnosis = selfdev._suite_diagnosis({})
+        self.assertIn("ran=0", diagnosis)
+        self.assertIn("identified=0", diagnosis)
+        self.assertIn("output_chars=0", diagnosis)
+
+    def test_truncated_tail_does_not_make_a_completed_suite_look_empty(self) -> None:
+        """The hosted failure: 50 problems reported, 46 headings left in the tail.
+
+        The output cap keeps the end, so the earliest FAIL:/ERROR: lines are cut
+        off and the recovered set undercounts the summary. The gate then reads
+        "missing failure evidence" and refuses every edit forever.
+        """
+        result = {
+            "summary": {"ran": 473, "skipped": 38, "failures": 30, "errors": 20, "problems": 50},
+            "exit_code": 1,
+            "timed_out": False,
+            "truncated": True,
+            "stderr": "\n".join(f"FAIL: kept.test{i}" for i in range(46)),
+        }
+        # Without the recorded ids the suite is rejected, exactly as it was.
+        self.assertEqual(len(selfdev._test_problem_ids(result)), 46)
+        self.assertFalse(selfdev._suite_completed(result))
+
+        recorded = [f"lost.test{i}" for i in range(4)] + [f"kept.test{i}" for i in range(46)]
+        self.assertTrue(selfdev._suite_completed(dict(result, problem_ids=recorded)))
+
+    def test_recorded_ids_are_preferred_over_scraped_headings(self) -> None:
+        result = {"stderr": "FAIL: from.text\n", "problem_ids": ["from.record"]}
+        self.assertEqual(selfdev._test_problem_ids(result), {"from.record"})
+
+    def test_scraping_is_still_used_when_nothing_was_recorded(self) -> None:
+        result = {"stderr": "FAIL: from.text\nERROR: also.text\n"}
+        self.assertEqual(selfdev._test_problem_ids(result), {"from.text", "also.text"})
+        self.assertEqual(selfdev._test_problem_ids(dict(result, problem_ids=[])), set())
 
     def test_preexisting_failure_does_not_block_a_good_change(self) -> None:
         (self.root / "tests" / "test_known_failure.py").write_text(
