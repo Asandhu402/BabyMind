@@ -181,11 +181,32 @@ class HostTests(BootstrapFixture):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Alpine/musl is unsupported", result.stderr)
 
-    def test_refuses_architectures_other_than_x86_64(self):
-        self._stub("uname", '#!/bin/sh\ncase "$1" in -m) echo aarch64 ;; *) echo Linux ;; esac\n')
+    def _uname(self, machine: str) -> None:
+        self._stub("uname", f'#!/bin/sh\ncase "$1" in -m) echo {machine} ;; *) echo Linux ;; esac\n')
+
+    def _glibc(self, version: str) -> None:
+        self._stub("ldd", f'#!/bin/sh\necho "ldd (GNU libc) {version}"\n')
+
+    def test_accepts_x86_64_at_the_oldest_supported_glibc(self):
+        # PySide6's x86-64 wheel is manylinux_2_28 from 6.8 onwards, so Debian 10
+        # (2.28), Debian 11 and Ubuntu 20.04 (both 2.31) are supported.
+        self._glibc("2.28")
+        result = self.run_bootstrap("--dry-run")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_refuses_glibc_below_the_wheel_floor(self):
+        self._glibc("2.27")
         result = self.run_bootstrap("--dry-run")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("needs 64-bit x86", result.stderr)
+        self.assertIn("glibc 2.28 or newer is required", result.stderr)
+
+    def test_refuses_architectures_other_than_x86_64(self):
+        for machine in ("aarch64", "riscv64", "ppc64le", "i686", "s390x"):
+            with self.subTest(machine=machine):
+                self._uname(machine)
+                result = self.run_bootstrap("--dry-run")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("this machine reports " + machine, result.stderr)
 
     def test_refuses_an_unknown_package_manager(self):
         result = self.run_bootstrap("--dry-run", BABYMIND_BOOTSTRAP_PM="portage")

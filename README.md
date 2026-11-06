@@ -32,7 +32,7 @@ bash -c 'if command -v curl >/dev/null 2>&1; then curl -fsSL https://raw.githubu
 
 The command downloads and runs `bootstrap-linux.sh`, which:
 
-1. checks the host (x86-64, glibc 2.34+, not root, not musl/Alpine) and picks the
+1. checks the host (x86-64, glibc 2.28+, not root, not musl/Alpine) and picks the
    package manager it finds;
 2. installs only the tools it is missing (`curl`/`wget`, `tar`, certificates);
 3. **searches for the newest supported Python**: an existing `python3.13`,
@@ -41,7 +41,7 @@ The command downloads and runs `bootstrap-linux.sh`, which:
    source into `~/.cache/babymind/python/<version>` (a few minutes, no
    third-party repositories);
 4. downloads the newest source, then hands over to `install-linux.sh`, which
-   installs the Qt 6.12/WebEngine libraries for your package manager, verifies
+   installs the Qt 6/WebEngine libraries for your package manager, verifies
    and downloads the pinned 2.71 GB model, builds the CPU runtime and desktop,
    and adds the application-menu entry.
 
@@ -97,9 +97,11 @@ model cannot answer the tested questions or produce a valid edit.
 
 ## Portable desktop
 
-The target is a graphical Linux desktop with glibc 2.39 or newer (Ubuntu 24.04+,
-because Qt 6.12 requires glibc 2.34 or newer and the release is built on 24.04)
-and standard Qt WebEngine system libraries. Extract the complete
+The target is a graphical Linux desktop with glibc 2.39 or newer (Ubuntu 24.04+),
+because the release archive is built on 24.04 and inherits that host's libc, and
+with standard Qt WebEngine system libraries. Older glibc is supported through the
+one-command installer above, which builds on your machine instead; the Qt floor
+there is 2.28. Extract the complete
 Linux portable archive and run `./BabyMind` (or open the executable in your file
 manager). On first launch BabyMind asks to download a roughly 2.71 GB model,
 verifies its SHA-256, and saves it under `~/.babymind/models`. The download

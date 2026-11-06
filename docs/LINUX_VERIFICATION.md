@@ -2,7 +2,7 @@
 
 > **Historical record.** The runs below were made while BabyMind still supported
 > Python 3.10/3.11 and Qt 6.8, and the installer accepted Ubuntu 22.04. The
-> current baseline is Python 3.13+ with PySide6 6.12 on Ubuntu 24.04+; see
+> current baseline is Python 3.13+ with PySide6 6.8-6.12 on Ubuntu 24.04+; see
 > [Python support](PYTHON_SUPPORT.md) for the supported matrix and the CI jobs
 > that cover it.
 

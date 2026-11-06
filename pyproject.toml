@@ -21,7 +21,12 @@ classifiers = [
     "Environment :: X11 Applications :: Qt",
 ]
 dependencies = [
-    "PySide6>=6.12,<6.13",
+    # The floor is 6.8 rather than 6.12 so pip picks the newest x86-64 wheel
+    # this host can actually load. PySide6 publishes manylinux_2_28 wheels from
+    # 6.8 and manylinux_2_34 from 6.12, so a glibc 2.28-2.33 machine gets 6.8.x
+    # while every newer host still gets 6.12. desktop.py only uses Qt 6 APIs
+    # present since 6.0, so both are supported.
+    "PySide6>=6.8,<6.13",
     "cryptography>=50.0.0,<51",
 ]
 

@@ -37,9 +37,10 @@ in the application folder. Deleting the application does not delete your data.
 To build from source, install Python 3.13+ (tested on 3.13, 3.14 and 3.15),
 venv/pip, a C++ compiler, CMake, curl and tar, then run `./build-linux.sh`. The build downloads Python packages
 and checksum-verifies the pinned llama.cpp source. It builds a generic x86-64
-CPU runtime and packages Qt 6.12 and Python with PyInstaller. Use a glibc 2.39
-build host (Ubuntu 24.04) for compatibility with Ubuntu 24.04; newer build hosts
-may produce binaries that require newer glibc. The archive and build dependencies are not vendored.
+CPU runtime and packages Qt 6 and Python with PyInstaller. The artifact inherits
+the build host's glibc, so use a glibc 2.39 build host (Ubuntu 24.04) for
+compatibility with Ubuntu 24.04; newer build hosts may produce binaries that
+require newer glibc, and older ones widen the set of hosts that can run it. The archive and build dependencies are not vendored.
 The first model download has not been verified in restricted/offline networks. See docs/LINUX_VERIFICATION.md in the source tree for the actual test status.
 
 The portable build includes a Python helper and bundled source seed. It can stage

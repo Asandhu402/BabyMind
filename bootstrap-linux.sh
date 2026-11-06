@@ -46,13 +46,17 @@ done
 say 'Checking this machine'
 [[ $(uname -s) == Linux ]] || die 'BabyMind runs on Linux only.'
 [[ $(uname -m) == x86_64 ]] || die "BabyMind needs 64-bit x86 (x86_64); this machine reports $(uname -m)."
+# The glibc floor comes from PySide6's published wheels, not from our own code:
+# the bundled Qt cannot load on an older libc than the wheel it ships in was
+# built against. The x86-64 wheel is manylinux_2_28 from PySide6 6.8 onwards.
+GLIBC_MIN=2.28
 [[ $EUID -ne 0 ]] || die 'Run as your normal desktop user, not root: sudo is used only for packages.'
 [[ -r /etc/os-release ]] || die 'Cannot identify this distribution (/etc/os-release is missing).'
 # shellcheck source=/dev/null
 . /etc/os-release
 DISTRO=${PRETTY_NAME:-${NAME:-Linux}}
 if [[ -e /lib/ld-musl-x86_64.so.1 ]] || ldd --version 2>/dev/null | grep -qi musl; then
-  die 'Alpine/musl is unsupported: Qt 6.12 and BabyMind need glibc 2.34 or newer.'
+  die 'Alpine/musl is unsupported: PySide6 publishes no musl wheels, so Qt cannot be installed there.'
 fi
 glibc=$(ldd --version 2>/dev/null | awk 'NR == 1 {print $NF}' || true)
 case ${glibc:-} in
@@ -60,8 +64,10 @@ case ${glibc:-} in
     glibc_major=${glibc%%.*}
     glibc_rest=${glibc#*.}
     glibc_minor=${glibc_rest%%.*}
-    if ((glibc_major < 2 || (glibc_major == 2 && glibc_minor < 34))); then
-      die "glibc 2.34 or newer is required (this system has $glibc)."
+    min_major=${GLIBC_MIN%%.*}
+    min_minor=${GLIBC_MIN#*.}
+    if ((glibc_major < min_major || (glibc_major == min_major && glibc_minor < min_minor))); then
+      die "glibc $GLIBC_MIN or newer is required (this system has $glibc)."
     fi
     ;;
   *) warn 'Could not read the glibc version; continuing.' ;;
@@ -366,7 +372,7 @@ if [[ $DRY_RUN == 1 ]]; then
   note "Package manager: $PM"
   note "Python: $PYTHON ($PYTHON_ORIGIN)"
   [[ -n $source_dir ]] && note "Source: $source_dir"
-  note 'Next: install-linux.sh installs the Qt 6.12/WebEngine libraries, downloads'
+  note 'Next: install-linux.sh installs the Qt 6/WebEngine libraries, downloads'
   note 'the pinned 2.71 GB model, builds the CPU runtime and desktop, and adds'
   note 'the application-menu entry. Re-run without --dry-run to do that.'
   exit 0

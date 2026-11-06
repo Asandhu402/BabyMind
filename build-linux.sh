@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Build an x86-64 CPU-only portable directory on Linux (glibc >= 2.35).
+# Build an x86-64 CPU-only portable directory on Linux.
+#
+# The glibc floor is whatever the host has: PySide6's x86-64 wheel is
+# manylinux_2_28 from 6.8 onwards, so an artifact built here inherits the build
+# host's libc rather than a fixed one.
 set -euo pipefail
 cd "$(dirname "$0")"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'Build requires Linux x86-64.' >&2; exit 1; }

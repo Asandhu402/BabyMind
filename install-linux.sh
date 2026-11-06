@@ -8,11 +8,28 @@ umask 077
 
 fail() { printf 'BabyMind installation stopped: %s\n' "$*" >&2; exit 1; }
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || fail 'Linux x86-64 is required.'
+# The floor is set by PySide6's published x86-64 wheel: the bundled Qt cannot
+# load on an older libc than the wheel it ships in was built against.
+GLIBC_MIN=2.28
 [[ $EUID -ne 0 ]] || fail 'Run as your normal desktop user, not root; the installer will use sudo for packages.'
 [[ -r /etc/os-release ]] || fail 'Cannot identify this operating system.'
 if [[ -e /lib/ld-musl-x86_64.so.1 ]] || ldd --version 2>/dev/null | grep -qi musl; then
-  fail 'Alpine/musl is unsupported: Qt 6.12 and BabyMind need glibc 2.34 or newer.'
+  fail 'Alpine/musl is unsupported: PySide6 publishes no musl wheels, so Qt cannot be installed there.'
 fi
+glibc=$(ldd --version 2>/dev/null | awk 'NR == 1 {print $NF}' || true)
+case ${glibc:-} in
+  [0-9]*.[0-9]*)
+    min_major=${GLIBC_MIN%%.*}
+    min_minor=${GLIBC_MIN#*.}
+    glibc_major=${glibc%%.*}
+    glibc_rest=${glibc#*.}
+    glibc_minor=${glibc_rest%%.*}
+    if ((glibc_major < min_major || (glibc_major == min_major && glibc_minor < min_minor))); then
+      fail "glibc $GLIBC_MIN or newer is required (this system has $glibc)."
+    fi
+    ;;
+  *) printf 'Could not read the glibc version; continuing.\n' >&2 ;;
+esac
 command -v sudo >/dev/null || fail 'sudo is required to install system packages.'
 PM=
 for candidate in apt-get dnf pacman zypper; do

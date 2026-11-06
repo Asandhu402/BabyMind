@@ -18,7 +18,7 @@ explanatory message instead of a confusing dependency error.
 
 | Package | Version | Why |
 | --- | --- | --- |
-| PySide6 | `>=6.12,<6.13` | Qt 6.12 is the current release and the first line that publishes `cp310-abi3` wheels usable on 3.13-3.15. Wheels need glibc 2.34 or newer on x86-64. |
+| PySide6 | `>=6.8,<6.13` | A range rather than a single line, so pip picks the newest x86-64 wheel the host can actually load. 6.12 is the current release and publishes `manylinux_2_34`; 6.8 is the first line with `manylinux_2_28`, which is what lets glibc 2.28-2.33 hosts install at all. Both are `abi3` wheels usable on 3.13-3.15, and `desktop.py` only uses Qt 6 APIs present since 6.0. |
 | cryptography | `>=50.0.0,<51` | Unchanged; supports 3.15. |
 | pyinstaller (`build` extra) | `>=6.22,<7` | Supports `requires-python <3.16`. |
 | browser-use (`browser` extra) | `>=0.13` | Python 3.11+; the previous `python_version >= '3.11'` marker is no longer needed. |
@@ -26,10 +26,13 @@ explanatory message instead of a confusing dependency error.
 
 ## Platform consequences
 
-* **glibc:** the portable archive produced by CI is built on Ubuntu 24.04 and
-  therefore needs glibc 2.39 or newer (Ubuntu 24.04+). Qt 6.12 itself needs
-  glibc 2.34 or newer, so Ubuntu 22.04 users cannot run it even with a newer
-  Python.
+* **glibc:** two different floors apply, because they come from different
+  artifacts. The portable archive built by CI inherits the glibc of its build
+  host, Ubuntu 24.04, so it needs 2.39 or newer. The one-command installer
+  builds on the user's machine and needs only what PySide6's wheel needs, which
+  is glibc 2.28 on x86-64 (`manylinux_2_28`, published from PySide6 6.8). So
+  Ubuntu 22.04 and Debian 11 users install with the one-command path and use the
+  portable archive only on 24.04 or newer.
 * **Distributions that ship an old Python** (Ubuntu 24.04 ships 3.12, Debian 13
   ships 3.13): `bootstrap-linux.sh` searches for an installed `python3.15`,
   `python3.14` or `python3.13` (each one must also provide a shared libpython
@@ -40,8 +43,8 @@ explanatory message instead of a confusing dependency error.
 * **Distributions that ship 3.13-3.15** (Ubuntu 26.04 ships 3.14, Fedora and
   Arch ship current Python) need no extra Python step; the bootstrap reuses the
   installed interpreter.
-* **Alpine/musl is rejected:** Qt 6.12 needs glibc, so the bootstrap stops on
-  musl systems instead of half-installing.
+* **Alpine/musl is rejected:** PySide6 publishes no musl wheels, so Qt cannot be
+  installed there. The bootstrap stops on musl systems instead of half-installing.
 * **Packaged app:** the portable build bundles its own interpreter, so end users
   of the release archive do not need Python installed at all.
 
