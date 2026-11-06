@@ -67,7 +67,7 @@ def orchestrator():
     from .orchestrator import Orchestrator
 
     budget = int(os.getenv("BABYMIND_MISSION_MAX_SECONDS", "900") or 900)
-    return Orchestrator(COORDINATOR.provider, mission_store(), max_seconds=budget)
+    return Orchestrator(COORDINATOR.model_router, mission_store(), max_seconds=budget)
 
 
 @contextmanager
