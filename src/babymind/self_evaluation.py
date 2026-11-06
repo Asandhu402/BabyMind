@@ -5,6 +5,7 @@ consciousness, sentience, or free will.
 """
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -106,6 +107,37 @@ def run_self_evaluation(core: CognitiveCore | None = None) -> dict[str, Any]:
             )
     except Exception as error:
         record("isolated_persistence_probe", False, f"Probe failed safely: {type(error).__name__}: {error}")
+
+    # A scripted provider checks the autonomous-cycle integration contract, not real-model intelligence.
+    try:
+        with tempfile.TemporaryDirectory(prefix="babymind-cycle-eval-") as temporary:
+            class ScriptedProvider:
+                def __init__(self):
+                    self.calls = 0
+                    self.planning_prompts = []
+
+                def complete(self, system_prompt, user_prompt):
+                    self.calls += 1
+                    if "post-action reflection stage" in system_prompt:
+                        learning = "Consult the verified goal in the next cycle." if self.calls == 2 else "Carry forward verified lessons."
+                        return json.dumps({"reflection": "The local result was checked.", "learning": learning, "confidence": 0.9})
+                    self.planning_prompts.append(user_prompt)
+                    action = ({"type": "create_goal", "title": "Autonomy probe", "description": "Temporary test."}
+                              if len(self.planning_prompts) == 1 else {"type": "wait"})
+                    return json.dumps({"understanding": "Evaluation environment.", "plan": "Take one bounded step.", "action": action, "expected": "The local result is verifiable."})
+
+            cycle_core = CognitiveCore(Path(temporary) / "cycle.sqlite3")
+            provider = ScriptedProvider()
+            first_cycle = cycle_core.run_cycle(provider)
+            second_cycle = cycle_core.run_cycle(provider)
+            reused = (first_cycle["verified"] and second_cycle["verified"]
+                      and len(provider.planning_prompts) == 2
+                      and "Consult the verified goal in the next cycle" in provider.planning_prompts[1])
+            record("bounded_autonomous_cycle_and_learning_reuse", reused,
+                   "A scripted provider initiated a local goal without a user task; the next cycle received the prior reflection. This validates wiring, not real-model intelligence.")
+    except Exception as error:
+        record("bounded_autonomous_cycle_and_learning_reuse", False,
+               f"Cycle integration probe failed: {type(error).__name__}: {error}")
 
     if active_core is not None:
         try:
