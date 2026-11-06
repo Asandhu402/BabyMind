@@ -92,11 +92,18 @@ def verify_packaged_staging() -> None:
             if (result.get("status") != "applied" or not result.get("sandboxed")
                     or result.get("source_scope") != "staged-copy"
                     or not (result.get("tests") or {}).get("summary", {}).get("passed")):
-                summary = (result.get("tests") or {}).get("summary") or {}
+                tests = result.get("tests") or {}
+                summary = tests.get("summary") or {}
+                try:
+                    problems = sorted(selfdev._test_problem_ids(tests))
+                except Exception:
+                    problems = []
+                test_output = (tests.get("stderr") or tests.get("stdout") or "")[-5000:]
                 raise PackagedDevelopmentError(
                     "Staged self-edit did not pass: "
                     f"status={result.get('status')} sandboxed={result.get('sandboxed')} "
                     f"source_scope={result.get('source_scope')} tests={summary} "
+                    f"problem_ids={problems[:40]} test_output_tail={test_output!r} "
                     f"reason={result.get('reason', '')}"
                 )
             from . import broker
