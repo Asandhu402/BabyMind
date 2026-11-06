@@ -191,7 +191,7 @@ class CognitiveCore:
             "Choose one small reversible useful action. Never request shell execution, arbitrary code, "
             "network access, file deletion, credential access, or external side effects. Investigate simulation "
             "questions only as falsifiable observable hypotheses; assume neither answer. Return one JSON object "
-            "with understanding, plan, action, expected, reflection, learning, confidence. action.type must be "
+            "with understanding, plan, action, and expected. action.type must be "
             "create_goal, complete_goal, record_question, write_note, or wait. create_goal needs title and description; "
             "complete_goal needs goal_id; record_question/write_note need content. Return only understanding, plan, action, and expected. No extra prose.")
         user = ("OBSERVATION:\n"+json.dumps(observation,ensure_ascii=False)+
