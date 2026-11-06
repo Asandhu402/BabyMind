@@ -12,7 +12,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from babymind import server
+from babymind import sandbox, server
 
 
 class FakeProvider:
@@ -90,6 +90,8 @@ class BuilderApiTests(unittest.TestCase):
         self.assertFalse(body["ready"])
 
     def test_plan_then_build_creates_the_app(self) -> None:
+        if not sandbox.available():
+            self.skipTest("generated code execution requires an available OS sandbox")
         status, plan = self.request("/api/builder/plan", {"brief": "a greeting app"})
         self.assertEqual(status, 201, plan)
         self.assertEqual(plan["target"], "apps/greeting-app")
