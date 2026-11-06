@@ -66,13 +66,13 @@ class BackgroundService:
                 while not self._stop and (max_cycles is None or cycles < max_cycles):
                     try:
                         report = self.controller.run(
-                            self.coordinator.provider, cycles=1, interval=0,
+                            self.coordinator.model_router, cycles=1, interval=0,
                             agent_id=self.agent_id,
                         )
                         last_result = report
                         cycles += int(report.get("completed_cycles", 0))
                         verified += int(report.get("verified_cycles", 0))
-                        if report.get("status") != "completed":
+                        if report.get("status") != "completed" or report.get("verified_cycles") != 1:
                             raise RuntimeError("Cognitive cycle did not complete successfully.")
                         errors = 0
                         delay = self.interval
