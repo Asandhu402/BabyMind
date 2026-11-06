@@ -189,10 +189,12 @@ class HostTests(BootstrapFixture):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("needs 64-bit x86", result.stderr)
 
-    def test_refuses_an_unknown_package_manager(self):
-        result = self.run_bootstrap("--dry-run", BABYMIND_BOOTSTRAP_PM="portage")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Unsupported package manager", result.stderr)
+    def test_refuses_non_apt_package_managers(self):
+        for package_manager in ("dnf", "pacman", "zypper", "portage"):
+            with self.subTest(package_manager=package_manager):
+                result = self.run_bootstrap("--dry-run", BABYMIND_BOOTSTRAP_PM=package_manager)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Only apt-get is supported", result.stderr)
 
 
 class PrepareTests(BootstrapFixture):
