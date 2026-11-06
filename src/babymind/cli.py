@@ -117,7 +117,7 @@ def main() -> None:
         from .orchestrator import MissionStore, Orchestrator
         from .server import DATA_HOME
         store = MissionStore(DATA_HOME)
-        orchestrator = Orchestrator(BabyMindCoordinator().provider, store,
+        orchestrator = Orchestrator(BabyMindCoordinator().model_router, store,
                                     max_seconds=args.max_seconds)
         mission = orchestrator.run_now(args.brief)
         for run in mission["runs"]:
