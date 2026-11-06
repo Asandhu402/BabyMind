@@ -9,7 +9,15 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from babymind.agents import AGENTS
-from babymind.orchestrator import MissionError, MissionStore, Orchestrator, _agent_prompt, phase_catalogue, role_catalogue
+from babymind.orchestrator import (
+    MissionError,
+    MissionStore,
+    Orchestrator,
+    _agent_prompt,
+    parse_model_json,
+    phase_catalogue,
+    role_catalogue,
+)
 
 BRIEF = "Build a small inventory application with a database and a report."
 
@@ -258,6 +266,56 @@ class SelfEditLoopTests(unittest.TestCase):
         self.assertIn("ROLLED BACK", provider.prompts[1])
         self.assertIn("assertEqual(2, 2)", (self.root / "tests" / "test_ok.py").read_text())
 
+    def test_a_patch_with_raw_newlines_is_repaired_on_the_first_attempt(self) -> None:
+        # The documented real-model failure: the model put literal newlines
+        # inside the JSON string value, json.loads rejected the whole reply, and
+        # the mission recorded no_change without ever applying the edit.
+        provider = SequencedSelfEditProvider([
+            '{"reason": "add a helper", "edits": [{"path": "src/babymind/mod.py", '
+            '"content": "VALUE = 1\ndef add(a, b):\n    return a + b\n"}]}',
+            {"reason": "unused", "edits": []},
+        ])
+        mission = Orchestrator(provider, self.store, max_seconds=180).run_now(
+            "Add a helper function to the module.", self_edit=True
+        )
+        report = mission["self_edit"]
+        self.assertEqual(report["status"], "applied", report)
+        self.assertEqual(provider.self_edit_calls, 1)
+        self.assertIn("add(a, b)", (self.root / "src" / "babymind" / "mod.py").read_text())
+
+    def test_an_unrepairable_reply_gets_a_second_attempt_that_explains_the_fault(self) -> None:
+        # A truncated reply must not be guessed at, but it must still consume
+        # only one attempt: the repair budget the caller asked for is real.
+        provider = SequencedSelfEditProvider([
+            '{"reason": "r", "edits": [{"path": "src/babymind/mod.py", "content": "VALUE = 2',
+            {"reason": "add a helper", "edits": [{
+                "path": "src/babymind/mod.py",
+                "content": "VALUE = 1\ndef add(a, b):\n    return a + b\n"}]},
+        ])
+        mission = Orchestrator(provider, self.store, max_seconds=180).run_now(
+            "Add a helper function to the module.", self_edit=True
+        )
+        report = mission["self_edit"]
+        self.assertEqual(report["status"], "applied", report)
+        self.assertEqual(report["attempts"], 2)
+        self.assertEqual([item["status"] for item in report["trail"]],
+                         ["proposer_error", "applied"])
+        self.assertEqual(provider.self_edit_calls, 2)
+        self.assertIn("COULD NOT BE USED", provider.prompts[1])
+        self.assertIn("cut off", provider.prompts[1])
+        self.assertIn("add(a, b)", (self.root / "src" / "babymind" / "mod.py").read_text())
+
+    def test_two_unparseable_patches_are_reported_without_touching_the_tree(self) -> None:
+        provider = SequencedSelfEditProvider(['{"reason": "r", "edits": [{"path": "x.py"'] * 2)
+        mission = Orchestrator(provider, self.store, max_seconds=180).run_now(
+            "Add a helper function to the module.", self_edit=True
+        )
+        report = mission["self_edit"]
+        self.assertEqual(report["status"], "no_change", report)
+        self.assertEqual(provider.self_edit_calls, 2)
+        self.assertIn("COULD NOT BE USED", provider.prompts[1])
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+
     def test_two_failed_attempts_leave_the_tree_untouched(self) -> None:
         bad = {"reason": "still broken", "edits": [{
             "path": "tests/test_ok.py",
@@ -392,3 +450,60 @@ class GraphCancellationTests(unittest.TestCase):
         orchestrator._run_graph(mid, BRIEF)
         mission = store.get(mid)
         self.assertEqual(mission["status"], "cancelled")
+
+
+class ParseModelJsonTests(unittest.TestCase):
+    """A self-edit proposal is free model text, so parsing it must not be brittle.
+
+    These cover the shapes the pinned model actually produced: raw newlines
+    inside a string value, a brace in the surrounding prose, a Markdown fence,
+    and a reply cut off mid-object.
+    """
+
+    def test_raw_newlines_inside_a_string_value_are_repaired(self) -> None:
+        raw = ('{"reason": "add a helper", "edits": [{"path": "src/babymind/mod.py", '
+               '"content": "VALUE = 1\ndef add(a, b):\n    return a + b\n"}]}')
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(raw)  # the failure this exists to survive
+        parsed = parse_model_json(raw)
+        self.assertEqual(parsed["edits"][0]["content"], "VALUE = 1\ndef add(a, b):\n    return a + b\n")
+
+    def test_prose_after_the_object_cannot_extend_it(self) -> None:
+        raw = 'Here is the patch:\n{"reason": "r", "edits": []}\nTell me if you want {more}.'
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(raw[raw.find("{"):raw.rfind("}") + 1])  # the old slice
+        self.assertEqual(parse_model_json(raw), {"reason": "r", "edits": []})
+
+    def test_a_stray_brace_in_prose_does_not_hide_the_real_object(self) -> None:
+        raw = 'Use a {dict} here.\n{"reason": "r", "edits": []}'
+        self.assertEqual(parse_model_json(raw), {"reason": "r", "edits": []})
+
+    def test_a_code_fence_is_stripped(self) -> None:
+        raw = '```json\n{"reason": "r", "edits": []}\n```'
+        self.assertEqual(parse_model_json(raw), {"reason": "r", "edits": []})
+
+    def test_already_valid_json_survives_the_repair_unchanged(self) -> None:
+        payload = {"reason": 'a "quoted" reason with an escaped \n newline', "edits": []}
+        self.assertEqual(parse_model_json(json.dumps(payload)), payload)
+
+    def test_a_truncated_object_is_reported_and_never_completed(self) -> None:
+        raw = '{"reason": "r", "edits": [{"path": "src/babymind/mod.py", "content": "VALUE = 1'
+        with self.assertRaises(ValueError) as caught:
+            parse_model_json(raw)
+        self.assertIn("cut off", str(caught.exception))
+
+    def test_a_truncated_outer_object_is_not_satisfied_by_a_complete_inner_one(self) -> None:
+        raw = '{"reason": "r", "edits": [{"path": "a.py", "content": "VALUE = 1"}]'
+        with self.assertRaises(ValueError) as caught:
+            parse_model_json(raw)
+        self.assertIn("cut off", str(caught.exception))
+
+    def test_invalid_json_that_repair_cannot_fix_names_the_reason(self) -> None:
+        with self.assertRaises(ValueError) as caught:
+            parse_model_json('{"reason": "r", "edits": [}')
+        self.assertIn("invalid JSON", str(caught.exception))
+
+    def test_a_reply_with_no_object_is_rejected(self) -> None:
+        with self.assertRaises(ValueError) as caught:
+            parse_model_json("I cannot make that change safely.")
+        self.assertIn("no JSON object", str(caught.exception))

@@ -101,8 +101,15 @@ missing, not what is planned.
 
 ## Data and model
 
-- No model is bundled in the repository. Installation downloads ~2.7 GB; this
-  passed once on a hosted Ubuntu VM, but other networks remain untested.
+- No model is bundled in the repository. Installation downloads ~2.7 GB; the
+  installer, download and checksum verification now run automatically on every
+  CI push and pull request on a hosted Ubuntu VM, but other networks and a
+  normal desktop session remain untested.
+- The real-model acceptance job is permanent CI, not an opt-in dispatch, so a
+  model that cannot answer its tested questions or emit a valid edit turns the
+  build red. Its checks cover a fixed GUI question set, three source-mode chat
+  questions, one coding task and two self-edits; they are not a measure of role
+  competence or advice quality.
 - Conversations, missions, and memory are encrypted at rest with a local key file on Linux. It is readable by the same user and does not protect against a compromised account.
 - Knowledge-graph and voice integrations remain optional and unverified here.
 

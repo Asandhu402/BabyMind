@@ -6,6 +6,7 @@ here installs software, downloads a model or needs network access.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -141,6 +142,36 @@ class CommandTests(BootstrapFixture):
         self.assertTrue(os.access(SCRIPT, os.X_OK))
         result = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_downloads_retry_transfer_failures_and_stay_compatible_with_old_curl(self):
+        # curl's --retry covers timeouts and 4xx/5xx only. A transfer failure
+        # such as an HTTP/2 stream error (curl exit 92) aborted a hosted
+        # portable build outright, so the real detection block is extracted and
+        # run here against both a modern and an old curl.
+        for name in ("bootstrap-linux.sh", "build-linux.sh"):
+            text = (REPO / name).read_text(encoding="utf-8")
+            block = re.search(r"(?ms)^[ \t]*(\w+)=''\n[ \t]*if curl --help all .*?^[ \t]*fi\n", text)
+            self.assertIsNotNone(block, f"{name} does not feature-detect --retry-all-errors")
+            variable = block.group(1)
+            downloads = re.findall(r"(?m)^.*\bcurl .*--retry 3.*$", text)
+            self.assertTrue(downloads, f"{name} has no curl download line")
+            for line in downloads:
+                self.assertIn(f"${variable}", line, f"{name} does not use the detected flag: {line}")
+            with tempfile.TemporaryDirectory() as directory:
+                stub = Path(directory) / "curl"
+                env = {**os.environ, "PATH": f"{directory}:{os.environ['PATH']}"}
+                probe = block.group(0) + f'printf "%s\\n" "${variable}"\n'
+                stub.write_text("#!/bin/sh\necho ' --retry-all-errors  Retry even on transient errors'\n")
+                stub.chmod(0o755)
+                modern = subprocess.run(["bash", "-c", probe], env=env, capture_output=True, text=True)
+                self.assertEqual(modern.returncode, 0, modern.stderr)
+                self.assertEqual(modern.stdout.strip(), "--retry-all-errors --retry-delay 2")
+                # An older curl must not be handed a flag it would reject with
+                # "option --retry-all-errors: is unknown".
+                stub.write_text("#!/bin/sh\necho 'Usage: curl [options...] <url>'\n")
+                legacy = subprocess.run(["bash", "-c", probe], env=env, capture_output=True, text=True)
+                self.assertEqual(legacy.returncode, 0, legacy.stderr)
+                self.assertEqual(legacy.stdout.strip(), "")
 
 
 class HostTests(BootstrapFixture):

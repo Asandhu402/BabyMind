@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Opt-in real-model role, coding and disposable self-edit smoke test.
+"""Real-model role, coding and disposable self-edit smoke test.
 
-Use an ephemeral host with a pinned model installed by install-linux.sh. This
-runs 50 sequential model calls and can take a long time. Generated code is
-executed only if the OS sandbox's own boundary probes pass, and only inside a
-throwaway project. It does not test the frozen desktop's self-edit capability.
+CI runs this on every push and pull request against an ephemeral host with the
+pinned model installed by install-linux.sh. This runs 50 sequential model
+calls and can take a long time. Generated code is executed only if the OS
+sandbox's own boundary probes pass, and only inside a throwaway project. It
+does not test the frozen desktop's self-edit capability.
 """
 from __future__ import annotations
 

@@ -535,3 +535,164 @@ What has been run:
 What has **not** been run: the dnf, pacman and zypper package lists on those
 distributions, the from-source CPython build end to end (only its plan and its
 failure handling), and a fresh-machine install with the production model.
+
+## Real-model acceptance is now permanent CI (2026-11-06)
+
+The `real-model-installer` job in `.github/workflows/tests.yml` used to be a
+manual `workflow_dispatch` behind the `real_model_test` input, so the pinned
+model - the application's brain - was only exercised when someone remembered to
+ask for it. That input is gone. The job now has no trigger condition, so it
+runs on every push to `main`, on every pull request against `main`, and on
+`workflow_dispatch`. Nothing in the job changed except when it runs: the same
+fresh Ubuntu 26.04 VM still runs the real `install-linux.sh` in a disposable
+home (Ubuntu packages, the ~2.71 GB production-model download and its SHA-256
+verification, the local build), starts the installed Qt desktop under Xvfb and
+drives it with the real model, then runs the 50-role mission, the coding test
+and the disposable real-source self-edit through `verify_real_model_roles.py`.
+
+A per-branch `concurrency` group with `cancel-in-progress: true` was added so a
+newer commit on the same branch or pull request supersedes the in-flight run
+instead of stacking another model download and 50-role CPU mission. The newest
+commit always still runs the job.
+
+The same pass then removed the last optional paths from the workflow, so there
+is no way to trigger a partial BabyMind run:
+
+- `chat_test_only` is gone. The extended GUI question set (`--extended-chat`
+  plus its JSON report) is no longer a manual variant that replaced the 50-role
+  mission; it now runs on every real-model run, followed by the mission. The
+  job timeout went from 110 to 180 minutes, because recorded runs needed
+  3,601-4,235 seconds for the mission alone on top of the download, the build
+  and the question set. Both reports are uploaded on every run.
+- `diagnose_source_only` and the whole `diagnose-source` job are gone. That job
+  was a manual re-run of `source-latest` on the same runner (ubuntu-26.04,
+  Python 3.15) with the same annotation script; its only differences were
+  installing the `[build]` extra and desktop libraries that neither job uses,
+  because neither sets `BABYMIND_GUI_TEST`. No test imports PyInstaller, so
+  deleting it removed no coverage - `source-latest` already runs permanently.
+- `workflow_dispatch` now has no inputs at all, and no job in the file carries
+  a job-level `if:`. The three remaining step-level conditions only propagate
+  failures (`!cancelled()`, `steps.installer.outcome == 'success'`).
+- `tests/test_real_model_ci.py` (10 cases) now asserts all of that from the
+  workflow file. Run against the pre-change workflow it fails 4 of its 10 cases
+  (job-level gate, dispatch switch, step condition, partial GUI question set),
+  so it is not a vacuous check.
+
+What remains optional is not CI. The `documents`, `voice`, `browser` and
+`knowledge-graph` extras in `pyproject.toml` are still opt-in dependencies:
+`cognee` publishes no Python 3.15 wheels, so `knowledge-graph` cannot become a
+hard dependency of a project that supports 3.15, and `docling`,
+`faster-whisper` and `browser-use` are heavyweight third-party stacks. The
+model itself is not optional: `providers.create_provider()` accepts only
+`llama.cpp` and raises `ProviderError` for anything else, its unconfigured
+provider refuses to complete a request, and `first_run.prepare_local_engine()`
+refuses to start without the bundled `llama-server` and a model whose SHA-256
+matches the pin.
+
+What this does and does not establish:
+
+- **It does** mean a regression that breaks the installer, the model download,
+  the pinned checksum, llama-server startup, GUI launch under a virtual
+  display, or the model's answers to the tested questions is reported on the
+  commit that caused it rather than at some later, manual re-run.
+- **It does not** mean the checks pass. The last recorded hosted run
+  ([41939836348](https://github.com/Asandhu402/BabyMind/actions/runs/41939836348),
+  reported above under "Packaged source-staging development") **failed** its
+  real-source self-edit because the model returned malformed JSON, and the
+  harness records any failure as a red job. Until the model reliably emits a
+  valid edit, this job is expected to fail, and it will fail on every push.
+- It is not a clean Ubuntu Desktop session, not a measure of role competence,
+  and not proof that the packaged app can upgrade itself.
+- Whether this job is a *required* status check for merging is a repository
+  setting on `main`; it is not controlled by this workflow file and was not
+  changed here.
+
+## Self-edit JSON parsing and the wasted repair attempt (2026-11-06)
+
+Run [41939836348](https://github.com/Asandhu402/BabyMind/actions/runs/41939836348)
+failed its real-source self-edit because "the model produced malformed,
+unterminated JSON" and the mission recorded `no_change`. Two separate defects
+produced that outcome, and both were in BabyMind rather than in the model.
+
+**1. `orchestrator._extract_json` sliced from the first `{` to the last `}` and
+handed the result straight to `json.loads`.** That is brittle in three ways: a
+`}` inside a string value or in the model's trailing prose moves the slice, a
+reply cut off mid-object reports only "no JSON object in the response", and -
+the case that actually bit - a `"content"` value containing literal newlines is
+rejected outright. Reproduced against the pre-fix source with the exact shape a
+4B model emits for a multi-line file:
+
+```
+json.loads(_extract_json(raw))
+  -> JSONDecodeError: Invalid control character at: line 1 column 91 (char 90)
+```
+
+**2. `selfdev.apply_with_repair` broke out of its loop on the first proposer
+exception**, so `MAX_SELF_EDIT_ATTEMPTS = 2` never applied to a malformed
+reply. The retry prompt was only ever built from *verification* output, so a
+proposer that could not be parsed was never told what was wrong with it. The
+same probe, proposer raising once then returning a good patch, `attempts=3`:
+
+```
+before: propose() called on attempts: [1]    | outcome: unrepaired
+after:  propose() called on attempts: [1, 2] | outcome: applied
+```
+
+What changed:
+
+- `parse_model_json` replaces `json.loads(_extract_json(...))` at all five call
+  sites (mission self-edit, `/api/dev/repair`, `/api/verify/fix`, and both
+  verifier paths). It scans for a balanced object with string and escape
+  awareness, so prose and braces inside values cannot move the slice; it
+  retries later `{` positions; and it escapes raw newlines, tabs and other
+  control characters inside string literals, which is meaning-preserving
+  because valid JSON never contains one. A **truncated** object is still
+  reported and never completed, so a half-written file cannot be applied.
+- `apply_with_repair` now consumes one attempt for a proposer error, hands the
+  error back prefixed with `PROPOSER_ERROR_PREFIX`, and continues.
+- Both self-edit proposers (mission and HTTP) tell the model its previous reply
+  could not be used, quote the parse error, and ask for escaped quotes and
+  newlines. Previously they re-sent the identical prompt.
+
+14 new regression tests cover the raw-newline reply, prose around the object,
+a stray brace, a code fence, valid JSON surviving the repair unchanged,
+truncation being reported rather than completed, a truncated outer object not
+being satisfied by a complete inner one, and both repair-loop paths. Source
+suite: **470 tests, OK, 2 skipped** on the sandbox interpreter.
+
+This fixes the parser and the retry budget. It does **not** by itself prove the
+real model will produce an acceptable patch: the harness's real-source
+self-edit still has to pass on a hosted run with the pinned model, and the
+repair only handles raw control characters - a reply with genuinely unescaped
+inner quotes still needs the second attempt to succeed.
+
+## Portable-build download aborted by a transient HTTP/2 error (2026-11-06)
+
+Run [42242814978](https://github.com/Asandhu402/BabyMind/actions/runs/42242814978)
+failed `linux (24.04, 3.13)` at the **Build Linux portable directory** step with
+the check annotation `Process completed with exit code 92`; "Test source" was
+skipped, so no test ran. `build-linux.sh` runs under `set -euo pipefail` and its
+only exit-92 candidate is the pinned llama.cpp download:
+
+```
+curl --fail --location --retry 3 --output "$archive.part" \
+  https://codeload.github.com/ggml-org/llama.cpp/tar.gz/refs/tags/b11960
+```
+
+curl's status 92 is an HTTP/2 stream error, and `--retry` does not retry it:
+`--retry` covers timeouts and 4xx/5xx responses only, so the transfer failure
+aborted the build on the first attempt. The job log itself could not be
+retrieved here - GitHub's log host is not reachable from this environment - so
+this is read from the annotation plus the script, not from the build output.
+`linux (24.04, 3.14)` and `3.15` on the same commit were still building when
+this was written.
+
+`build-linux.sh` and `bootstrap-linux.sh` now pass `--retry-all-errors
+--retry-delay 2` to curl. The flag needs curl 7.71+, so both scripts detect it
+with `curl --help all` and omit it on an older curl rather than failing with
+"option is unknown". A regression test extracts each real detection block and
+runs it against a stub curl that advertises the flag and one that does not.
+
+This does not make the build immune to a codeload outage, and it is not
+evidence about the model: the portable build compiles llama.cpp and packages the
+desktop, and does not download or run the pinned model.

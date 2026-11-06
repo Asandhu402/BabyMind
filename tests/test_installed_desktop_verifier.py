@@ -1,4 +1,4 @@
-"""Unit coverage for the opt-in installed-desktop smoke-test harness.
+"""Unit coverage for the installed-desktop smoke-test harness.
 
 These fakes do not test Qt, Ubuntu, a model or an installation.
 """
