@@ -1,4 +1,4 @@
-"""Unified BabyMind coordinator backed by one shared model."""
+"""Unified BabyMind coordinator with optional per-specialist model routing."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,6 +7,7 @@ from .agents import AGENTS, AgentSpec, agent_instructions, validate_registry
 from .memory import LocalMemory
 from .cognitive_core import CognitiveCore
 from .providers import ChatProvider, create_provider
+from .model_router import ModelRouter
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,7 +20,7 @@ class CoordinatorResult:
 
 
 class BabyMindCoordinator:
-    """Use one model with role-specific instructions for all 50 agents and tools."""
+    """Coordinate 50 specialist roles over a shared fallback or independently routed models."""
 
     def __init__(
         self,
@@ -29,6 +30,7 @@ class BabyMindCoordinator:
     ) -> None:
         validate_registry(agents)
         self.provider = provider if provider is not None else create_provider()
+        self.model_router = ModelRouter(fallback=self.provider)
         self.memory = memory or LocalMemory()
         self.cognitive = CognitiveCore(self.memory.database_path.with_name("cognitive.sqlite3"))
         self._agents = {agent.agent_id: agent for agent in agents}
@@ -95,7 +97,7 @@ class BabyMindCoordinator:
                 + memory_text
             )
 
-        response = self.provider.complete(system_prompt, clean_task)
+        response = self.model_router.complete_for(normalized_id, system_prompt, clean_task)
         if remember:
             self.memory.remember(normalized_id, clean_task, response)
         return CoordinatorResult(
