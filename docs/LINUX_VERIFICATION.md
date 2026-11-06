@@ -503,3 +503,35 @@ unterminated JSON; the mission recorded `no_change` and did not apply an edit.
 The independent real-source behavior test therefore did not run. Some role
 reasoning was repetitive or incorrect. This run does not establish reliable
 self-development or packaged update activation.
+
+## One-command bootstrap (2026-11-06)
+
+`bootstrap-linux.sh` now does the machine preparation the old one-liner asked
+the user to do by hand: it detects apt-get, dnf, pacman or zypper, installs only
+the tools it lacks, and selects the newest Python 3.13-3.15 (installed
+interpreter, distribution package, or the newest CPython release built from
+python.org source). `install-linux.sh` installs the Qt/WebEngine libraries for
+all four package managers and can start the app after installing.
+
+What has been run:
+
+- **Fixture tests** (`tests/test_bootstrap.py`, 15 cases): host refusals
+  (musl, non-x86_64, unknown package manager), `--dry-run` changing nothing,
+  installing a missing downloader through the package manager, preferring the
+  newest ready interpreter, skipping an interpreter without a shared libpython,
+  the distribution-package and source-build fallbacks, the source download into
+  a temporary directory plus its cleanup, and the handover to
+  `install-linux.sh` with `BABYMIND_BUILD_PYTHON`.
+- **The documented one command**, executed as written (pipeline into `bash`,
+  including the automatic start) against a disposable home with stubbed
+  packages, downloads and build; it installs and starts the app.
+- **CI:** the `bootstrap` job runs `--prepare-only` on a fresh ubuntu-26.04
+  runner, and `bootstrap-plan` checks the CPython source-build plan on
+  ubuntu-22.04.
+- **Dry run on Debian 12** (this sandbox, glibc 2.36, apt-get): plan reported
+  the distribution packages it would try for 3.13-3.15 and the CPython 3.15.0
+  source build into `~/.cache/babymind/python/3.15.0`.
+
+What has **not** been run: the dnf, pacman and zypper package lists on those
+distributions, the from-source CPython build end to end (only its plan and its
+failure handling), and a fresh-machine install with the production model.

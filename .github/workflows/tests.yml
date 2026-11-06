@@ -144,8 +144,45 @@ jobs:
       - name: Test source
         run: |
           python -m compileall -q src tests
-          python -m unittest discover -s tests -q
+          log="$RUNNER_TEMP/babymind-source-tests.log"
+          set +e
+          python -m unittest discover -s tests -q >"$log" 2>&1
+          status=$?
+          set -e
+          cat "$log"
+          if [ "$status" -ne 0 ]; then
+            # Publish the failing traceback as a check annotation, which stays
+            # readable even when the job log is not retrievable.
+            python scripts/ci_acceptance_diagnostics.py "$log" 'Source tests' "$status"
+            exit "$status"
+          fi
           for file in src/babymind/web/*.js; do node --check "$file"; done
+  bootstrap:
+    # The one-command entry point, on a runner with no project Python set up:
+    # bootstrap-linux.sh must prepare the machine by itself.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare this machine with the one-command bootstrap
+        run: bash bootstrap-linux.sh --prepare-only
+      - name: Show the plan the bootstrap would follow
+        run: |
+          bash bootstrap-linux.sh --dry-run | tee "$RUNNER_TEMP/plan.txt"
+          grep -q "Plan (dry run, nothing was changed)" "$RUNNER_TEMP/plan.txt"
+          grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
+  bootstrap-plan:
+    # A distribution whose Python is too old must plan the python.org source
+    # build instead of stopping. Ubuntu 22.04 ships Python 3.10.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Plan the source-build fallback
+        run: |
+          bash bootstrap-linux.sh --dry-run | tee "$RUNNER_TEMP/plan.txt"
+          grep -q "would build CPython" "$RUNNER_TEMP/plan.txt"
+          grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
   diagnose-source:
     if: github.event_name == 'workflow_dispatch' && inputs.diagnose_source_only
     runs-on: ubuntu-26.04

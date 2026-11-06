@@ -56,6 +56,9 @@ artifact and an owner-approved result.
 
 - Fresh Ubuntu 24.04 and 26.04 x86-64 desktop install, upgrade, launch,
   restart, uninstall, and reinstall tests.
+- The one-command `bootstrap-linux.sh` path on fresh Fedora, Arch and openSUSE
+  desktops, including the from-source CPython fallback; today only its fixture
+  tests and the apt path in CI cover it.
 - Reproducible, signed release artifacts and a published software bill of
   materials; pinned and verified model/runtime/dependency downloads.
 - No network dependency after the model and declared offline assets are cached.

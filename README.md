@@ -19,45 +19,58 @@ it is no longer supported. Ubuntu 26.04 ships Python 3.14; Ubuntu 24.04 ships
 [Python support](docs/PYTHON_SUPPORT.md) for the upgrade policy and the pinned
 dependency set.
 
-## Install on Ubuntu with one command
+## Install on Linux with one command
 
-On Ubuntu 24.04 or newer, x86-64, open a terminal as your normal user and run:
-
-```bash
-sudo apt-get update && sudo apt-get install -y git ca-certificates && bash -c 'set -e; d=$(mktemp -d); trap "rm -rf -- \"$d\"" EXIT; git clone --depth 1 https://github.com/Asandhu402/BabyMind.git "$d/repo"; bash "$d/repo/install-linux.sh"'
-```
-
-This command downloads and executes the current repository's installer. Review
-`install-linux.sh` and its dependencies before running it. It uses `sudo` to
-install Ubuntu packages, downloads about 2.71 GB of model weights, verifies the
-pinned model SHA-256, builds the CPU runtime and desktop, and creates a BabyMind
-application-menu entry. It requires a working internet connection, time to
-compile, a graphical desktop, and ample disk space (at least 4.5 GB for the
-model plus several GB for dependencies and build files; 10 GB free recommended).
-It may prompt for your sudo password. Open **BabyMind** from Applications when
-finished, or run `~/.local/bin/babymind`.
-
-The installer and one real-model chat response passed on a hosted Ubuntu 22.04
-VM with an Xvfb virtual display, before the Python 3.13 baseline. CI now builds
-and tests on Ubuntu 24.04 with Python 3.13, 3.14 and 3.15, and source-tests on
-Ubuntu 26.04 with Python 3.15; the synthetic model used there does not measure
-the pinned model's quality. A clean Ubuntu Desktop session and broader model
-capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
-
-## Install and run with one command
-
-`install-and-run-linux.sh` is the zero-to-running entry point: it detects your
-distro's package manager (apt, dnf or pacman), installs any missing required
-software and system libraries, downloads the source, builds and installs
-BabyMind plus its verified local model, and then starts BabyMind automatically:
+On a fresh x86-64 Linux desktop (apt, dnf, pacman or zypper), as your normal
+user, run this single command. It installs everything it needs - including a
+downloader if the machine has none, and Python 3.13-3.15 if the distribution
+does not provide one - installs BabyMind and starts it:
 
 ```bash
-bash -c 'curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/install-and-run-linux.sh | bash'
+bash -c 'if command -v curl >/dev/null 2>&1; then curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; elif command -v wget >/dev/null 2>&1; then wget -qO- https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; else if command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y curl ca-certificates; elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y curl ca-certificates; elif command -v pacman >/dev/null 2>&1; then sudo pacman -Sy --noconfirm curl ca-certificates; elif command -v zypper >/dev/null 2>&1; then sudo zypper --non-interactive install curl ca-certificates; else printf "Install curl or wget first.\n" >&2; exit 1; fi; curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; fi' | BABYMIND_LAUNCH_AFTER_INSTALL=1 bash
 ```
 
-Run from a repository checkout, `bash install-and-run-linux.sh` reuses that
-checkout instead of cloning. The same requirements as above apply (sudo,
-internet, disk space, graphical desktop).
+The command downloads and runs `bootstrap-linux.sh`, which:
+
+1. checks the host (x86-64, glibc 2.34+, not root, not musl/Alpine) and picks the
+   package manager it finds;
+2. installs only the tools it is missing (`curl`/`wget`, `tar`, certificates);
+3. **searches for the newest supported Python**: an existing `python3.13`,
+   `python3.14` or `python3.15`, otherwise the distribution package for the
+   newest of those, otherwise the newest CPython release built from python.org
+   source into `~/.cache/babymind/python/<version>` (a few minutes, no
+   third-party repositories);
+4. downloads the newest source, then hands over to `install-linux.sh`, which
+   installs the Qt 6.12/WebEngine libraries for your package manager, verifies
+   and downloads the pinned 2.71 GB model, builds the CPU runtime and desktop,
+   and adds the application-menu entry.
+
+Review the scripts before running them. It needs internet, a graphical desktop,
+time to compile, and disk space (at least 4.5 GB for the model plus several GB
+for dependencies; 10 GB free recommended), and it may ask for your sudo
+password. When it finishes, BabyMind starts on its own; afterwards open it from
+Applications or run `~/.local/bin/babymind`. Set
+`BABYMIND_LAUNCH_AFTER_INSTALL=0` instead of `=1` in that command to install
+without starting.
+
+Preview without changing anything, or stop after preparing the machine:
+
+```bash
+bash bootstrap-linux.sh --dry-run        # print the plan (package manager, packages, Python)
+bash bootstrap-linux.sh --prepare-only   # install prerequisites + newest Python, nothing else
+```
+
+Run either of them from a checkout to install that checkout instead of
+downloading the newest source. `install-and-run-linux.sh` does the same work and
+then starts BabyMind.
+
+The apt path is exercised on real Ubuntu runners in CI (bootstrap preparation,
+Qt build, packaged app, installer shell tests). The dnf, pacman and zypper
+package lists and the from-source CPython fallback are covered by fixture tests
+but have **not** been run end to end on those distributions yet; the first-run
+GUI with the production model remains unverified on a clean desktop. See
+[verification](docs/LINUX_VERIFICATION.md) and
+[known limitations](docs/KNOWN_LIMITATIONS.md).
 
 ## Portable desktop
 

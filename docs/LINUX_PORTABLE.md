@@ -5,15 +5,25 @@ example Ubuntu 24.04 or later), a graphical X11/Wayland desktop, and standard
 Qt WebEngine system libraries (NSS, XCB, xkbcommon, OpenGL/Mesa, ALSA). This is
 not an AppImage and is not guaranteed to run on every Linux distribution.
 
-For Ubuntu 24.04+ x86-64, the repository includes `install-linux.sh`; the
-single-command bootstrap is in the main README. The installer uses sudo for
-system packages, builds in a temporary per-user cache, downloads and verifies
-the pinned model, and creates a per-user application-menu entry. Reinstalling
+On x86-64 Linux, the main README has one self-provisioning command. It runs
+`bootstrap-linux.sh`, which detects apt-get, dnf, pacman or zypper, installs any
+missing tool, and selects the newest supported Python (an existing 3.13-3.15
+interpreter, a distribution package, or the newest CPython release built from
+python.org source into `~/.cache/babymind/python`). It then runs
+`install-linux.sh`, which uses sudo for your distribution's Qt/WebEngine
+libraries, builds in a temporary per-user directory, downloads and verifies the
+pinned model, and creates a per-user application-menu entry. The documented
+one-liner ends with `BABYMIND_LAUNCH_AFTER_INSTALL=1`, so it also starts
+BabyMind; use `=0` to install without starting it. Reinstalling
 retains prior application versions and never deletes the model or user data.
 It installs the default model in `~/.babymind`; keep sufficient disk space for
-Ubuntu packages, build tools, the model, and previous versions. Installing
-requires network access to Ubuntu, GitHub, PyPI and Hugging Face. Python
-packages are not hash-locked. Full clean-host installation is unverified.
+distribution packages, build tools, the model, and previous versions.
+Installing requires network access to your distribution's mirrors, python.org,
+GitHub, PyPI and Hugging Face (python.org is skipped when a suitable Python is
+already installed). Python packages are not hash-locked. Bootstrap preparation
+and the apt path are exercised in CI; the dnf, pacman and zypper package lists
+and the from-source CPython build are only covered by fixture tests, so full
+clean-host installation on those distributions remains unverified.
 
 Alternatively, extract the **complete** release archive and double-click `BabyMind`, or run
 `./BabyMind` from a terminal. Keep the `_internal` and `llama.cpp` directories

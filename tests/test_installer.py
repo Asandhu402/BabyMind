@@ -86,7 +86,7 @@ set -e
 [[ ${FAIL_BUILD:-0} != 1 ]] || exit 42
 [[ $BABYMIND_BUILD_PYTHON == "$EXPECTED_PYTHON" ]] || exit 44
 mkdir -p dist/BabyMind/llama.cpp
-printf '#!/bin/sh\\nexit 0\\n' > dist/BabyMind/BabyMind
+printf '#!/bin/sh\\necho "app $*" >> "${APP_LOG:-/dev/null}"\\nexit 0\\n' > dist/BabyMind/BabyMind
 printf '#!/bin/sh\\n[ "${FAIL_RUNTIME:-0}" != 1 ]\\n' > dist/BabyMind/llama.cpp/llama-server
 chmod +x dist/BabyMind/BabyMind dist/BabyMind/llama.cpp/llama-server
 ''')
@@ -95,9 +95,26 @@ chmod +x dist/BabyMind/BabyMind dist/BabyMind/llama.cpp/llama-server
         self.bin.mkdir()
         self._stub('sudo', '#!/bin/sh\necho "$*" >> "$FAKE_LOG"\nexit 0\n')
         self._stub('apt-cache', '#!/bin/sh\nexit 1\n')
+        self._stub('apt-get', '#!/bin/sh\necho "apt-get $*" >> "$FAKE_LOG"\nexit 0\n')
+        self.python_lib = self.root / 'python-lib'
+        self.python_lib.mkdir()
+        (self.python_lib / 'libpython3.13.so.1.0').write_text('')
         self._stub('python3', f'''#!/bin/bash
+if [[ ${{1:-}} == -c && ${{2:-}} == *'version_info[:3]'* ]]; then
+  [[ ${{OLD_PYTHON:-0}} != 1 ]] || exit 1
+  echo 3.13.5
+  exit 0
+fi
 if [[ ${{1:-}} == -c && ${{2:-}} == *version_info* ]]; then
   [[ ${{OLD_PYTHON:-0}} != 1 ]] || exit 1
+  exit 0
+fi
+if [[ ${{1:-}} == -c && ${{2:-}} == *LIBDIR* ]]; then
+  echo "${{FAKE_PY_LIBDIR:-}}"
+  exit 0
+fi
+if [[ ${{1:-}} == -c && ${{2:-}} == *LDLIBRARY* ]]; then
+  echo libpython3.13.so.1.0
   exit 0
 fi
 if [[ ${{1:-}} == -m && ${{2:-}} == babymind.install_model ]]; then
@@ -116,13 +133,31 @@ exec '{sys.executable}' "$@"
         self.env = os.environ.copy()
         self.env.update(HOME=str(self.home), XDG_DATA_HOME=str(self.home / '.local/share'),
                         PATH=f"{path_python}:{self.bin}:{os.environ['PATH']}", FAKE_LOG=str(self.log),
-                        TMPDIR=str(self.root), EXPECTED_PYTHON=str(self.bin / 'python3'))
+                        TMPDIR=str(self.root), EXPECTED_PYTHON=str(self.bin / 'python3'),
+                        FAKE_PY_LIBDIR=str(self.python_lib))
         self.env.pop('BABYMIND_GGUF_MODEL', None)
 
     def _stub(self, name, content):
         path = self.bin / name
         path.write_text(content)
         path.chmod(0o755)
+
+    def test_starting_the_app_is_opt_in(self):
+        app_log = self.root / 'app.log'
+        result = self.run_installer(APP_LOG=str(app_log))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn('Starting BabyMind', result.stdout)
+        self.assertEqual(app_log.read_text().splitlines()[-1], 'app --check-desktop-deps')
+
+    def _wait_for_launch(self, path):
+        """Wait for the detached app to record its argument-free start."""
+        import time
+        for _ in range(200):
+            text = path.read_text() if path.exists() else ''
+            if text.rstrip('\n').endswith('app '):
+                return text
+            time.sleep(0.05)
+        return path.read_text() if path.exists() else ''
 
     def run_installer(self, **env):
         return subprocess.run(['bash', str(self.script)], env={**self.env, **env},
@@ -198,18 +233,33 @@ exec '{sys.executable}' "$@"
         self.assertEqual((root / 'important.txt').read_text(), 'keep')
         self.assertFalse(self.log.exists())
 
-    def test_documented_one_command_bootstraps_and_cleans_up(self):
+    def test_documented_one_command_installs_from_a_fresh_machine(self):
         import re
-        readme = (Path(__file__).resolve().parents[1] / 'README.md').read_text()
-        command = re.search(r'## Install on Ubuntu with one command.*?```bash\n([^\n]+)\n```',
+        repo = Path(__file__).resolve().parents[1]
+        readme = (repo / 'README.md').read_text()
+        command = re.search(r'## Install on Linux with one command.*?```bash\n([^\n]+)\n```',
                             readme, flags=re.S).group(1)
-        self._stub('git', '#!/bin/bash\nset -e\ncp -a -- "$FAKE_REPO/." "${@: -1}"\n')
-        env = {**self.env, 'FAKE_REPO': str(self.source)}
+        # The only thing a fresh machine lacks here is the network: curl hands
+        # over the real bootstrap script and the bootstrap does the rest.
+        bootstrap = (repo / 'bootstrap-linux.sh').read_text()
+        self._stub('curl', "#!/bin/bash\ncat <<'BABYMIND_BOOTSTRAP'\n"
+                   + bootstrap + "\nBABYMIND_BOOTSTRAP\n")
+        app_log = self.root / 'app.log'
+        env = {**self.env, 'BABYMIND_BOOTSTRAP_SOURCE': str(self.source),
+               'APP_LOG': str(app_log),
+               # Only the fixture's interpreter exists: the host's must not leak in.
+               'BABYMIND_BOOTSTRAP_SYSTEM_PYTHON_DIR': str(self.root / 'no-system-python'),
+               # This test covers the chain, not discovery: use the fixture's
+               # interpreter so a host Python cannot change the outcome.
+               'BABYMIND_BOOTSTRAP_PYTHON': str(self.bin / 'python3'),
+               'PATH': f"{self.bin}:{self.env['PATH']}"}
         result = subprocess.run(['bash', '-c', command], env=env, text=True,
-                                capture_output=True, timeout=30)
+                                capture_output=True, timeout=180)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue((self.home / '.local/share/babymind/current/BabyMind').is_file())
-        self.assertFalse(list(self.root.glob('tmp.*')), 'bootstrap checkout must be cleaned')
+        self.assertIn('model', self.log.read_text())
+        self.assertEqual(self._wait_for_launch(app_log).splitlines()[-1], 'app ',
+                         'the one command must finish with BabyMind running')
 
 
 class InstallAndRunScriptTests(unittest.TestCase):
@@ -225,9 +275,49 @@ class InstallAndRunScriptTests(unittest.TestCase):
         result = subprocess.run(['bash', '-n', str(self.script)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_script_covers_detect_install_build_run(self):
+    def test_script_delegates_the_whole_install_to_the_bootstrap(self):
         text = self.script.read_text(encoding='utf-8')
-        for stage in ('apt-get', 'dnf', 'pacman', 'install-linux.sh', 'babymind'):
-            self.assertIn(stage, text)
-        # It must hand over to the reviewed installer and then launch the app.
+        # One code path: the bootstrap owns prerequisites, Python and the source
+        # download; the wrapper only starts the app afterwards.
+        self.assertIn('bootstrap-linux.sh', text)
+        self.assertIn('BABYMIND_BOOTSTRAP_SOURCE', text)
         self.assertIn('exec "$launcher"', text)
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'requires bash')
+    def test_script_runs_the_bootstrap_from_a_checkout_then_launches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wrapper = root / 'install-and-run-linux.sh'
+            wrapper.write_text(self.script.read_text(encoding='utf-8'))
+            (root / 'bootstrap-linux.sh').write_text(
+                '#!/bin/bash\necho bootstrap >> "$FAKE_LOG"\nexit 0\n')
+            home = root / 'home'
+            launcher = home / '.local/bin/babymind'
+            launcher.parent.mkdir(parents=True)
+            launcher.write_text('#!/bin/bash\necho launched >> "$FAKE_LOG"\n')
+            launcher.chmod(0o755)
+            log = root / 'log'
+            env = {**os.environ, 'HOME': str(home), 'FAKE_LOG': str(log)}
+            result = subprocess.run(['bash', str(wrapper)], env=env, text=True,
+                                    capture_output=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(log.read_text().split(), ['bootstrap', 'launched'])
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'requires bash')
+    def test_script_stops_when_the_bootstrap_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wrapper = root / 'install-and-run-linux.sh'
+            wrapper.write_text(self.script.read_text(encoding='utf-8'))
+            (root / 'bootstrap-linux.sh').write_text(
+                '#!/bin/bash\necho "bootstrap stopped" >&2\nexit 3\n')
+            home = root / 'home'
+            launcher = home / '.local/bin/babymind'
+            launcher.parent.mkdir(parents=True)
+            launcher.write_text('#!/bin/bash\nexit 0\n')
+            launcher.chmod(0o755)
+            env = {**os.environ, 'HOME': str(home)}
+            result = subprocess.run(['bash', str(wrapper)], env=env, text=True,
+                                    capture_output=True, timeout=60)
+            self.assertEqual(result.returncode, 3)
+            self.assertNotIn('Starting BabyMind', result.stdout)

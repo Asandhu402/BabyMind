@@ -6,6 +6,11 @@ missing, not what is planned.
 ## Platform and packaging
 
 - The supported portable target is Linux x86-64 with glibc 2.39+ (Ubuntu 24.04+), Python 3.13+ for source builds, and a graphical desktop. A hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response while BabyMind still supported Python 3.10/3.11; that combination is no longer supported. A clean Ubuntu Desktop session and broader capabilities remain unverified.
+- The one-command installer is exercised on real Ubuntu runners for the apt path
+  (bootstrap preparation plus the Qt build and packaged app); the dnf, pacman and
+  zypper package lists and the from-source CPython build fallback are only
+  verified by fixture tests, not on those distributions. A fresh-machine run with
+  the production model remains unverified.
 - There is no auto-updater, code signing, or self-repair supervisor.
 - Linux x86-64 is the sole supported desktop target.
 - The portable executable is not itself a Python interpreter. A bundled Python helper supports sandboxed staged-source tests; generated Python app execution is still unavailable.
