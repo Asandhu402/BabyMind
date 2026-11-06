@@ -321,3 +321,65 @@ class InstallAndRunScriptTests(unittest.TestCase):
                                     capture_output=True, timeout=60)
             self.assertEqual(result.returncode, 3)
             self.assertNotIn('Starting BabyMind', result.stdout)
+
+
+class DistroPackageCheckTests(unittest.TestCase):
+    """The dnf/pacman/zypper lists must extract cleanly from install-linux.sh.
+
+    scripts/check_distro_packages.sh asks each distribution's own package
+    manager to resolve the installer's list, so a stale or misspelled name fails
+    there instead of on a user's machine. That is only worth anything if the
+    extraction is right: scraping the wrong region of the script once produced
+    shell prose ("newer", "renamed", "fi") as package names and still exited 0.
+    """
+
+    REPO = Path(__file__).resolve().parents[1]
+    CHECKER = REPO / "scripts" / "check_distro_packages.sh"
+    MANAGER_PACKAGES = {
+        "dnf": {"nss", "mesa-libGL", "python3-devel", "pkgconf-pkg-config"},
+        "pacman": {"nss", "mesa", "base-devel", "python-pip"},
+        "zypper": {"mozilla-nspr", "libglvnd0", "python3-devel", "pkg-config"},
+    }
+
+    def _list(self, manager: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["bash", str(self.CHECKER), "--list", manager],
+            cwd=self.REPO, text=True, capture_output=True, timeout=60,
+        )
+
+    def test_every_manager_extracts_a_real_package_list(self) -> None:
+        for manager, expected in self.MANAGER_PACKAGES.items():
+            with self.subTest(manager=manager):
+                result = self._list(manager)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                names = set(result.stdout.split())
+                self.assertGreaterEqual(len(names), 20, sorted(names))
+                self.assertTrue(expected <= names, f"missing {expected - names}")
+
+    def test_no_shell_syntax_or_prose_is_mistaken_for_a_package(self) -> None:
+        import re
+
+        for manager in self.MANAGER_PACKAGES:
+            with self.subTest(manager=manager):
+                names = self._list(manager).stdout.split()
+                self.assertTrue(names)
+                for name in names:
+                    self.assertRegex(
+                        name, r"^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+                        f"{manager}: {name!r} is not a package name",
+                    )
+                # Words that appear if the scrape wanders out of the case arm.
+                leaked = {"if", "then", "else", "fi", "esac", "newer", "renamed",
+                          "sudo", "install", "show", "update"} & set(names)
+                self.assertEqual(leaked, set(), f"{manager}: scraped {leaked}")
+
+    def test_managers_that_cannot_be_scraped_are_rejected(self) -> None:
+        # apt-get's arm holds a comment and an if/then, and CI already installs
+        # that list for real, so it is refused rather than silently mangled.
+        for manager in ("apt-get", "portage", ""):
+            with self.subTest(manager=manager):
+                result = subprocess.run(
+                    ["bash", str(self.CHECKER), "--list", manager],
+                    cwd=self.REPO, text=True, capture_output=True, timeout=60,
+                )
+                self.assertNotEqual(result.returncode, 0)

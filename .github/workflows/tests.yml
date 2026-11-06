@@ -171,6 +171,33 @@ jobs:
           bash bootstrap-linux.sh --dry-run | tee "$RUNNER_TEMP/plan.txt"
           grep -q "would build CPython" "$RUNNER_TEMP/plan.txt"
           grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
+  distro-packages:
+    # The dnf, pacman and zypper package lists are otherwise covered only by
+    # fixture tests with a stubbed package manager, which cannot notice that a
+    # distribution renamed or dropped a package. Ask each distribution's own
+    # package manager to resolve the installer's list in a dry run, so a stale
+    # name fails here instead of on a user's machine.
+    #
+    # docker run rather than a container: job, because the minimal distro images
+    # have no node and actions/checkout could not run inside them.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: fedora:latest
+            manager: dnf
+          - image: archlinux:latest
+            manager: pacman
+          - image: opensuse/tumbleweed:latest
+            manager: zypper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve the ${{ matrix.manager }} package list in ${{ matrix.image }}
+        run: |
+          docker run --rm --volume "$PWD:/work" --workdir /work "${{ matrix.image }}" \
+            bash scripts/check_distro_packages.sh "${{ matrix.manager }}"
   real-model-installer:
     # Permanent, not opt-in: the pinned model is the application's brain, so
     # every push and every pull request must prove that the real installer,
