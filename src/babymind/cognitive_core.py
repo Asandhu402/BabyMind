@@ -1,5 +1,6 @@
 """Inspectable, bounded cognitive runtime for BabyMind."""
 from __future__ import annotations
+import importlib.util
 import json, os, platform, shutil, sqlite3, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,8 +43,9 @@ def environment_snapshot() -> dict[str, Any]:
         "virtualization_hint_meaning": "Hypervisor flag observed; this does not establish simulation." if hypervisor else "No hypervisor flag observed; this does not establish a physical environment.",
         "agent_count": len(AGENTS), "agent_ids": [a.agent_id for a in AGENTS],
         "capabilities": {
-            "role_registry": len(AGENTS) == 50, "coordinator_module": True,
-            "research_module": True, "sandbox_module": True,
+            "role_registry": len(AGENTS) == 50, "coordinator_module": importlib.util.find_spec("babymind.coordinator") is not None,
+            "research_module": importlib.util.find_spec("babymind.research") is not None,
+            "sandbox_module": importlib.util.find_spec("babymind.sandbox") is not None,
             "model_endpoint_verified": False, "network_research_executed": False,
             "shell_execution_granted_by_cognitive_core": False,
         },
@@ -106,6 +108,25 @@ class CognitiveCore:
             finally: db.close()
         return [{"id":r["id"],"title":self.secure.decrypt(r["title"]),"description":self.secure.decrypt(r["description"]),"status":r["status"],"created_at":r["created_at"]} for r in rows]
 
+    def recent_experiences(self, limit: int = 5) -> list[dict[str, Any]]:
+        """Retrieve previous reflections and lessons so later cycles can use them."""
+        with self.lock:
+            db = self._connect()
+            try:
+                rows = db.execute(
+                    "SELECT id,created_at,agent_id,verified,confidence,reflection,learning "
+                    "FROM cycles ORDER BY id DESC LIMIT ?", (max(1, min(limit, 20)),)
+                ).fetchall()
+            finally:
+                db.close()
+        return [{
+            "cycle_id": row["id"], "created_at": row["created_at"],
+            "agent_id": row["agent_id"], "verified": bool(row["verified"]),
+            "confidence": row["confidence"],
+            "reflection": self.secure.decrypt(row["reflection"]),
+            "learning": self.secure.decrypt(row["learning"]),
+        } for row in rows]
+
     def context_for_agent(self, agent: AgentSpec) -> str:
         env = environment_snapshot()
         return ("COGNITIVE CORE / OPERATIONAL SELF-MODEL (shared by all 50 roles)\n"
@@ -114,6 +135,7 @@ class CognitiveCore:
             f"Observed host: {env['distribution']}; {env['system']} {env['architecture']}; Python {env['python']}.\n"
             f"Known boundaries: {json.dumps(env['capabilities'], sort_keys=True)}.\n"
             f"Active goals: {json.dumps(self.active_goals(5), ensure_ascii=False)}.\n"
+            f"Recent learning: {json.dumps(self.recent_experiences(3), ensure_ascii=False)}.\n"
             "This is operational context, not evidence of subjective consciousness. Never claim an unverified capability or action.")
 
     def status(self) -> dict[str, Any]:
@@ -162,6 +184,7 @@ class CognitiveCore:
         if normalized not in AGENT_BY_ID: raise KeyError(f"Unknown agent ID: {normalized}")
         agent = AGENT_BY_ID[normalized]
         observation, goals = environment_snapshot(), self.active_goals(10)
+        experiences = self.recent_experiences(8)
         roster = [{"id":a.agent_id,"name":a.name,"phase":a.phase} for a in AGENTS]
         system = ("You are BabyMind's cognitive cycle, one software system using a shared local model. "
             "Do not claim consciousness, feelings, or proof of simulation. Use only observable facts. "
@@ -173,6 +196,7 @@ class CognitiveCore:
             "complete_goal needs goal_id; record_question/write_note need content. confidence is 0..1. No extra prose.")
         user = ("OBSERVATION:\n"+json.dumps(observation,ensure_ascii=False)+
             "\nACTIVE GOALS:\n"+json.dumps(goals,ensure_ascii=False)+
+            "\nRECENT EXPERIENCES AND LEARNINGS:\n"+json.dumps(experiences,ensure_ascii=False)+
             "\nAVAILABLE SPECIALIST ROLES:\n"+json.dumps(roster,ensure_ascii=False)+
             "\nCURRENT ROLE:\n"+agent_instructions(agent)+
             "\nChoose a useful next step and return the structured cycle.")
