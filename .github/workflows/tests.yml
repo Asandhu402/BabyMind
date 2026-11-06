@@ -144,7 +144,18 @@ jobs:
       - name: Test source
         run: |
           python -m compileall -q src tests
-          python -m unittest discover -s tests -q
+          log="$RUNNER_TEMP/babymind-source-tests.log"
+          set +e
+          python -m unittest discover -s tests -q >"$log" 2>&1
+          status=$?
+          set -e
+          cat "$log"
+          if [ "$status" -ne 0 ]; then
+            # Publish the failing traceback as a check annotation, which stays
+            # readable even when the job log is not retrievable.
+            python scripts/ci_acceptance_diagnostics.py "$log" 'Source tests' "$status"
+            exit "$status"
+          fi
           for file in src/babymind/web/*.js; do node --check "$file"; done
   bootstrap:
     # The one-command entry point, on a runner with no project Python set up:
