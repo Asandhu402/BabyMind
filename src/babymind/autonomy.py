@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from .cognitive_core import CognitiveCore, _clean, environment_snapshot
@@ -70,22 +72,17 @@ class AutonomyController:
                     })
         baseline = {key: current.get(key) for key in DRIFT_KEYS}
         if prior != baseline:
-            self.core._apply_action({
-                "type": "write_note",
-                "content": json.dumps(baseline, sort_keys=True, ensure_ascii=False),
-                "kind": "environment_baseline",
-            })
-            # _apply_action classifies write_note; mark the newest matching note
-            # as a baseline using the existing notes table's kind field.
+            stamp = datetime.now(timezone.utc).isoformat()
+            note_id = uuid.uuid4().hex
+            encrypted = self.core.secure.encrypt(json.dumps(baseline, sort_keys=True, ensure_ascii=False))
             with self.core.lock:
                 db = self.core._connect()
                 try:
-                    row = db.execute(
-                        "SELECT id FROM notes WHERE kind='write_note' ORDER BY created_at DESC LIMIT 1"
-                    ).fetchone()
-                    if row:
-                        db.execute("UPDATE notes SET kind='environment_baseline' WHERE id=?", (row["id"],))
-                        db.commit()
+                    db.execute(
+                        "INSERT INTO notes (id,kind,content,created_at) VALUES (?,?,?,?)",
+                        (note_id, "environment_baseline", encrypted, stamp),
+                    )
+                    db.commit()
                 finally:
                     db.close()
         return {"snapshot": current, "changed": bool(changes), "changes": changes,
