@@ -137,6 +137,16 @@ on a normal Ubuntu desktop with the production model. See
 building from source, and current limitations. Linux is the sole supported
 desktop target.
 
+## Tuning the local model
+
+BabyMind's 4B model has a small set of honest dials: context window
+(`BABYMIND_CONTEXT_SIZE`, default 4096), temperature, top-p, max tokens, and
+the research/memory features. Invalid dial values fail with a clear error
+instead of a silent mis-launch. See
+[tuning the local model](docs/LOCAL_MODEL_TUNING.md) for ranges, RAM guidance,
+and what remains fixed (the SHA-256-pinned 4B, the llama.cpp engine). No dial
+raises the model's reasoning ceiling.
+
 ## Safety and capabilities
 
 Current capability status (honest, matches the code):
