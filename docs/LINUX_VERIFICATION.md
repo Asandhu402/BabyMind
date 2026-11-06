@@ -2,9 +2,13 @@
 
 > **Historical record.** The runs below were made while BabyMind still supported
 > Python 3.10/3.11 and Qt 6.8, and the installer accepted Ubuntu 22.04. The
-> current baseline is Python 3.13+ with PySide6 6.12 on Ubuntu 24.04+; see
+> current baseline is Python 3.13+ with PySide6 6.12, tested on Ubuntu 26.10
+> (glibc 2.43); see
 > [Python support](PYTHON_SUPPORT.md) for the supported matrix and the CI jobs
-> that cover it.
+> that cover it. Entries below keep the distribution they actually ran on;
+> none of them claims a run on Ubuntu 26.10. On 2026-11-06 CI, the release
+> workflow and the portable build moved to Ubuntu 26.10 — see the dated
+> section at the end of this file.
 
 This work is **not release acceptance**. The 64-bit Linux portable path is a
 work in progress, not yet demonstrated plug-and-play end to end.
@@ -510,8 +514,8 @@ self-development or packaged update activation.
 the user to do by hand: it uses APT on Debian-based distributions and installs only
 the tools it lacks, and selects the newest Python 3.13-3.15 (installed
 interpreter, distribution package, or the newest CPython release built from
-python.org source). `install-linux.sh` installs the Qt/WebEngine libraries for
-all four package managers and can start the app after installing.
+python.org source). `install-linux.sh` installs the Qt/WebEngine libraries via APT, the only
+package manager BabyMind supports, and can start the app after installing.
 
 What has been run:
 
@@ -527,7 +531,10 @@ What has been run:
   packages, downloads and build; it installs and starts the app.
 - **CI:** the `bootstrap` job runs `--prepare-only` on a fresh ubuntu-26.04
   runner, and `bootstrap-plan` checks the CPython source-build plan on
-  ubuntu-22.04.
+  ubuntu-22.04. (Same-day update, 2026-11-06: BabyMind moved to Ubuntu 26.10
+  for testing, so `bootstrap` now runs on ubuntu-26.10 and `bootstrap-plan` on
+  ubuntu-24.04, the newest available LTS runner whose Python is still below
+  the 3.13 floor.)
 - **Dry run on Debian 12** (this sandbox, glibc 2.36, apt-get): plan reported
   the distribution packages it would try for 3.13-3.15 and the CPython 3.15.0
   source build into `~/.cache/babymind/python/3.15.0`.
@@ -543,9 +550,10 @@ model - the application's brain - was only exercised when someone remembered to
 ask for it. That input is gone. The job now has no trigger condition, so it
 runs on every push to `main`, on every pull request against `main`, and on
 `workflow_dispatch`. Nothing in the job changed except when it runs: the same
-fresh Ubuntu 26.04 VM still runs the real `install-linux.sh` in a disposable
+fresh Ubuntu VM still runs the real `install-linux.sh` in a disposable
 home (Ubuntu packages, the ~2.71 GB production-model download and its SHA-256
-verification, the local build), starts the installed Qt desktop under Xvfb and
+verification, the local build) — the runner was Ubuntu 26.04 when this was
+written and moved to Ubuntu 26.10 later the same day — starts the installed Qt desktop under Xvfb and
 drives it with the real model, then runs the 50-role mission, the coding test
 and the disposable real-source self-edit through `verify_real_model_roles.py`.
 
@@ -695,3 +703,34 @@ runs it against a stub curl that advertises the flag and one that does not.
 This does not make the build immune to a codeload outage, and it is not
 evidence about the model: the portable build compiles llama.cpp and packages the
 desktop, and does not download or run the pinned model.
+
+## Testing platform moved to Ubuntu 26.10 (2026-11-06)
+
+BabyMind is Debian-based Linux for x86-64 only, and its testing platform is
+now Ubuntu 26.10 ("Stonking Stingray", released 2026-10-15, Python 3.14.7,
+glibc 2.43). The change moved every CI job except one and the portable build:
+
+- `.github/workflows/tests.yml`: the `linux` matrix (Python 3.13, 3.14, 3.15)
+  and the `source-latest`, `bootstrap` and `real-model-installer` jobs now run
+  on `ubuntu-26.10`. The release workflow (`release.yml`) builds on
+  `ubuntu-26.10` as well.
+- The portable artifact is now built on Ubuntu 26.10, so its floor is glibc
+  2.43 (Ubuntu 26.04+). Debian 13 ships glibc 2.41 and cannot run the portable
+  archive; source builds with Python 3.13+ remain supported there.
+- `bootstrap-plan` (which asserts that a distribution whose Python is below the
+  3.13 floor plans a python.org source build) cannot run on 26.10, whose
+  Python is supported; it now runs on `ubuntu-24.04` (ships Python 3.12).
+- README.md, docs/PYTHON_SUPPORT.md, docs/LINUX_PORTABLE.md,
+  docs/KNOWN_LIMITATIONS.md, docs/PRODUCTION_READINESS.md and the installer
+  test fixture were updated to match. Historical entries above keep the
+  distribution they actually ran on; none of them claims a run on 26.10.
+
+What this does **not** establish: nothing has run on Ubuntu 26.10 yet. At the
+time of this change no Ubuntu 26.10 CI job has completed, and no 26.10
+installer, packaged-app, GUI or real-model result has been recorded. GitHub
+also does not currently publish an `ubuntu-26.10` hosted runner label (only
+the LTS runners ubuntu-22.04/24.04/26.04, their arm variants and
+`ubuntu-slim`), so the `ubuntu-26.10` jobs need a matching self-hosted runner
+or a future GitHub label before they can run; until then the workflow is
+declared but not executed. Treat 26.10 support as unverified in the same way
+the clean Ubuntu Desktop session remains unverified.

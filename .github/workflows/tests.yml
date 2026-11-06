@@ -13,16 +13,19 @@ jobs:
   linux:
     strategy:
       fail-fast: false
-      # Build on Ubuntu 24.04 so the portable artifact needs glibc 2.39 (Ubuntu
-      # 24.04+), while exercising every supported interpreter: 3.13 is the
-      # supported floor and 3.15 is the current stable release.
+      # BabyMind is Debian-based x86-64 only and is tested on Ubuntu 26.10, so
+      # the portable artifact needs glibc 2.43 (Ubuntu 26.04+). Every supported
+      # interpreter is exercised: 3.13 is the supported floor and 3.15 is the
+      # current stable release. NOTE: GitHub does not yet publish an
+      # ubuntu-26.10 hosted runner label; these jobs require a matching
+      # self-hosted runner (or a future GitHub label) until one is available.
       matrix:
         include:
-          - ubuntu: '24.04'
+          - ubuntu: '26.10'
             python: '3.13'
-          - ubuntu: '24.04'
+          - ubuntu: '26.10'
             python: '3.14'
-          - ubuntu: '24.04'
+          - ubuntu: '26.10'
             python: '3.15'
     runs-on: ubuntu-${{ matrix.ubuntu }}
     timeout-minutes: 45
@@ -111,9 +114,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   source-latest:
-    # Cheap source-only check on the newest Ubuntu LTS (glibc 2.42), so the
-    # portable build is not the only data point for Python 3.15.
-    runs-on: ubuntu-26.04
+    # Cheap source-only check on Ubuntu 26.10, the Debian-based x86-64 release
+    # BabyMind is tested on (glibc 2.43), so the portable build is not the only
+    # data point for Python 3.15.
+    runs-on: ubuntu-26.10
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -148,7 +152,7 @@ jobs:
   bootstrap:
     # The one-command entry point, on a runner with no project Python set up:
     # bootstrap-linux.sh must prepare the machine by itself.
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-26.10
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -161,8 +165,9 @@ jobs:
           grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
   bootstrap-plan:
     # A distribution whose Python is too old must plan the python.org source
-    # build instead of stopping. Ubuntu 22.04 ships Python 3.10.
-    runs-on: ubuntu-22.04
+    # build instead of stopping. Ubuntu 24.04 ships Python 3.12, below the
+    # 3.13 floor (this job cannot run on 26.10, whose Python is supported).
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -185,8 +190,8 @@ jobs:
       # newest commit still runs the job, so nothing goes untested.
       group: real-model-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
-    # The installer requires Python 3.13+, which Ubuntu 26.04 provides (3.14).
-    runs-on: ubuntu-26.04
+    # The installer requires Python 3.13+, which Ubuntu 26.10 provides (3.14).
+    runs-on: ubuntu-26.10
     # Recorded runs needed 60-71 minutes for the 50-role mission alone, on top
     # of the download, the build and the extended GUI question set.
     timeout-minutes: 180

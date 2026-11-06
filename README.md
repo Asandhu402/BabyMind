@@ -6,15 +6,16 @@
 > [production readiness programme](docs/PRODUCTION_READINESS.md) for the
 > open gates.
 
-BabyMind is a local-first AI workspace for **Linux x86-64** with a desktop
-window and a bundled CPU llama.cpp runtime. Its 50 specialist roles are prompts
-over one model, not independent people or independently trained agents.
+BabyMind is a local-first AI workspace for **Debian-based Linux on x86-64**
+with a desktop window and a bundled CPU llama.cpp runtime. BabyMind is tested
+on **Ubuntu 26.10**. Its 50 specialist roles are prompts over one model, not
+independent people or independently trained agents.
 
 ## Python support
 
 BabyMind requires **Python 3.13 or newer** and is tested on 3.13, 3.14 and 3.15
 (the current stable release). Python 3.10 reached end of life on 2026-10-01, so
-it is no longer supported. Ubuntu 26.04 ships Python 3.14; Ubuntu 24.04 ships
+it is no longer supported. Ubuntu 26.10 ships Python 3.14.7; Ubuntu 24.04 ships
 3.12, so its users install `python3.13` first. See
 [Python support](docs/PYTHON_SUPPORT.md) for the upgrade policy and the pinned
 dependency set.
@@ -63,7 +64,7 @@ Run either of them from a checkout to install that checkout instead of
 downloading the newest source. `install-and-run-linux.sh` does the same work and
 then starts BabyMind.
 
-The apt path is exercised on real Ubuntu runners in CI (bootstrap preparation,
+The apt path is exercised on real Ubuntu 26.10 runners in CI (bootstrap preparation,
 Qt build, packaged app, installer shell tests). Debian and Ubuntu derivatives are the only supported distribution family; the first-run
 GUI with the production model remains unverified on a clean desktop. See
 [verification](docs/LINUX_VERIFICATION.md) and
@@ -73,7 +74,7 @@ GUI with the production model remains unverified on a clean desktop. See
 
 The model is BabyMind's brain, so the real-model acceptance job runs on **every
 push and every pull request** - it is not a manual, opt-in dispatch. On a fresh
-Ubuntu VM it runs the actual `install-linux.sh` (package installation, the
+Ubuntu 26.10 VM it runs the actual `install-linux.sh` (package installation, the
 2.71 GB model download and its SHA-256 check, the local build), starts the
 installed desktop under Xvfb and drives it through the **full** extended
 question set with the real model, then runs the real model through source-mode
@@ -94,8 +95,9 @@ model cannot answer the tested questions or produce a valid edit.
 
 ## Portable desktop
 
-The target is a graphical Debian-based x86-64 desktop with glibc 2.39 or newer (Ubuntu 24.04+,
-because Qt 6.12 requires glibc 2.34 or newer and the release is built on 24.04)
+The target is a graphical Debian-based x86-64 desktop with glibc 2.43 or newer (Ubuntu 26.04+,
+because the release itself is built and tested on Ubuntu 26.10; Qt 6.12 requires only glibc 2.34 or newer, but
+the portable build's floor is set by its build host)
 and standard Qt WebEngine system libraries. Extract the complete
 Linux portable archive and run `./BabyMind` (or open the executable in your file
 manager). On first launch BabyMind asks to download a roughly 2.71 GB model,
