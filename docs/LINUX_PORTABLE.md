@@ -1,13 +1,12 @@
 # BabyMind Linux portable desktop
 
-The supported desktop target is 64-bit x86 Linux with glibc 2.39 or newer (for
-example Ubuntu 24.04 or later), a graphical X11/Wayland desktop, and standard
+The supported desktop target is Debian-based Linux on 64-bit x86 (AMD64), with glibc 2.39 or newer (for
+example Debian 13+ or Ubuntu 24.04+), a graphical X11/Wayland desktop, and standard
 Qt WebEngine system libraries (NSS, XCB, xkbcommon, OpenGL/Mesa, ALSA). This is
 not an AppImage and is not guaranteed to run on every Linux distribution.
 
-On x86-64 Linux, the main README has one self-provisioning command. It runs
-`bootstrap-linux.sh`, which detects apt-get, dnf, pacman or zypper, installs any
-missing tool, and selects the newest supported Python (an existing 3.13-3.15
+On Debian-based x86-64 Linux, the main README has one self-provisioning command. It runs
+`bootstrap-linux.sh`, which uses APT to install any missing tool, and selects the newest supported Python (an existing 3.13-3.15
 interpreter, a distribution package, or the newest CPython release built from
 python.org source into `~/.cache/babymind/python`). It then runs
 `install-linux.sh`, which uses sudo for your distribution's Qt/WebEngine
@@ -20,10 +19,7 @@ It installs the default model in `~/.babymind`; keep sufficient disk space for
 distribution packages, build tools, the model, and previous versions.
 Installing requires network access to your distribution's mirrors, python.org,
 GitHub, PyPI and Hugging Face (python.org is skipped when a suitable Python is
-already installed). Python packages are not hash-locked. Bootstrap preparation
-and the apt path are exercised in CI; the dnf, pacman and zypper package lists
-and the from-source CPython build are only covered by fixture tests, so full
-clean-host installation on those distributions remains unverified.
+already installed). Python packages are not hash-locked. Bootstrap preparation and the APT installation path are exercised in CI on Ubuntu. Debian and Ubuntu derivatives are the only supported distribution family.
 
 Alternatively, extract the **complete** release archive and double-click `BabyMind`, or run
 `./BabyMind` from a terminal. Keep the `_internal` and `llama.cpp` directories
