@@ -7,6 +7,8 @@ whose dependencies have all completed start immediately and run concurrently
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, Future, wait, FIRST_COMPLETED
@@ -120,11 +122,19 @@ class TaskGraphRunner:
         self._should_cancel = should_cancel
         prior: dict[str, TaskResult] = {}
         if resume and store is not None and graph_id:
-            prior = store.completed_results(graph_id)
+            prior = store.completed_results(graph_id, tasks)
         if graph_id:
             register(graph_id, self)
         try:
-            result = self._execute(tasks, prior)
+            if store is not None and graph_id:
+                store.save(graph_id, tasks, self._result_payload(tasks, prior, False))
+            result = self._execute(
+                tasks, prior,
+                on_change=(
+                    (lambda current: store.save(graph_id, tasks, current))
+                    if store is not None and graph_id else None
+                ),
+            )
             if store is not None and graph_id:
                 store.save(graph_id, tasks, result)
             return result
@@ -138,7 +148,20 @@ class TaskGraphRunner:
         checker = getattr(self, "_should_cancel", None)
         return bool(checker and checker())
 
-    def _execute(self, tasks: list[Task], prior: dict[str, TaskResult] | None = None) -> dict:
+    @staticmethod
+    def _result_payload(tasks: list[Task], results: dict[str, TaskResult],
+                        cancelled: bool) -> dict:
+        ordered = [results[t.task_id].__dict__ for t in tasks if t.task_id in results]
+        return {
+            "tasks": ordered,
+            "completed": sum(1 for item in ordered if item["status"] == "completed"),
+            "failed": sum(1 for item in ordered if item["status"] == "failed"),
+            "skipped": sum(1 for item in ordered if item["status"] == "skipped"),
+            "cancelled": cancelled,
+        }
+
+    def _execute(self, tasks: list[Task], prior: dict[str, TaskResult] | None = None,
+                 on_change=None) -> dict:
         by_id = {t.task_id: t for t in tasks}
         results: dict[str, TaskResult] = dict(prior or {})
         pending = set(by_id) - set(results)
@@ -153,13 +176,21 @@ class TaskGraphRunner:
                         results[task_id] = TaskResult(
                             task_id, by_id[task_id].agent_id, "skipped", error="Cancelled.")
                     pending.clear()
-                    for future in list(futures):
-                        task_id = futures.pop(future)
-                        if not future.done():
+                    # Running calls cannot be killed safely. Wait for them to
+                    # finish and persist their real outcome instead of falsely
+                    # recording them as skipped.
+                    for future, task_id in list(futures.items()):
+                        if future.cancelled():
                             results[task_id] = TaskResult(
-                                task_id, by_id[task_id].agent_id, "skipped", error="Cancelled.")
+                                task_id, by_id[task_id].agent_id, "skipped",
+                                error="Cancelled before task started.")
                         else:
                             results[task_id] = future.result()
+                        if on_change:
+                            on_change(self._result_payload(tasks, results, True))
+                    futures.clear()
+                    if on_change:
+                        on_change(self._result_payload(tasks, results, True))
                     break
                 # Launch every task whose dependencies are satisfied.
                 for task_id in sorted(pending):
@@ -183,14 +214,10 @@ class TaskGraphRunner:
                 for future in done:
                     task_id = futures.pop(future)
                     results[task_id] = future.result()
+                    if on_change:
+                        on_change(self._result_payload(tasks, results, self._is_cancelled()))
 
-        return {
-            "tasks": [results[t.task_id].__dict__ for t in tasks],
-            "completed": sum(1 for r in results.values() if r.status == "completed"),
-            "failed": sum(1 for r in results.values() if r.status == "failed"),
-            "skipped": sum(1 for r in results.values() if r.status == "skipped"),
-            "cancelled": self._is_cancelled(),
-        }
+        return self._result_payload(tasks, results, self._is_cancelled())
 
     def _run_one(self, task: Task, context: dict[str, TaskResult]) -> TaskResult:
         started = time.monotonic()
@@ -215,6 +242,15 @@ class TaskGraphStore:
     def __init__(self, root) -> None:
         self.dir = Path(root) / "state" / "taskgraph"
         self.dir.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
+
+    @staticmethod
+    def _fingerprint(tasks: list[Task]) -> str:
+        canonical = json.dumps(
+            [task.__dict__ for task in tasks],
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _path(self, graph_id: str) -> Path:
         safe = "".join(c for c in graph_id if c.isalnum() or c in {"-", "_"})[:64]
@@ -224,13 +260,16 @@ class TaskGraphStore:
         import json
         payload = {
             "id": graph_id,
+            "fingerprint": self._fingerprint(tasks),
             "saved_at": time.time(),
             "tasks": [t.__dict__ for t in tasks],
             "result": result,
         }
-        tmp = self._path(graph_id).with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        tmp.replace(self._path(graph_id))
+        path = self._path(graph_id)
+        tmp = path.with_suffix(f".{threading.get_ident()}.tmp")
+        with self._lock:
+            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            tmp.replace(path)
 
     def load(self, graph_id: str) -> dict | None:
         import json
@@ -242,9 +281,14 @@ class TaskGraphStore:
         except (OSError, ValueError):
             return None
 
-    def completed_results(self, graph_id: str) -> dict[str, TaskResult]:
+    def completed_results(self, graph_id: str,
+                          tasks: list[Task] | None = None) -> dict[str, TaskResult]:
         record = self.load(graph_id)
         if not record:
+            return {}
+        # Never replay results against a changed task graph. Legacy records
+        # without a fingerprint are deliberately treated as non-resumable.
+        if tasks is None or record.get("fingerprint") != self._fingerprint(tasks):
             return {}
         out = {}
         for item in record.get("result", {}).get("tasks", []):
