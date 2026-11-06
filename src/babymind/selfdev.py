@@ -497,14 +497,42 @@ def preview_edits(edits: list[dict]) -> list[dict]:
     seen: set[str] = set()
     total = 0
     for item in edits:
-        if not isinstance(item, dict) or set(item) != {"path", "content"}:
-            raise SelfDevError("Each edit must contain exactly 'path' and 'content'.")
+        if not isinstance(item, dict) or set(item) not in ({"path", "content"}, {"path", "content", "create_only"}, {"path", "search", "replace", "sha256"}):
+            raise SelfDevError("Each edit must contain path and content, or path, search, replace and sha256.")
         relative = _normalise(item["path"])
         key = relative.as_posix()
         if key in seen:
             raise SelfDevError(f"The same path appears twice: {key}")
         seen.add(key)
-        content = item["content"]
+        target = resolve_path(root, key)
+        base_hash = None
+        if "create_only" in item:
+            if item["create_only"] is not True:
+                raise SelfDevError(f"create_only must be true: {key}")
+            if target.exists() or target.is_symlink():
+                raise SelfDevError(f"Create-only target already exists: {key}")
+        if "search" in item:
+            search, replacement, base_hash = item["search"], item["replace"], item["sha256"]
+            if not isinstance(search, str) or not search or not isinstance(replacement, str):
+                raise SelfDevError(f"Search must be non-empty text and replace must be text: {key}")
+            if not isinstance(base_hash, str) or len(base_hash) != 64 or any(c not in "0123456789abcdef" for c in base_hash):
+                raise SelfDevError(f"A lowercase SHA-256 is required: {key}")
+            if not target.is_file() or target.stat().st_size > MAX_FILE_BYTES:
+                raise SelfDevError(f"Search edits require an existing text file within the size limit: {key}")
+            with target.open("rb") as source:
+                data = source.read(MAX_FILE_BYTES + 1)
+            if len(data) > MAX_FILE_BYTES or b"\x00" in data or _sha256(data) != base_hash:
+                raise SelfDevError(f"File changed or is not valid text: {key}")
+            try:
+                original = data.decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise SelfDevError(f"File is not UTF-8 text: {key}") from error
+            first = original.find(search)
+            if first < 0 or original.find(search, first + 1) >= 0:
+                raise SelfDevError(f"Search text must match exactly once: {key}")
+            content = original.replace(search, replacement, 1)
+        else:
+            content = item["content"]
         if not isinstance(content, str):
             raise SelfDevError(f"Content must be text: {key}")
         if "\x00" in content:
@@ -515,19 +543,20 @@ def preview_edits(edits: list[dict]) -> list[dict]:
         total += len(encoded)
         if total > MAX_TOTAL_BYTES:
             raise SelfDevError("This transaction exceeds the total size limit.")
-        target = resolve_path(root, key)
-        previous = target.read_text(encoding="utf-8") if target.is_file() else ""
+        previous = original if base_hash else (
+            target.read_text(encoding="utf-8") if "create_only" not in item and target.is_file() else "")
         diff = "".join(difflib.unified_diff(
             previous.splitlines(keepends=True), content.splitlines(keepends=True),
             fromfile=f"a/{key}", tofile=f"b/{key}",
         ))
         reviewed.append({
             "path": key,
-            "exists": target.is_file(),
+            "exists": target.is_file() if "create_only" not in item else False,
             "bytes_before": len(previous.encode("utf-8")),
             "bytes_after": len(encoded),
             "diff": diff[:20_000],
             "content": content,
+            "base_sha256": base_hash,
         })
     return reviewed
 
@@ -607,6 +636,9 @@ def apply_edits(
                        if item["exists"] and item["path"] not in snapshot["files"]]
     if missing_backups:
         raise SelfDevError("Cannot edit files missing from the checkpoint: " + ", ".join(missing_backups))
+    for item in reviewed:
+        if item["base_sha256"] and snapshot["files"][item["path"]]["sha256"] != item["base_sha256"]:
+            raise SelfDevError(f"{item['path']} changed after the search edit was prepared; no edits applied.")
 
     # Record the intended paths before writing so the checkpoint remains useful
     # if the process is interrupted during the transaction.

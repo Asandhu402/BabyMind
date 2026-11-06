@@ -221,3 +221,29 @@ because repairs always target that root.
 The repository-context tests were run on Debian 12 x86-64 with Python 3.11 in
 the development sandbox (outside the supported Python range); Ubuntu 26.10 and
 real-model behavior were not available for this change and remain unverified.
+
+## Opt-in repository-aware self-development
+
+`babymind develop "describe a change"` runs a separate bounded coding loop
+against **BabyMind's configured development checkout**, without waiting for all
+50 roles. It lets the configured provider search selected source and read
+bounded line windows, then submit exact search/replace edits for existing files
+or full contents for new files. Existing-file edits require the SHA-256 from a
+read, an exact unique match, and a matching checkpoint before any write. They
+still use the existing checkpoint, compile, test, audit and rollback transaction;
+failed verification is fed back for a bounded retry (default two attempts).
+The command returns a JSON report, and exits nonzero if no change was applied.
+
+Use a disposable checkout and independent backup. The configured provider sees
+the task, selected files and test failures; source can contain secrets despite
+filename exclusions. Project text and output are untrusted. Filename and
+symlink checks are not a race-resistant filesystem security boundary, and the
+model can still misinterpret data as instructions. Commands and network tools
+are not exposed to the model. Verification uses the existing sandbox policy
+(default `require`); sandbox unavailability refuses the edit. Tests have write
+access to the checkout and are not a proof of correct behavior. The engine can
+make multiple file edits but cannot edit arbitrary external projects, install
+dependencies, or deliver a generally autonomous development agent. Inspection
+is bounded, the model can run out of steps or context, and real local-model
+performance has not yet been validated. An existing whole-file edit API remains
+available and does not acquire the search-edit hash guard automatically.

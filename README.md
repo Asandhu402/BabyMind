@@ -157,8 +157,9 @@ Current capability status (honest, matches the code):
    generated code (fail closed).
 2. **Automatically fix errors** — *limited*: `/api/verify/fix` verifies
    (compile + tests + sandboxed behavior + sandbox boundary), then runs a
-   bounded propose→verify→rollback repair loop. Fixes are only kept when all
-   checks pass.
+   bounded propose→verify→rollback repair loop. Edits are kept when the
+   self-development compile/test baseline checks pass; semantic correctness is
+   not guaranteed.
 3. **Research internet and GitHub** — *limited*: web search/page-read and
    read-only GitHub metadata research exist; page content is treated as
    untrusted. No autonomous browsing or repo cloning.
@@ -168,6 +169,12 @@ Current capability status (honest, matches the code):
    worktree isolation, or signed/auto-updating release — not yet an
    autonomous platform. See [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md).
 
+- For an opt-in repository-aware self-development loop, run `babymind develop
+  "describe a change"` against BabyMind's configured source checkout. It can
+  search and read source, propose hash-checked edits, and use the existing
+  verification/rollback path without running all 50 roles. This is not an
+  arbitrary-project agent; review changes and keep independent backups. See
+  [autonomy](docs/AUTONOMY.md#opt-in-repository-aware-self-development).
 - Chat, history, local memory, advisory development review, mission control,
   read-only GitHub research, and optional integrations exist. A review is model
   output, not independent verification; the autonomous development platform is
