@@ -1,7 +1,7 @@
 """Inspectable, bounded cognitive runtime for BabyMind."""
 from __future__ import annotations
 import importlib.util
-import json, os, platform, shutil, sqlite3, threading, uuid
+import json, math, os, platform, shutil, sqlite3, threading, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -222,16 +222,16 @@ class CognitiveCore:
             "action": action, "expected": expected, "actual_outcome": outcome,
             "verified": verified, "prior_experiences": experiences,
         }, ensure_ascii=False)
-        reflection_raw = provider.complete(reflection_system, reflection_user).strip()
-        if reflection_raw.startswith(chr(96)*3):
-            reflection_raw = reflection_raw.split("\n",1)[-1].removesuffix(chr(96)*3).strip()
         reflection_error = ""
         try:
+            reflection_raw = provider.complete(reflection_system, reflection_user).strip()
+            if reflection_raw.startswith(chr(96)*3):
+                reflection_raw = reflection_raw.split("\n",1)[-1].removesuffix(chr(96)*3).strip()
             reflection_result = json.loads(reflection_raw)
             if not isinstance(reflection_result,dict):
                 raise ValueError("Reflection response must be a JSON object.")
-        except (json.JSONDecodeError, ValueError) as error:
-            reflection_error = str(error)
+        except Exception as error:
+            reflection_error = str(error)[:300]
             reflection_result = {
                 "reflection": "Post-action reflection failed; the action outcome remains recorded.",
                 "learning": "A failed reflection must be retried and must not be treated as successful learning.",
@@ -241,7 +241,7 @@ class CognitiveCore:
         learning = _clean(reflection_result.get("learning"))
         try: confidence = float(reflection_result.get("confidence",0.5))
         except (TypeError,ValueError): confidence = 0.5
-        confidence = max(0.0,min(1.0,confidence))
+        confidence = max(0.0,min(1.0,confidence)) if math.isfinite(confidence) else 0.0
         stamp = _now()
         encrypted = [self.secure.encrypt(json.dumps(observation,ensure_ascii=False)),
             self.secure.encrypt(understanding),self.secure.encrypt(plan),
