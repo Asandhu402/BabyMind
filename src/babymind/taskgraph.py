@@ -288,7 +288,7 @@ class TaskGraphStore:
             return {}
         # Never replay results against a changed task graph. Legacy records
         # without a fingerprint are deliberately treated as non-resumable.
-        if tasks is None or record.get("fingerprint") != self._fingerprint(tasks):
+        if tasks is not None and record.get("fingerprint") != self._fingerprint(tasks):
             return {}
         out = {}
         for item in record.get("result", {}).get("tasks", []):
