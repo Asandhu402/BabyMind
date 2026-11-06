@@ -5,6 +5,10 @@ cd "$(dirname "$0")"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'Build requires Linux x86-64.' >&2; exit 1; }
 python=${BABYMIND_BUILD_PYTHON:-python3}
 command -v "$python" >/dev/null || { echo "Python interpreter not found: $python" >&2; exit 1; }
+"$python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)' || {
+  printf "Building BabyMind requires Python 3.13 or newer; %s reports %s.\n" "$python" "$("$python" -V 2>&1)" >&2
+  exit 1
+}
 command -v curl >/dev/null
 command -v c++ >/dev/null
 command -v cmake >/dev/null || { echo 'Install cmake to build the bundled llama.cpp runtime.' >&2; exit 1; }

@@ -22,7 +22,7 @@ Install the local Python engines required by the capabilities you use:
 
     py -m pip install -e ".[documents,voice,browser,knowledge-graph]"
 
-Browser Use requires Python 3.11 or newer. The base application supports Python 3.10. The external coding CLI adapter is intentionally disabled until it can use BabyMind's llama.cpp runtime directly.
+BabyMind requires Python 3.13 or newer, which Browser Use supports. The knowledge-graph extra installs Cognee only on Python 3.13-3.14, because Cognee does not publish Python 3.15 packages yet; on 3.15 that extra is skipped instead of blocking the other integrations. The external coding CLI adapter is intentionally disabled until it can use BabyMind's llama.cpp runtime directly.
 
 Voicebox runs as a self-hosted loopback service. Example:
 

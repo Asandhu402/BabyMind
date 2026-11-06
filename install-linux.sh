@@ -55,8 +55,24 @@ sudo apt-get install -y ca-certificates curl git python3 python3-venv python3-pi
 
 # Use Ubuntu's packaged Python, not an unrelated virtual environment or custom
 # Python earlier on PATH; its matching shared library is provided by apt.
+# Python 3.13 or newer is required: Ubuntu 26.04 ships 3.14, and on 24.04 the
+# user can install python3.13 alongside the default interpreter.
 python=/usr/bin/python3
+for candidate in /usr/bin/python3.15 /usr/bin/python3.14 /usr/bin/python3.13 /usr/bin/python3; do
+  [[ -x $candidate ]] || continue
+  if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)' 2>/dev/null; then
+    python=$candidate
+    break
+  fi
+done
 [[ -x $python ]] || fail 'Ubuntu Python is missing after package installation.'
+"$python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)' 2>/dev/null || fail \
+  "BabyMind requires Python 3.13 or newer, but $python reports $("$python" -V 2>&1). Ubuntu 26.04 or newer ships it; on Ubuntu 24.04 run 'sudo apt install python3.13 python3.13-venv python3.13-dev' first."
+# A non-default interpreter needs its own versioned venv, pip and header packages.
+python_suffix=${python#/usr/bin/python}
+if [[ $python_suffix != 3 ]] && ! "$python" -c 'import venv, ensurepip' >/dev/null 2>&1; then
+  sudo apt-get install -y "python${python_suffix}-venv" "python${python_suffix}-pip" "python${python_suffix}-dev"
+fi
 printf '%s\n' 'Downloading and verifying the local AI model (about 2.71 GB if not already present)...'
 # Keep the app and model under the same normal per-user defaults for desktop launches.
 env -u BABYMIND_GGUF_MODEL BABYMIND_HOME="$HOME/.babymind" PYTHONPATH="$source_dir/src" \

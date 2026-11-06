@@ -94,6 +94,18 @@ for tool in git curl python3 cmake c++; do
   command -v "$tool" >/dev/null 2>&1 || fail "Required tool '$tool' is still missing after installation."
 done
 
+# BabyMind needs Python 3.13 or newer. Accept a versioned interpreter, because a
+# distro whose default python3 is older can have python3.13+ installed alongside.
+python3_ok=
+for candidate in python3.15 python3.14 python3.13 python3; do
+  if command -v "$candidate" >/dev/null 2>&1 && \
+     "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)' 2>/dev/null; then
+    python3_ok=1
+    break
+  fi
+done
+[[ -n $python3_ok ]] || fail "BabyMind requires Python 3.13 or newer, but $(python3 -V 2>&1) was found. Install python3.13+ (Ubuntu 26.04 or newer ships it) and re-run."
+
 # --- 2. Get the BabyMind source ----------------------------------------------
 say 'Fetching the BabyMind source…'
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P || true)

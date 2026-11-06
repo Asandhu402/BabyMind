@@ -4,28 +4,40 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "babymind"
-version = "0.5.0"
+version = "0.6.0"
 description = "Local-first personal AI workspace with 50 specialist roles (experimental, not production-ready)"
 readme = "README.md"
-requires-python = ">=3.10"
+# Python 3.10 reached end of life on 2026-10-01. BabyMind targets the current
+# stable interpreter and is tested on 3.13, 3.14 and 3.15.
+requires-python = ">=3.13"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: X11 Applications :: Qt",
+]
 dependencies = [
-    "PySide6>=6.8,<6.9",
+    "PySide6>=6.12,<6.13",
     "cryptography>=50.0.0,<51",
 ]
 
 [project.optional-dependencies]
-build = ["pyinstaller>=6.0,<7"]
+build = ["pyinstaller>=6.22,<7"]
 documents = ["docling>=2.0"]
 voice = ["faster-whisper>=1.0"]
-browser = ["browser-use>=0.11; python_version >= '3.11'"]
-knowledge-graph = ["cognee[gliner]>=0.5.0"]
+browser = ["browser-use>=0.13"]
+# cognee publishes no wheels for Python 3.15 yet, so the knowledge graph extra is
+# only offered on 3.13/3.14 instead of making the whole extra set uninstallable.
+knowledge-graph = ["cognee[gliner]>=0.5.0; python_version < '3.15'"]
 all-integrations = [
     "docling>=2.0",
     "faster-whisper>=1.0",
-    "browser-use>=0.11; python_version >= '3.11'",
-    "cognee[gliner]>=0.5.0",
+    "browser-use>=0.13",
+    "cognee[gliner]>=0.5.0; python_version < '3.15'",
 ]
 
 [project.scripts]

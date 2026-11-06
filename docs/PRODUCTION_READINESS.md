@@ -54,7 +54,7 @@ artifact and an owner-approved result.
 
 ### G0 — Supported installation and lifecycle
 
-- Fresh Ubuntu 22.04 and 24.04 x86-64 desktop install, upgrade, launch,
+- Fresh Ubuntu 24.04 and 26.04 x86-64 desktop install, upgrade, launch,
   restart, uninstall, and reinstall tests.
 - Reproducible, signed release artifacts and a published software bill of
   materials; pinned and verified model/runtime/dependency downloads.
