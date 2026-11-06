@@ -141,3 +141,17 @@ route is lazily initialized and cached. This makes independent model selection
 possible without pretending that 50 roles are 50 separate models. It does not
 download models or guarantee that multiple local models fit in available RAM.
 Inspect routing with `babymind cognitive routing`; secrets are not displayed.
+
+
+## Routing across missions and the background service
+
+Per-role routing is used by direct specialist conversations, cognitive cycles,
+and all 50 role passes in both CLI and web missions. Self-edit proposal
+generation is routed through the coding specialist (BM-03). The existing
+shared provider remains the fallback for roles without a specific route.
+
+The systemd installer creates `~/.config/babymind/models.env` with mode 0600
+and adds it as an optional EnvironmentFile. Put `BABYMIND_AGENT_MODEL_MAP='{"BM-03":{"base_url":"http://127.0.0.1:9001/v1","model":"coder"}}'`
+there to configure a role-specific local model for the background service.
+Keep any API key in a separate environment assignment whose value is not
+committed to source control. Restart the service after changing the file.
