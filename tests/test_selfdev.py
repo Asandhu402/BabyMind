@@ -350,8 +350,8 @@ class SelfDevTests(unittest.TestCase):
 
     def test_test_problem_ids_reads_both_output_streams(self) -> None:
         result = {
-            "stderr": "FAIL: stderr_failure (tests.test_one)\\n",
-            "stdout": "ERROR: stdout_error (tests.test_two)\\n",
+            "stderr": "FAIL: stderr_failure (tests.test_one)\n",
+            "stdout": "ERROR: stdout_error (tests.test_two)\n",
         }
         self.assertEqual(
             selfdev._test_problem_ids(result),
