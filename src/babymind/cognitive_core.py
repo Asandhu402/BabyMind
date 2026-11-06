@@ -222,7 +222,9 @@ class CognitiveCore:
             "\nSELECTED GOAL OBJECTIVE:\n"+_clean(objective, 1000)+
             "\nIf an objective is supplied, work only toward it using permitted local actions. Break it into small verifiable steps; do not claim completion until the goal is explicitly completed and read-back verified."+
             "\nChoose a useful next step and return the structured cycle.")
-        raw = provider.complete(system,user).strip()
+        complete_for = getattr(provider, "complete_for", None)
+        generate = (lambda system_prompt, user_prompt: complete_for(normalized, system_prompt, user_prompt)) if callable(complete_for) else provider.complete
+        raw = generate(system,user).strip()
         if raw.startswith(chr(96)*3): raw = raw.split("\n",1)[-1].removesuffix(chr(96)*3).strip()
         try: result = json.loads(raw)
         except json.JSONDecodeError as error: raise ValueError(f"Cognitive planning response was not valid JSON: {error.msg}") from error
@@ -246,7 +248,7 @@ class CognitiveCore:
         }, ensure_ascii=False)
         reflection_error = ""
         try:
-            reflection_raw = provider.complete(reflection_system, reflection_user).strip()
+            reflection_raw = generate(reflection_system, reflection_user).strip()
             if reflection_raw.startswith(chr(96)*3):
                 reflection_raw = reflection_raw.split("\n",1)[-1].removesuffix(chr(96)*3).strip()
             reflection_result = json.loads(reflection_raw)
