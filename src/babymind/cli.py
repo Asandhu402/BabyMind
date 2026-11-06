@@ -18,6 +18,16 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("hardware", help="Detect hardware and recommend local model settings")
     subparsers.add_parser("selfdev", help="Report the self-development engine's real state")
 
+    cognitive_parser = subparsers.add_parser("cognitive", help="Inspect or run BabyMind's bounded cognitive core")
+    cognitive_actions = cognitive_parser.add_subparsers(dest="cognitive_action", required=True)
+    cognitive_actions.add_parser("status", help="Show persistent identity, observed environment, goals, and cycle metrics")
+    cycle_parser = cognitive_actions.add_parser("cycle", help="Run one observe-to-learn cognitive cycle")
+    cycle_parser.add_argument("--agent", default="BM-02", help="Existing role ID to run this cycle through")
+    autonomous_parser = cognitive_actions.add_parser("run", help="Run a bounded number of autonomous cognitive cycles")
+    autonomous_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 101), help="Number of cycles (1-100)")
+    autonomous_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
+    autonomous_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
+
     mission_parser = subparsers.add_parser("mission", help="Run a mission across all 50 roles")
     mission_parser.add_argument("brief", help="Mission brief")
     mission_parser.add_argument("--max-seconds", type=int, default=900,
@@ -138,6 +148,26 @@ def main() -> None:
         print(result.response)
         print(f"memories used: {result.memories_used}")
         print(f"saved to local memory: {result.remembered}")
+    elif args.command == "cognitive":
+        import json
+        import time
+        from .cognitive_core import CognitiveCore
+        core = CognitiveCore()
+        if args.cognitive_action == "status":
+            print(json.dumps(core.status(), indent=2, ensure_ascii=False))
+        else:
+            if args.cognitive_action == "run" and not 0 <= args.interval <= 3600:
+                raise SystemExit("Interval must be between 0 and 3600 seconds.")
+            provider = BabyMindCoordinator().provider
+            count = 1 if args.cognitive_action == "cycle" else args.cycles
+            for index in range(count):
+                try:
+                    result = core.run_cycle(provider, agent_id=args.agent)
+                except (KeyError, ValueError, RuntimeError) as error:
+                    raise SystemExit(str(error)) from error
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                if index + 1 < count and args.interval:
+                    time.sleep(args.interval)
     elif args.command == "memory":
         memory = LocalMemory()
         if args.memory_action == "list":
