@@ -3,7 +3,7 @@
 set -euo pipefail
 umask 077
 
-fail() { printf 'BabyMind installation stopped: %s\\n' "$*" >&2; exit 1; }
+fail() { printf 'BabyMind installation stopped: %s\n' "$*" >&2; exit 1; }
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || fail 'Ubuntu x86-64 is required.'
 [[ $EUID -ne 0 ]] || fail 'Run as your normal desktop user, not root; the installer will use sudo for packages.'
 [[ -r /etc/os-release ]] || fail 'Cannot identify this operating system.'
@@ -42,15 +42,15 @@ if [[ -e $desktop || -L $desktop ]]; then
   [[ -f $desktop && ! -L $desktop ]] && grep -qx 'X-BabyMind-Installer=true' "$desktop" || fail "Existing $desktop is not our desktop entry; it was not changed."
 fi
 
-printf '%s\\n' 'Installing Ubuntu packages (sudo may ask for your password)...'
+printf '%s\n' 'Installing Ubuntu packages (sudo may ask for your password)...'
 sudo apt-get update
 # libasound2 has been renamed in newer Ubuntu releases.
 if apt-cache show libasound2t64 >/dev/null 2>&1; then audio=libasound2t64; else audio=libasound2; fi
-sudo apt-get install -y ca-certificates curl git python3 python3-venv python3-pip python3-dev \\
-  build-essential cmake pkg-config tar libnss3 libgl1 libegl1 libgbm1 libdrm2 "$audio" \\
-  libdbus-1-3 libfontconfig1 libfreetype6 libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrender1 libxrandr2 \\
-  libxtst6 libxi6 libxss1 libxshmfence1 libxkbfile1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \\
-  libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \\
+sudo apt-get install -y ca-certificates curl git python3 python3-venv python3-pip python3-dev \
+  build-essential cmake pkg-config tar libnss3 libgl1 libegl1 libgbm1 libdrm2 "$audio" \
+  libdbus-1-3 libfontconfig1 libfreetype6 libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrender1 libxrandr2 \
+  libxtst6 libxi6 libxss1 libxshmfence1 libxkbfile1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
+  libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
   libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 libxcb-shape0 libxcb-xkb1 libxcb-xinerama0
 
 # Use Ubuntu's packaged Python, not an unrelated virtual environment or custom
@@ -58,7 +58,7 @@ sudo apt-get install -y ca-certificates curl git python3 python3-venv python3-pi
 python=/usr/bin/python3
 [[ -x $python ]] || fail 'Ubuntu Python is missing after package installation.'
 # Fail before downloading the multi-gigabyte model if the interpreter is outside
-# the tested dependency range. Python 3.15 is the newest supported series.
+# the supported dependency range. PySide6 6.12 provides wheels through Python 3.15.
 "$python" - <<'PYTHON'
 import sys
 version = sys.version_info[:2]
@@ -71,13 +71,13 @@ if not ((3, 11) <= version < (3, 16)):
     raise SystemExit(1)
 print(f"Using supported Python {sys.version.split()[0]}.")
 PYTHON
-printf '%s\\n' 'Downloading and verifying the local AI model (about 2.71 GB if not already present)...'
+printf '%s\n' 'Downloading and verifying the local AI model (about 2.71 GB if not already present)...'
 # Keep the app and model under the same normal per-user defaults for desktop launches.
-env -u BABYMIND_GGUF_MODEL BABYMIND_HOME="$HOME/.babymind" PYTHONPATH="$source_dir/src" \\
+env -u BABYMIND_GGUF_MODEL BABYMIND_HOME="$HOME/.babymind" PYTHONPATH="$source_dir/src" \
   "$python" -m babymind.install_model
 
 mkdir -p -- "$install_root/versions" "$bin_dir" "$applications"
-printf '%s\\n' 'BabyMind Linux installer v1' > "$install_root/.babymind-managed"
+printf '%s\n' 'BabyMind Linux installer v1' > "$install_root/.babymind-managed"
 cache_root="${XDG_CACHE_HOME:-$HOME/.cache}"
 mkdir -p -- "$cache_root"
 work=$(mktemp -d "$cache_root/babymind-build.XXXXXXXX")
@@ -87,10 +87,10 @@ cleanup() {
   if [[ -n $staged && -d $staged ]]; then rm -rf -- "$staged"; fi
 }
 trap cleanup EXIT
-printf '%s\\n' 'Building the Linux desktop and local CPU runtime; this can take several minutes...'
+printf '%s\n' 'Building the Linux desktop and local CPU runtime; this can take several minutes...'
 mkdir -p -- "$work/source"
 # Build in our own temporary directory; never clean or overwrite the caller's checkout.
-tar -C "$source_dir" --exclude='./.git' --exclude='./.venv' --exclude='./build' \\
+tar -C "$source_dir" --exclude='./.git' --exclude='./.venv' --exclude='./build' \
   --exclude='./dist' --exclude='./state' --exclude='./.babymind' -cf - . | tar -C "$work/source" -xf -
 (cd "$work/source" && BABYMIND_BUILD_PYTHON="$python" ./build-linux.sh)
 [[ -x $work/source/dist/BabyMind/BabyMind && -x $work/source/dist/BabyMind/llama.cpp/llama-server ]] || fail 'The build did not produce both desktop and runtime executables.'
@@ -102,7 +102,7 @@ tar -C "$source_dir" --exclude='./.git' --exclude='./.venv' --exclude='./build' 
 # Preserve older versions for recovery. Publish a completed version by atomic symlink swap.
 staged=$(mktemp -d "$install_root/versions/install.XXXXXXXX")
 cp -a -- "$work/source/dist/BabyMind/." "$staged/"
-printf '%s\\n' 'BabyMind Linux installer v1' > "$staged/.babymind-installed"
+printf '%s\n' 'BabyMind Linux installer v1' > "$staged/.babymind-installed"
 newlink="$install_root/.current.$$"
 [[ ! -e $newlink && ! -L $newlink ]] || fail 'Temporary install link already exists.'
 ln -s -- "$staged" "$newlink"
@@ -115,8 +115,8 @@ if [[ ! -L $launcher ]]; then ln -s -- "$current/BabyMind" "$launcher"; fi
 "$python" - "$desktop" "$current/BabyMind" <<'PY'
 import os, sys, tempfile
 path, executable = sys.argv[1:]
-quoted = '"' + executable.replace('\\\\', '\\\\\\\\').replace('"', '\\\\"').replace('`', '\\\`').replace('$', '\\\$').replace('%', '%%') + '"'
-data = '[Desktop Entry]\\nType=Application\\nName=BabyMind\\nComment=Local AI workspace\\nExec=' + quoted + '\\nTerminal=false\\nCategories=Utility;\\nX-BabyMind-Installer=true\\n'
+quoted = '"' + executable.replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$').replace('%', '%%') + '"'
+data = '[Desktop Entry]\nType=Application\nName=BabyMind\nComment=Local AI workspace\nExec=' + quoted + '\nTerminal=false\nCategories=Utility;\nX-BabyMind-Installer=true\n'
 fd, temp = tempfile.mkstemp(prefix='.babymind-', dir=os.path.dirname(path), text=True)
 try:
     with os.fdopen(fd, 'w', encoding='utf-8') as f:
@@ -126,7 +126,7 @@ finally:
     if os.path.exists(temp):
         os.unlink(temp)
 PY
-printf '\\n%s\\n' 'BabyMind is installed. Open BabyMind from your Applications menu,' \\
-  "or start it with: $launcher" \\
-  "Model and personal data: $HOME/.babymind" \\
+printf '\n%s\n' 'BabyMind is installed. Open BabyMind from your Applications menu,' \
+  "or start it with: $launcher" \
+  "Model and personal data: $HOME/.babymind" \
   'Previous app versions are kept in the BabyMind installation directory.'
