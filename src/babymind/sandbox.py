@@ -124,26 +124,11 @@ if failed_limits:
     sys.stderr.write("LIMIT_FAILED " + ",".join(failed_limits) + "\n")
     sys.stderr.flush()
 
-# Best-effort cgroup v2 physical-memory cap. RLIMIT_AS bounds virtual address
-# space; a delegated cgroup memory.max also bounds physical RAM. If the
-# cgroup filesystem is not delegated, report and continue with rlimits only.
-try:
-    cgroup_root = "/sys/fs/cgroup"
-    if os.path.isdir(cgroup_root) and os.path.exists(cgroup_root + "/cgroup.controllers"):
-        if "memory" in open(cgroup_root + "/cgroup.controllers").read():
-            sub = cgroup_root + "/babymind-sandbox-" + str(os.getpid())
-            os.makedirs(sub, exist_ok=True)
-            open(sub + "/memory.max", "w").write(str(spec["mem_bytes"]))
-            open(sub + "/cgroup.procs", "w").write(str(os.getpid()))
-            sys.stderr.write("CGROUP_MEM_SET " + str(spec["mem_bytes"]) + "\n")
-        else:
-            sys.stderr.write("CGROUP_MEM_UNAVAILABLE no-memory-controller\n")
-    else:
-        sys.stderr.write("CGROUP_MEM_UNAVAILABLE no-cgroup-v2\n")
-    sys.stderr.flush()
-except Exception as error:
-    sys.stderr.write("CGROUP_MEM_UNAVAILABLE " + str(error) + "\n")
-    sys.stderr.flush()
+# The chroot intentionally has no host /sys mount. Do not pretend that
+# an in-chroot cgroup write enforces physical RSS: the RLIMIT_AS/RLIMIT_DATA
+# caps below constrain address space/data segments, not total physical RAM.
+sys.stderr.write("CGROUP_MEM_UNAVAILABLE not-delegated-before-chroot\\n")
+sys.stderr.flush()
 
 os.execvpe(spec["argv"][0], spec["argv"], spec["env"])
 '''
@@ -429,8 +414,9 @@ def status(probe: bool = False) -> dict:
             "process": "separate PID namespace with --kill-child" if record.available else "not enforced",
             "privileges": "unprivileged user namespace; no host capabilities" if record.available else "not enforced",
             "limits": "RLIMIT_CPU / RLIMIT_FSIZE / RLIMIT_NOFILE / RLIMIT_AS + RLIMIT_DATA "
-                      "(address-space and heap caps) / RLIMIT_NPROC inside the sandbox; "
-                      "any limit the kernel refuses is reported on stderr as LIMIT_FAILED"
+                      "(address-space and data-segment caps) / RLIMIT_NPROC inside the sandbox; "
+                      "physical RSS is not capped; any limit the kernel refuses is reported "
+                      "on stderr as LIMIT_FAILED"
             if record.available else "not enforced",
             "environment": "rebuilt from a non-secret allowlist",
         },
