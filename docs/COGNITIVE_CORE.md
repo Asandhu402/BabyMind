@@ -63,3 +63,16 @@ BabyMind remains Debian-based Linux and x86-64 only. Ubuntu 26.10 is the request
 - The virtualization hint is incomplete and cannot identify every VM, container, or hypervisor.
 - Autonomous cycles are finite CLI invocations, not a persistent service. A service or scheduler should be added only with explicit resource, pause, audit, and approval controls.
 - Research notes do not imply external research, shell experiments, or physical-world actions were performed.
+
+
+## Operational self-evaluation
+
+Run:
+
+```bash
+babymind cognitive evaluate
+```
+
+This command performs deterministic local checks for grounded identity, host observation, preservation of all 50 roles, explicit capability boundaries, identity persistence, memory surviving a database reopen, rejection of an unallowlisted shell action, a scripted autonomous cycle, reuse of prior reflection in the next planning context, and Cognitive Core context reaching every role. The persistence probes use a temporary isolated database and do not add goals or notes to the user's real memory. No model endpoint, network access, or external service is required.
+
+The scripted cycle check validates that a future planning call receives a prior reflection; it does not measure the quality of a real model's reasoning. The command exits non-zero if a check fails or cannot be completed. Its score is an operational software-test score only. It is not a consciousness score and cannot establish subjective experience, sentience, free will, or whether the environment is simulated.

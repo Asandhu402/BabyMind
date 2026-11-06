@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     cognitive_parser = subparsers.add_parser("cognitive", help="Inspect or run BabyMind's bounded cognitive core")
     cognitive_actions = cognitive_parser.add_subparsers(dest="cognitive_action", required=True)
     cognitive_actions.add_parser("status", help="Show persistent identity, observed environment, goals, and cycle metrics")
+    cognitive_actions.add_parser("evaluate", help="Run deterministic local checks of operational self-awareness")
     cycle_parser = cognitive_actions.add_parser("cycle", help="Run one observe-to-learn cognitive cycle")
     cycle_parser.add_argument("--agent", default="BM-02", help="Existing role ID to run this cycle through")
     autonomous_parser = cognitive_actions.add_parser("run", help="Run a bounded number of autonomous cognitive cycles")
@@ -185,6 +186,12 @@ def main() -> None:
         core = CognitiveCore()
         if args.cognitive_action == "status":
             print(json.dumps(core.status(), indent=2, ensure_ascii=False))
+        elif args.cognitive_action == "evaluate":
+            from .self_evaluation import run_self_evaluation
+            report = run_self_evaluation(core)
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if not report["all_passed"]:
+                raise SystemExit(1)
         else:
             if args.cognitive_action == "run" and not 0 <= args.interval <= 3600:
                 raise SystemExit("Interval must be between 0 and 3600 seconds.")
