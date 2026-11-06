@@ -47,6 +47,22 @@ The host report includes the detected distribution, architecture, kernel, Python
 
 A cycle may create a falsifiable research question about the environment, but must distinguish observation, hypothesis, and unknowns. No hardcoded answer is supplied.
 
+## Bounded autonomy, goal execution, and drift detection
+
+Additional commands:
+
+- `babymind cognitive autonomy --cycles 5 --interval 30` — run at most 25 bounded cognitive cycles.
+- `babymind cognitive goal GOAL_ID --max-steps 5` — work toward one existing local goal for at most 10 steps; each step uses the Cognitive Core allowlist and read-after-write verification.
+- `babymind cognitive benchmark` — run the operational capability benchmark and report scores by dimension.
+
+The autonomy controller stores a compact encrypted baseline of observable host facts and compares later observations for changes in OS, distribution, kernel, architecture, Python interpreter, and BabyMind home paths. A change is reported as drift, not automatically treated as a fault. Failures are written to local notes when storage is available, so later cycles can inspect them.
+
+The action policy is fail-closed. The autonomous cognitive layer can only create or complete local goals, record research questions, write local notes, or wait. Shell execution, arbitrary code, network access, source edits, deletion, credentials, purchases, messages, and system changes are not enabled by this controller. Listing an operation as approval-required does not itself implement that operation; it must be handled by a separately supervised tool.
+
+Goal execution is finite and goal-specific. The model receives the selected goal as an explicit objective, proposes one small step at a time, and the runtime verifies local state changes. If the goal remains active at the step limit, BabyMind reports that it is incomplete. The controller is a finite CLI process, not an always-on daemon; stopping the process stops autonomous work.
+
+The benchmark score measures only the deterministic behaviors it exercises. It is not an IQ, general-intelligence, consciousness, or sentience score. A scripted provider verifies control-flow integration; only separate testing with the configured real model can assess the quality of its reasoning, and model outputs still require external evaluation.
+
 ## Objective checks
 
 Automated tests cover identity persistence, environment observation, all 50 role contexts, goal persistence, read-after-write verification, encrypted research notes, unsupported-action rejection, malformed model output, and coordinator integration. Confidence is stored as a model estimate and is not ground truth.
