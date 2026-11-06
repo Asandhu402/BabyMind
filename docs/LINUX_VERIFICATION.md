@@ -507,7 +507,7 @@ self-development or packaged update activation.
 ## One-command bootstrap (2026-11-06)
 
 `bootstrap-linux.sh` now does the machine preparation the old one-liner asked
-the user to do by hand: it detects apt-get, dnf, pacman or zypper, installs only
+the user to do by hand: it uses APT on Debian-based distributions and installs only
 the tools it lacks, and selects the newest Python 3.13-3.15 (installed
 interpreter, distribution package, or the newest CPython release built from
 python.org source). `install-linux.sh` installs the Qt/WebEngine libraries for
@@ -532,8 +532,7 @@ What has been run:
   the distribution packages it would try for 3.13-3.15 and the CPython 3.15.0
   source build into `~/.cache/babymind/python/3.15.0`.
 
-What has **not** been run: the dnf, pacman and zypper package lists on those
-distributions, the from-source CPython build end to end (only its plan and its
+What has **not** been run: the from-source CPython build end to end (only its plan and its
 failure handling), and a fresh-machine install with the production model.
 
 ## Real-model acceptance is now permanent CI (2026-11-06)
