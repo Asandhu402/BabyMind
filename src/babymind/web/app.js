@@ -190,6 +190,12 @@ async function copyText(text){
   }
 }
 function diagnosticsReportText(){return $("#diagnosticsReport").value;}
+async function copyDiagnosticsReport(){
+  const report=diagnosticsReportText();
+  if(!report){toast("Report is still loading — click Refresh");return;}
+  const copied=await copyText(report);
+  toast(copied?"Log copied — paste it into the chat and I'll work from it":"Clipboard blocked by the browser; select the preview text and copy it manually, or use Download .md");
+}
 async function loadDiagnostics(){
   const summary=$("#diagnosticsSummary"),list=$("#diagnosticList"),reportBox=$("#diagnosticsReport");
   try{
@@ -449,7 +455,8 @@ async function init() {
   });
   $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories`);loadMemory();}catch(error){toast(error.message);}});
   $("#refreshDiagnostics").addEventListener("click",loadDiagnostics);
-  $("#copyReport").addEventListener("click",async()=>{const report=diagnosticsReportText();if(!report){toast("Report is still loading — click Refresh");return;}const copied=await copyText(report);toast(copied?"Diagnostics report copied — paste it anywhere for help":"Clipboard blocked by the browser; select the preview text and copy it manually, or use Download .md");});
+  $("#copyReport").addEventListener("click",copyDiagnosticsReport);
+  $("#copyLogBottom").addEventListener("click",copyDiagnosticsReport);
   $("#copyLogPath").addEventListener("click",async()=>{const path=state.diagnosticsLogPath;if(!path){toast("Log path not loaded yet — click Refresh");return;}const copied=await copyText(path);toast(copied?"Log file path copied":"Clipboard blocked by the browser");});
   $("#downloadReport").addEventListener("click",async()=>{try{const report=diagnosticsReportText()||(await api("/api/diagnostics/report")).report;const blob=new Blob([report],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="babymind-diagnostics.md";link.click();URL.revokeObjectURL(url);}catch(error){toast(error.message);}});
   $("#clearDiagnostics").addEventListener("click",async()=>{if(!confirm("Delete all recorded interactions from the local diagnostics log?"))return;try{const result=await api("/api/diagnostics/interactions",{method:"DELETE"});toast(`Cleared ${result.deleted} recorded interactions`);loadDiagnostics();}catch(error){toast(error.message);}});

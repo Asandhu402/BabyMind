@@ -162,11 +162,13 @@ Current capability status (honest, matches the code):
   does — every local API call (method, route, status, timing, error text; no
   request/response bodies, attachments or memories), every failed page/asset
   request, and every uncaught client error — to
-  `~/.babymind/interactions.jsonl` (capped at 500 entries). The window shows a
-  selectable report preview, per-entry **Copy** buttons, a one-click **Copy
-  report**, **Copy log path** and **Download .md**, so everything it shows can
-  be pasted anywhere for debugging. The log is local and unencrypted; review
-  it before sharing.
+  `~/.babymind/interactions.jsonl` (capped at 500 entries). The installed
+  desktop app embeds the same view, so every model reply, task, approval and
+  error it handles lands in the same log. The window shows a selectable report
+  preview, per-entry **Copy** buttons, a **Copy log** button at the bottom of
+  the log (one click to paste into a chat for help) and at the top, plus
+  **Copy log path** and **Download .md**. The log is local and unencrypted;
+  review it before sharing.
 - Downloads, third-party dependencies and the model have their own licenses;
   assess them before redistribution. This repository currently has no top-level
   license file. No license to redistribute the project is implied.
