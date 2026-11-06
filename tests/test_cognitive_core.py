@@ -63,7 +63,7 @@ class CognitiveCoreTests(unittest.TestCase):
         self.assertEqual(reopened.status()["cycles"], 1)
         self.assertEqual(reopened.active_goals()[0]["description"], "Check persistence after restart.")
         self.assertIn("AVAILABLE SPECIALIST ROLES", provider.user_prompts[0])
-        self.assertIn("VERIFICATION RESULT", provider.user_prompts[1])
+        self.assertIn("actual_outcome", provider.user_prompts[1])
         self.assertIn("Created local goal", provider.user_prompts[1])
         followup = FakeProvider({
             "understanding": "A previous lesson is available.",
