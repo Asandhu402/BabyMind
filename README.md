@@ -27,7 +27,7 @@ downloader if the machine has none, and Python 3.13-3.15 if the distribution
 does not provide one - installs BabyMind and starts it:
 
 ```bash
-bash -c 'if command -v curl >/dev/null 2>&1; then curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; elif command -v wget >/dev/null 2>&1; then wget -qO- https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; else if command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y curl ca-certificates; elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y curl ca-certificates; elif command -v pacman >/dev/null 2>&1; then sudo pacman -Sy --noconfirm curl ca-certificates; elif command -v zypper >/dev/null 2>&1; then sudo zypper --non-interactive install curl ca-certificates; else printf "Install curl or wget first.\n" >&2; exit 1; fi; curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; fi' | BABYMIND_LAUNCH_AFTER_INSTALL=1 bash
+bash -c 'if command -v curl >/dev/null 2>&1; then curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; elif command -v wget >/dev/null 2>&1; then wget -qO- https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; else sudo apt-get update && sudo apt-get install -y curl ca-certificates && curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; fi' | BABYMIND_LAUNCH_AFTER_INSTALL=1 bash
 ```
 
 The command downloads and runs `bootstrap-linux.sh`, which:
