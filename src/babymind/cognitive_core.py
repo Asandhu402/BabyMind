@@ -219,7 +219,7 @@ class CognitiveCore:
             "\nPERSISTENT RESEARCH NOTES:\n"+json.dumps(notes,ensure_ascii=False)+
             "\nAVAILABLE SPECIALIST ROLES:\n"+json.dumps(roster,ensure_ascii=False)+
             "\nCURRENT ROLE:\n"+agent_instructions(agent)+
-            "\nUSER-APPROVED OBJECTIVE:\n"+_clean(objective, 1000)+
+            "\nSELECTED GOAL OBJECTIVE:\n"+_clean(objective, 1000)+
             "\nIf an objective is supplied, work only toward it using permitted local actions. Break it into small verifiable steps; do not claim completion until the goal is explicitly completed and read-back verified."+
             "\nChoose a useful next step and return the structured cycle.")
         raw = provider.complete(system,user).strip()
