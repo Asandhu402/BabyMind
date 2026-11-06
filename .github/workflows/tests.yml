@@ -31,6 +31,10 @@ jobs:
             python: '3.11'
           - ubuntu: '24.04'
             python: '3.12'
+          - ubuntu: '24.04'
+            python: '3.14'
+          - ubuntu: '24.04'
+            python: '3.15'
     runs-on: ubuntu-${{ matrix.ubuntu }}
     timeout-minutes: 45
     steps:
@@ -106,7 +110,7 @@ jobs:
         run: tar -C dist -czf dist/BabyMind-Linux-x86_64.tar.gz BabyMind
       - uses: actions/upload-artifact@v4
         with:
-          name: BabyMind-Linux-x86_64-ubuntu-${{ matrix.ubuntu }}
+          name: BabyMind-Linux-x86_64-ubuntu-${{ matrix.ubuntu }}-python-${{ matrix.python }}
           path: dist/BabyMind-Linux-x86_64.tar.gz
           if-no-files-found: error
           retention-days: 14
