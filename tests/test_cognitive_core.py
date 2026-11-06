@@ -61,6 +61,17 @@ class CognitiveCoreTests(unittest.TestCase):
         self.assertEqual(reopened.status()["cycles"], 1)
         self.assertEqual(reopened.active_goals()[0]["description"], "Check persistence after restart.")
         self.assertIn("AVAILABLE SPECIALIST ROLES", provider.user_prompt)
+        followup = FakeProvider({
+            "understanding": "A previous lesson is available.",
+            "plan": "Pause and preserve the lesson.",
+            "action": {"type": "wait"},
+            "expected": "No external state changes.",
+            "reflection": "The prior learning was available to this cycle.",
+            "learning": "Carry forward verified lessons.",
+            "confidence": 0.9,
+        })
+        self.core.run_cycle(followup, "BM-03")
+        self.assertIn("Verify writes by reading the database", followup.user_prompt)
 
     def test_question_is_recorded_as_encrypted_local_research_note(self):
         provider = FakeProvider({
