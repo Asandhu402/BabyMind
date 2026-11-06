@@ -8,10 +8,12 @@ from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
+import babymind.providers as providers_module
 from babymind.providers import (
     LlamaCppHTTPClient,
     LlamaCppProvider,
     ProviderError,
+    _context_size,
     create_provider,
 )
 
@@ -140,3 +142,69 @@ class ProviderSelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContextSizeTests(unittest.TestCase):
+    def test_default_context_size_is_4096(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_context_size(), 4096)
+
+    def test_valid_context_sizes_are_accepted(self) -> None:
+        for raw, want in (("512", 512), ("4096", 4096), ("8192", 8192), ("131072", 131072)):
+            with patch.dict(os.environ, {"BABYMIND_CONTEXT_SIZE": raw}, clear=True):
+                self.assertEqual(_context_size(), want)
+
+    def test_invalid_context_sizes_fail_clearly(self) -> None:
+        for raw in ("not-a-number", "", "4096.5", "100", "131073"):
+            with patch.dict(os.environ, {"BABYMIND_CONTEXT_SIZE": raw}, clear=True):
+                with self.assertRaises(ProviderError):
+                    _context_size()
+
+    def test_invalid_context_size_fails_before_launching(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            exe = Path(folder) / "llama-server"
+            exe.write_text("#!/bin/sh\nexit 0\n")
+            model = Path(folder) / "model.gguf"
+            model.write_bytes(b"gguf")
+            env = {
+                "BABYMIND_LLAMA_SERVER": str(exe),
+                "BABYMIND_GGUF_MODEL": str(model),
+                "BABYMIND_CONTEXT_SIZE": "abc",
+            }
+            with patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(ProviderError, "whole number of tokens"):
+                    LlamaCppProvider()
+
+    def test_context_size_reaches_llama_server_argv(self) -> None:
+        with tempfile.TemporaryDirectory() as folder, socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        with tempfile.TemporaryDirectory() as folder:
+            exe = Path(folder) / "llama-server"
+            exe.write_text("#!/bin/sh\nexit 0\n")
+            exe.chmod(0o755)
+            model = Path(folder) / "model.gguf"
+            model.write_bytes(b"gguf")
+            env = {
+                "BABYMIND_LLAMA_SERVER": str(exe),
+                "BABYMIND_GGUF_MODEL": str(model),
+                "BABYMIND_CONTEXT_SIZE": "8192",
+                "BABYMIND_LLAMA_PORT": str(port),
+            }
+            fake_process = MagicMock()
+            fake_process.poll.return_value = None
+            env_patch = patch.dict(os.environ, env, clear=True)
+            popen_patch = patch.object(providers_module.subprocess, "Popen", return_value=fake_process)
+            health_patch = patch.object(providers_module, "urlopen", return_value=MagicMock())
+            env_patch.start()
+            popen_patch.start()
+            health_patch.start()
+            try:
+                provider = LlamaCppProvider()
+                argv = providers_module.subprocess.Popen.call_args.args[0]
+                self.assertEqual(argv[argv.index("--ctx-size") + 1], "8192")
+                provider.stop()
+            finally:
+                health_patch.stop()
+                popen_patch.stop()
+                env_patch.stop()

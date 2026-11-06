@@ -23,6 +23,22 @@ class ProviderError(RuntimeError):
     """Raised when a model provider cannot complete a request."""
 
 
+def _context_size() -> int:
+    """Parse and validate BABYMIND_CONTEXT_SIZE for the llama.cpp command line."""
+    raw = os.getenv("BABYMIND_CONTEXT_SIZE", "4096").strip()
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ProviderError(
+            "BABYMIND_CONTEXT_SIZE must be a whole number of tokens (for example 4096 or 8192)."
+        ) from error
+    if not 512 <= value <= 131072:
+        raise ProviderError(
+            "BABYMIND_CONTEXT_SIZE must be between 512 and 131072 tokens."
+        )
+    return value
+
+
 class LlamaCppHTTPClient:
     """OpenAI-compatible HTTP client used by BabyMind's local llama.cpp server."""
 
@@ -162,6 +178,7 @@ class LlamaCppProvider(LlamaCppHTTPClient):
                 raise ValueError("out of range")
         except ValueError as error:
             raise ProviderError("BABYMIND_LLAMA_PORT must be a port number between 1 and 65535.") from error
+        context_size = _context_size()
         super().__init__(
             base_url=f"http://127.0.0.1:{port}/v1",
             model=os.getenv("BABYMIND_MODEL"),
@@ -183,7 +200,7 @@ class LlamaCppProvider(LlamaCppHTTPClient):
         command = [
             str(exe), "--model", str(model), "--host", "127.0.0.1",
             "--port", str(port), "--ctx-size",
-            os.getenv("BABYMIND_CONTEXT_SIZE", "4096"),
+            str(context_size),
             # BabyMind serializes inference. Auto-selected multiple llama
             # slots divide the configured context and can reject normal chats.
             "--parallel", "1",
