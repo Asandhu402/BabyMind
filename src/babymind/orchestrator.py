@@ -23,6 +23,7 @@ from typing import Callable
 
 from .agents import AGENTS, AGENT_BY_ID, PHASES, AgentSpec, agents_in_phase, agent_instructions
 from .secure_store import SecureTextStore
+from .cognitive_core import CognitiveCore
 
 DEFAULT_MAX_SECONDS = 900
 MAX_BRIEF_CHARS = 8_000
@@ -421,6 +422,7 @@ class Orchestrator:
     ) -> None:
         self.provider = provider
         self.store = store
+        self.cognitive = CognitiveCore(self.store.home / "cognitive.sqlite3")
         self.max_seconds = max(30, int(max_seconds))
         self.on_update = on_update
         self._threads: dict[str, threading.Thread] = {}
@@ -699,6 +701,7 @@ class Orchestrator:
 
     def _run_agent(self, agent: AgentSpec, brief: str, recorded: list[AgentRun]) -> AgentRun:
         system, user = _agent_prompt(agent, brief, build_digest(recorded))
+        system += "\n\n" + self.cognitive.context_for_agent(agent)
         start = time.monotonic()
         try:
             output = self.provider.complete(system, user)
