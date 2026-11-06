@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-command bootstrap for a fresh x86-64 Linux machine.
+# One-command bootstrap for Debian-based x86-64 Linux (Debian, Ubuntu and derivatives).
 #
 #   bash bootstrap-linux.sh                 prepare this machine and install BabyMind
 #   bash bootstrap-linux.sh --prepare-only  install prerequisites and the newest Python
@@ -50,6 +50,10 @@ say 'Checking this machine'
 [[ -r /etc/os-release ]] || die 'Cannot identify this distribution (/etc/os-release is missing).'
 # shellcheck source=/dev/null
 . /etc/os-release
+case " ${ID:-} ${ID_LIKE:-} " in
+  *" debian "*|*" ubuntu "*) ;;
+  *) die "Only Debian-based distributions (Debian, Ubuntu and derivatives) are supported; detected ${ID:-unknown}." ;;
+esac
 DISTRO=${PRETTY_NAME:-${NAME:-Linux}}
 if [[ -e /lib/ld-musl-x86_64.so.1 ]] || ldd --version 2>/dev/null | grep -qi musl; then
   die 'Alpine/musl is unsupported: Qt 6.12 and BabyMind need glibc 2.34 or newer.'
@@ -69,53 +73,27 @@ esac
 note "$DISTRO on $(uname -m), glibc ${glibc:-unknown}"
 command -v sudo >/dev/null 2>&1 || die 'sudo is required to install system packages.'
 
-# --- 2. Package manager ------------------------------------------------------
-say 'Selecting a package manager'
-PM=${BABYMIND_BOOTSTRAP_PM:-}
-if [[ -z $PM ]]; then
-  for candidate in apt-get dnf pacman zypper; do
-    if command -v "$candidate" >/dev/null 2>&1; then PM=$candidate; break; fi
-  done
-fi
-case ${PM:-} in
-  apt-get|dnf|pacman|zypper) ;;
-  '') die 'No supported package manager found (apt-get, dnf, pacman or zypper).' ;;
-  *) die "Unsupported package manager: $PM (use apt-get, dnf, pacman or zypper)." ;;
-esac
-command -v "$PM" >/dev/null 2>&1 || die "Configured package manager not found: $PM"
-note "Using $PM"
+# --- 2. APT package manager -------------------------------------------------
+say 'Selecting the Debian package manager'
+PM=${BABYMIND_BOOTSTRAP_PM:-apt-get}
+[[ $PM == apt-get ]] || die 'Only apt-get is supported on Debian-based systems.'
+command -v apt-get >/dev/null 2>&1 || die 'apt-get is required; BabyMind supports Debian-based distributions only.'
+note 'Using apt-get'
 
 sudo_cmd=(sudo)
-
-pm_update() {
-  case $PM in
-    apt-get) "${sudo_cmd[@]}" apt-get update ;;
-    dnf) "${sudo_cmd[@]}" dnf -y makecache ;;
-    pacman) "${sudo_cmd[@]}" pacman -Sy --noconfirm ;;
-    zypper) "${sudo_cmd[@]}" zypper --non-interactive refresh ;;
-  esac
-}
-
+pm_update() { "${sudo_cmd[@]}" apt-get update; }
 pm_install() {
   (($#)) || return 0
-  case $PM in
-    apt-get) "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" ;;
-    dnf) "${sudo_cmd[@]}" dnf install -y "$@" ;;
-    pacman) "${sudo_cmd[@]}" pacman -S --noconfirm --needed "$@" ;;
-    zypper) "${sudo_cmd[@]}" zypper --non-interactive install "$@" ;;
-  esac
+  "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }
-
-# Every system change goes through here so --dry-run stays truthful.
 install_packages() {
   (($#)) || return 0
   if [[ $DRY_RUN == 1 ]]; then
-    note "Would install with $PM: $*"
+    note "Would install with apt-get: $*"
     return 0
   fi
   pm_install "$@"
 }
-
 refresh_packages() {
   [[ $DRY_RUN == 1 ]] && return 0
   pm_update
@@ -208,24 +186,11 @@ scan_python() {
 }
 
 distro_python_packages() {
-  case $PM in
-    apt-get) printf '%s\n' "python3.$1" "python3.$1-venv" "python3.$1-dev" ;;
-    dnf) printf '%s\n' "python3.$1" "python3.$1-devel" ;;
-    pacman) : ;; # Arch ships one rolling python; there are no versioned packages
-    zypper) printf '%s\n' "python3$1" "python3$1-devel" ;;
-  esac
+  printf '%s\n' "python3.$1" "python3.$1-venv" "python3.$1-dev"
 }
-
 python_build_packages() {
-  case $PM in
-    apt-get) printf '%s\n' build-essential pkg-config libssl-dev zlib1g-dev libbz2-dev \
-      liblzma-dev libffi-dev libsqlite3-dev libreadline-dev libncurses-dev ;;
-    dnf) printf '%s\n' gcc gcc-c++ make pkgconf-pkg-config openssl-devel zlib-devel \
-      bzip2-devel xz-devel libffi-devel sqlite-devel readline-devel ncurses-devel ;;
-    pacman) printf '%s\n' base-devel openssl zlib bzip2 xz libffi sqlite readline ncurses ;;
-    zypper) printf '%s\n' gcc gcc-c++ make pkg-config libopenssl-devel zlib-devel \
-      libbz2-devel xz-devel libffi-devel sqlite3-devel readline-devel ncurses-devel ;;
-  esac
+  printf '%s\n' build-essential pkg-config libssl-dev zlib1g-dev libbz2-dev \
+    liblzma-dev libffi-dev libsqlite3-dev libreadline-dev libncurses-dev
 }
 
 # Newest final CPython release the pinned dependency set supports.

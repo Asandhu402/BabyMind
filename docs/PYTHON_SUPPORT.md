@@ -37,11 +37,11 @@ explanatory message instead of a confusing dependency error.
   CPython release from python.org source into `~/.cache/babymind/python`.
   `install-linux.sh` alone only uses what is already installed and stops with a
   message naming the package to install.
-* **Distributions that ship 3.13-3.15** (Ubuntu 26.04 ships 3.14, Fedora and
-  Arch ship current Python) need no extra Python step; the bootstrap reuses the
+* **Debian-based distributions that ship 3.13-3.15** (Debian 13 ships 3.13;
+  Ubuntu 26.04 ships 3.14; Ubuntu 26.10 is within the supported Debian-based family) need no extra Python step; the bootstrap reuses the
   installed interpreter.
-* **Alpine/musl is rejected:** Qt 6.12 needs glibc, so the bootstrap stops on
-  musl systems instead of half-installing.
+* **Non-Debian distributions are rejected:** BabyMind's installers require a
+  Debian-based distribution and APT. x86-64 is the only supported architecture.
 * **Packaged app:** the portable build bundles its own interpreter, so end users
   of the release archive do not need Python installed at all.
 

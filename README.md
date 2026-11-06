@@ -21,19 +21,18 @@ dependency set.
 
 ## Install on Linux with one command
 
-On a fresh x86-64 Linux desktop (apt, dnf, pacman or zypper), as your normal
+On a fresh Debian-based x86-64 Linux desktop (Debian, Ubuntu or a Debian/Ubuntu derivative), as your normal
 user, run this single command. It installs everything it needs - including a
 downloader if the machine has none, and Python 3.13-3.15 if the distribution
 does not provide one - installs BabyMind and starts it:
 
 ```bash
-bash -c 'if command -v curl >/dev/null 2>&1; then curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; elif command -v wget >/dev/null 2>&1; then wget -qO- https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; else if command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y curl ca-certificates; elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y curl ca-certificates; elif command -v pacman >/dev/null 2>&1; then sudo pacman -Sy --noconfirm curl ca-certificates; elif command -v zypper >/dev/null 2>&1; then sudo zypper --non-interactive install curl ca-certificates; else printf "Install curl or wget first.\n" >&2; exit 1; fi; curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; fi' | BABYMIND_LAUNCH_AFTER_INSTALL=1 bash
+bash -c 'if command -v curl >/dev/null 2>&1; then curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; elif command -v wget >/dev/null 2>&1; then wget -qO- https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; else sudo apt-get update && sudo apt-get install -y curl ca-certificates && curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; fi' | BABYMIND_LAUNCH_AFTER_INSTALL=1 bash
 ```
 
 The command downloads and runs `bootstrap-linux.sh`, which:
 
-1. checks the host (x86-64, glibc 2.34+, not root, not musl/Alpine) and picks the
-   package manager it finds;
+1. checks the host (Debian-based distribution, x86-64, glibc 2.34+, not root) and uses APT;
 2. installs only the tools it is missing (`curl`/`wget`, `tar`, certificates);
 3. **searches for the newest supported Python**: an existing `python3.13`,
    `python3.14` or `python3.15`, otherwise the distribution package for the
@@ -65,9 +64,7 @@ downloading the newest source. `install-and-run-linux.sh` does the same work and
 then starts BabyMind.
 
 The apt path is exercised on real Ubuntu runners in CI (bootstrap preparation,
-Qt build, packaged app, installer shell tests). The dnf, pacman and zypper
-package lists and the from-source CPython fallback are covered by fixture tests
-but have **not** been run end to end on those distributions yet; the first-run
+Qt build, packaged app, installer shell tests). Debian and Ubuntu derivatives are the only supported distribution family; the first-run
 GUI with the production model remains unverified on a clean desktop. See
 [verification](docs/LINUX_VERIFICATION.md) and
 [known limitations](docs/KNOWN_LIMITATIONS.md).
@@ -97,7 +94,7 @@ model cannot answer the tested questions or produce a valid edit.
 
 ## Portable desktop
 
-The target is a graphical Linux desktop with glibc 2.39 or newer (Ubuntu 24.04+,
+The target is a graphical Debian-based x86-64 desktop with glibc 2.39 or newer (Ubuntu 24.04+,
 because Qt 6.12 requires glibc 2.34 or newer and the release is built on 24.04)
 and standard Qt WebEngine system libraries. Extract the complete
 Linux portable archive and run `./BabyMind` (or open the executable in your file

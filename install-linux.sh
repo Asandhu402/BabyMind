@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux desktop installer for apt-get, dnf, pacman and zypper systems.
+# Linux desktop installer for Debian-based x86-64 systems using APT.
 # Run as your normal desktop user; sudo is used only for system packages.
 # bootstrap-linux.sh prepares a fresh machine, including a Python 3.13-3.15
 # interpreter, and then runs this script.
@@ -10,15 +10,18 @@ fail() { printf 'BabyMind installation stopped: %s\n' "$*" >&2; exit 1; }
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || fail 'Linux x86-64 is required.'
 [[ $EUID -ne 0 ]] || fail 'Run as your normal desktop user, not root; the installer will use sudo for packages.'
 [[ -r /etc/os-release ]] || fail 'Cannot identify this operating system.'
+# shellcheck source=/dev/null
+. /etc/os-release
+case " ${ID:-} ${ID_LIKE:-} " in
+  *" debian "*|*" ubuntu "*) ;;
+  *) fail "Only Debian-based distributions (Debian, Ubuntu and derivatives) are supported; detected ${ID:-unknown}." ;;
+esac
 if [[ -e /lib/ld-musl-x86_64.so.1 ]] || ldd --version 2>/dev/null | grep -qi musl; then
   fail 'Alpine/musl is unsupported: Qt 6.12 and BabyMind need glibc 2.34 or newer.'
 fi
 command -v sudo >/dev/null || fail 'sudo is required to install system packages.'
-PM=
-for candidate in apt-get dnf pacman zypper; do
-  if command -v "$candidate" >/dev/null 2>&1; then PM=$candidate; break; fi
-done
-[[ -n $PM ]] || fail 'A supported package manager (apt-get, dnf, pacman or zypper) is required; run bootstrap-linux.sh on other systems.'
+PM=apt-get
+command -v apt-get >/dev/null || fail 'apt-get is required; BabyMind supports Debian-based distributions only.'
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 [[ -f $source_dir/pyproject.toml && -f $source_dir/build-linux.sh && -f $source_dir/src/babymind/install_model.py ]] || fail 'Run install-linux.sh from a complete BabyMind checkout.'
 
@@ -49,40 +52,15 @@ if [[ -e $desktop || -L $desktop ]]; then
 fi
 
 install_system_packages() {
-  case $PM in
-    apt-get)
-      sudo apt-get update
-      # libasound2 has been renamed in newer Ubuntu releases.
-      if apt-cache show libasound2t64 >/dev/null 2>&1; then audio=libasound2t64; else audio=libasound2; fi
-      sudo apt-get install -y ca-certificates curl git python3 python3-venv python3-pip python3-dev \
-        build-essential cmake pkg-config tar libnss3 libgl1 libegl1 libgbm1 libdrm2 "$audio" \
-        libdbus-1-3 libfontconfig1 libfreetype6 libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrender1 libxrandr2 \
-        libxtst6 libxi6 libxss1 libxshmfence1 libxkbfile1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
-        libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-        libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 libxcb-shape0 libxcb-xkb1 libxcb-xinerama0
-
-      ;;
-    dnf)
-      sudo dnf install -y ca-certificates curl git tar gcc gcc-c++ make cmake pkgconf-pkg-config \
-        python3 python3-devel python3-pip alsa-lib mesa-libGL mesa-libEGL mesa-libgbm libdrm nss nspr \
-        dbus-glib fontconfig freetype libX11-xcb libXcomposite libXdamage libXfixes libXrender libXrandr \
-        libXtst libXi libXScrnSaver libxkbfile libxkbcommon libxkbcommon-x11 libxcb
-      ;;
-    pacman)
-      sudo pacman -S --noconfirm --needed ca-certificates curl git tar base-devel cmake pkgconf \
-        python python-pip alsa-lib mesa nss nspr dbus-glib fontconfig freetype2 \
-        libx11 libxcomposite libxdamage libxfixes libxrender libxrandr libxtst libxi libxss \
-        libxkbfile libxkbcommon libxkbcommon-x11 libxcb
-      ;;
-    zypper)
-      sudo zypper --non-interactive install ca-certificates curl git tar gcc gcc-c++ make cmake pkg-config \
-        python3 python3-devel python3-pip libasound2 libglvnd0 libgbm1 libdrm2 libnss3 mozilla-nspr \
-        dbus-1-glib fontconfig freetype2 libX11-xcb1 libXcomposite1 libXdamage1 libXfixes3 libXrender1 \
-        libXrandr2 libXtst6 libXi6 libXScrnSaver1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
-        libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shm0 \
-        libxcb-sync1 libxcb-xfixes0 libxcb-render0 libxcb-shape0 libxcb-xinerama0
-      ;;
-  esac
+  sudo apt-get update
+  # libasound2 has been renamed in newer Ubuntu releases.
+  if apt-cache show libasound2t64 >/dev/null 2>&1; then audio=libasound2t64; else audio=libasound2; fi
+  sudo apt-get install -y ca-certificates curl git python3 python3-venv python3-pip python3-dev \
+    build-essential cmake pkg-config tar libnss3 libgl1 libegl1 libgbm1 libdrm2 "$audio" \
+    libdbus-1-3 libfontconfig1 libfreetype6 libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrender1 libxrandr2 \
+    libxtst6 libxi6 libxss1 libxshmfence1 libxkbfile1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
+    libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+    libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 libxcb-shape0 libxcb-xkb1 libxcb-xinerama0
 }
 
 printf 'Installing %s packages (sudo may ask for your password)...\n' "$PM"
@@ -120,12 +98,7 @@ python_version_ok "$python" || fail \
 if [[ $python == /usr/bin/python3.* ]] && { ! python_has_venv "$python" || ! python_has_shared_library "$python"; }; then
   python_suffix=${python#/usr/bin/python}
   if [[ $python_suffix != 3 ]]; then
-    case $PM in
-      apt-get) sudo apt-get install -y "python${python_suffix}-venv" "python${python_suffix}-pip" "python${python_suffix}-dev" ;;
-      dnf) sudo dnf install -y "python${python_suffix}-devel" "python${python_suffix}-pip" ;;
-      zypper) sudo zypper --non-interactive install "python${python_suffix//./}" "python${python_suffix//./}-devel" ;;
-      pacman) ;;
-    esac
+    sudo apt-get install -y "python${python_suffix}-venv" "python${python_suffix}-pip" "python${python_suffix}-dev"
   fi
 fi
 python_has_venv "$python" || fail "$python cannot create virtual environments; install its venv package (for example python3.13-venv) and re-run."

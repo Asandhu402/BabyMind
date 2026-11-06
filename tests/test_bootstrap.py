@@ -134,14 +134,22 @@ class CommandTests(BootstrapFixture):
         section = readme.split("## Install on Linux with one command", 1)[1]
         command = section.split("```bash\n", 1)[1].split("\n```", 1)[0]
         self.assertEqual(command.count("\n"), 0, "the one-command installer must stay a single line")
-        for fragment in ("curl", "wget", "apt-get", "dnf", "pacman", "zypper", "bootstrap-linux.sh"):
+        for fragment in ("curl", "wget", "apt-get", "bootstrap-linux.sh"):
             self.assertIn(fragment, command)
         self.assertNotIn("git clone", command, "the bootstrap downloads its own source")
+        for unsupported in ("dnf", "pacman", "zypper"):
+            self.assertNotIn(unsupported, command)
 
     def test_script_is_executable_and_syntactically_valid(self):
         self.assertTrue(os.access(SCRIPT, os.X_OK))
         result = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_build_script_is_limited_to_debian_based_x86_64(self):
+        build_script = (REPO / "build-linux.sh").read_text(encoding="utf-8")
+        self.assertIn("uname -m) == x86_64", build_script)
+        self.assertIn('case " ${ID:-} ${ID_LIKE:-} "', build_script)
+        self.assertIn("Build requires a Debian-based distribution", build_script)
 
     def test_downloads_retry_transfer_failures_and_stay_compatible_with_old_curl(self):
         # curl's --retry covers timeouts and 4xx/5xx only. A transfer failure
@@ -187,10 +195,12 @@ class HostTests(BootstrapFixture):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("needs 64-bit x86", result.stderr)
 
-    def test_refuses_an_unknown_package_manager(self):
-        result = self.run_bootstrap("--dry-run", BABYMIND_BOOTSTRAP_PM="portage")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Unsupported package manager", result.stderr)
+    def test_refuses_non_apt_package_managers(self):
+        for package_manager in ("dnf", "pacman", "zypper", "portage"):
+            with self.subTest(package_manager=package_manager):
+                result = self.run_bootstrap("--dry-run", BABYMIND_BOOTSTRAP_PM=package_manager)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Only apt-get is supported", result.stderr)
 
 
 class PrepareTests(BootstrapFixture):
