@@ -951,6 +951,62 @@ class DiagnosticsEndpointTests(unittest.TestCase):
         self.assertEqual(json.loads(body)["deleted"], 1)
         self.assertEqual(self.interactions(), [])
 
+    def test_interactions_response_includes_log_path(self) -> None:
+        status, body = self.json_request("/api/diagnostics/interactions")
+        self.assertEqual(status, 200)
+        payload = json.loads(body)
+        self.assertTrue(payload["log_path"].endswith("interactions.jsonl"))
+
+    def test_unexpected_get_error_is_caught_and_logged(self) -> None:
+        from unittest.mock import patch
+        with patch.object(server.COORDINATOR.memory, "recent", side_effect=RuntimeError("synthetic boom")):
+            status, body = self.json_request("/api/memory")
+        self.assertEqual(status, 500)
+        self.assertIn("synthetic boom", json.loads(body)["error"])
+        entries = self.interactions()
+        self.assertTrue(any(entry["path"] == "/api/memory" and not entry["ok"] for entry in entries), entries)
+
+    def test_unexpected_delete_error_is_caught_and_logged(self) -> None:
+        from unittest.mock import patch
+        with patch.object(server, "db", side_effect=RuntimeError("synthetic delete boom")):
+            status, body = self.json_request("/api/conversations/abc", method="DELETE")
+        self.assertEqual(status, 500)
+        self.assertIn("synthetic delete boom", json.loads(body)["error"])
+        entries = self.interactions()
+        self.assertTrue(any(entry["path"] == "/api/conversations/abc" and not entry["ok"] for entry in entries), entries)
+
+    def test_missing_static_asset_is_logged_as_error(self) -> None:
+        from urllib.error import HTTPError
+        try:
+            with urlopen(Request(self.base + "/assets/definitely-missing-file.js"), timeout=3):
+                self.fail("expected HTTPError")
+        except HTTPError as error:
+            self.assertEqual(error.code, 404)
+        entries = self.interactions()
+        self.assertTrue(
+            any(entry["kind"] == "asset" and entry["path"] == "/assets/definitely-missing-file.js" and not entry["ok"]
+                for entry in entries),
+            entries,
+        )
+
+    def test_page_not_found_is_logged_as_page_error(self) -> None:
+        try:
+            with urlopen(Request(self.base + "/does-not-exist"), timeout=3):
+                self.fail("expected HTTPError")
+        except HTTPError as error:
+            self.assertEqual(error.code, 404)
+        entries = self.interactions()
+        self.assertTrue(any(entry["kind"] == "page" and entry["path"] == "/does-not-exist" for entry in entries), entries)
+
+    def test_asset_error_is_logged_exactly_once(self) -> None:
+        try:
+            with urlopen(Request(self.base + "/assets/definitely-missing-file.js"), timeout=3):
+                self.fail("expected HTTPError")
+        except HTTPError:
+            pass
+        matching = [entry for entry in self.interactions() if entry["path"] == "/assets/definitely-missing-file.js"]
+        self.assertEqual(len(matching), 1, matching)
+
     def test_get_interactions_honours_limit(self) -> None:
         for index in range(5):
             self.json_request("/api/definitely-not-a-route")

@@ -98,11 +98,14 @@
           <div class="diagnostics-actions">
             <button class="task-primary" id="copyReport" type="button">Copy report</button>
             <button class="task-refresh" id="downloadReport" type="button">Download .md</button>
+            <button class="task-refresh" id="copyLogPath" type="button">Copy log path</button>
             <button class="task-refresh" id="refreshDiagnostics" type="button">Refresh</button>
             <button class="danger-button" id="clearDiagnostics" type="button">Clear log</button>
           </div>
         </div>
         <div class="diagnostics-summary" id="diagnosticsSummary">Loading interactions…</div>
+        <label class="diagnostics-report-label" for="diagnosticsReport">REPORT — select everything and copy, paste it anywhere</label>
+        <textarea id="diagnosticsReport" class="diagnostics-report" readonly spellcheck="false" placeholder="Loading report…"></textarea>
         <div class="diagnostic-list" id="diagnosticList"><div class="empty-state">Loading interactions…</div></div>
       </section>
       <section class="view secondary-view" id="missionView">

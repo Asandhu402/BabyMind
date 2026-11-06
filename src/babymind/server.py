@@ -276,14 +276,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_interaction(self, status: int, payload: object) -> None:
         path = (self.path or "").split("?", 1)[0]
-        if not path.startswith("/api/") or path.startswith("/api/diagnostics/"):
+        if path.startswith("/api/diagnostics/"):
             return
+        is_api = path.startswith("/api/")
+        if not is_api and status < 400:
+            # Successful static serves would flood the log; API calls are
+            # always logged, failures anywhere are always logged.
+            return
+        if is_api:
+            kind = "api"
+        elif path == "/" or path.startswith("/assets/"):
+            kind = "asset"
+        else:
+            kind = "page"
         error = payload.get("error") if isinstance(payload, dict) else None
         started = getattr(self, "_request_started", None)
         duration = (time.monotonic() - started) * 1000 if started is not None else None
         try:
             interaction_log.record(
-                DATA_HOME, kind="api", method=getattr(self, "command", "?"), path=path,
+                DATA_HOME, kind=kind, method=getattr(self, "command", "?"), path=path,
                 status=status, duration_ms=duration, error=error,
             )
         except OSError:
@@ -368,6 +379,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         self._request_started = time.monotonic()
+        try:
+            self._handle_get()
+        except Exception as error:
+            print(f"[BabyMind] Unhandled error: {error}", flush=True)
+            try:
+                self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
+            except OSError:
+                pass
+
+    def _handle_get(self) -> None:
         path = urlparse(self.path).path
         if not self.validate_host():
             return
@@ -398,7 +419,12 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 limit = 100
             entries = interaction_log.recent(DATA_HOME, limit)
-            self.send_json({"interactions": entries, "count": len(entries), "generated_at": now()})
+            self.send_json({
+                "interactions": entries,
+                "count": len(entries),
+                "log_path": str(interaction_log.log_path(DATA_HOME)),
+                "generated_at": now(),
+            })
         elif path == "/api/diagnostics/report":
             self.send_json({
                 "report": interaction_log.export_report(DATA_HOME, version=__version__),
@@ -544,6 +570,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         self._request_started = time.monotonic()
+        try:
+            self._handle_post()
+        except Exception as error:
+            print(f"[BabyMind] Unhandled error: {error}", flush=True)
+            try:
+                self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
+            except OSError:
+                pass
+
+    def _handle_post(self) -> None:
         path = urlparse(self.path).path
         if not self.validate_host():
             return
@@ -1239,6 +1275,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         self._request_started = time.monotonic()
+        try:
+            self._handle_delete()
+        except Exception as error:
+            print(f"[BabyMind] Unhandled error: {error}", flush=True)
+            try:
+                self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
+            except OSError:
+                pass
+
+    def _handle_delete(self) -> None:
         path = urlparse(self.path).path
         if not self.validate_host():
             return
