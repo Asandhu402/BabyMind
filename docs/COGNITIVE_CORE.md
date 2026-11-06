@@ -47,6 +47,22 @@ The host report includes the detected distribution, architecture, kernel, Python
 
 A cycle may create a falsifiable research question about the environment, but must distinguish observation, hypothesis, and unknowns. No hardcoded answer is supplied.
 
+## Bounded autonomy, goal execution, and drift detection
+
+Additional commands:
+
+- `babymind cognitive autonomy --cycles 5 --interval 30` — run at most 25 bounded cognitive cycles.
+- `babymind cognitive goal GOAL_ID --max-steps 5` — work toward one existing local goal for at most 10 steps; each step uses the Cognitive Core allowlist and read-after-write verification.
+- `babymind cognitive benchmark` — run the operational capability benchmark and report scores by dimension.
+
+The autonomy controller stores a compact encrypted baseline of observable host facts and compares later observations for changes in OS, distribution, kernel, architecture, Python interpreter, and BabyMind home paths. A change is reported as drift, not automatically treated as a fault. Failures are written to local notes when storage is available, so later cycles can inspect them.
+
+The action policy is fail-closed. The autonomous cognitive layer can only create or complete local goals, record research questions, write local notes, or wait. Shell execution, arbitrary code, network access, source edits, deletion, credentials, purchases, messages, and system changes are not enabled by this controller. Listing an operation as approval-required does not itself implement that operation; it must be handled by a separately supervised tool.
+
+Goal execution is finite and goal-specific. The model receives the selected goal as an explicit objective, proposes one small step at a time, and the runtime verifies local state changes. If the goal remains active at the step limit, BabyMind reports that it is incomplete. The controller is a finite CLI process, not an always-on daemon; stopping the process stops autonomous work.
+
+The benchmark score measures only the deterministic behaviors it exercises. It is not an IQ, general-intelligence, consciousness, or sentience score. A scripted provider verifies control-flow integration; only separate testing with the configured real model can assess the quality of its reasoning, and model outputs still require external evaluation.
+
 ## Objective checks
 
 Automated tests cover identity persistence, environment observation, all 50 role contexts, goal persistence, read-after-write verification, encrypted research notes, unsupported-action rejection, malformed model output, and coordinator integration. Confidence is stored as a model estimate and is not ground truth.
@@ -76,3 +92,66 @@ babymind cognitive evaluate
 This command performs deterministic local checks for grounded identity, host observation, preservation of all 50 roles, explicit capability boundaries, identity persistence, memory surviving a database reopen, rejection of an unallowlisted shell action, a scripted autonomous cycle, reuse of prior reflection in the next planning context, and Cognitive Core context reaching every role. The persistence probes use a temporary isolated database and do not add goals or notes to the user's real memory. No model endpoint, network access, or external service is required.
 
 The scripted cycle check validates that a future planning call receives a prior reflection; it does not measure the quality of a real model's reasoning. The command exits non-zero if a check fails or cannot be completed. Its score is an operational software-test score only. It is not a consciousness score and cannot establish subjective experience, sentience, free will, or whether the environment is simulated.
+
+
+## Persistent background service
+
+The optional Linux user service runs BabyMind's existing bounded cognitive cycle
+continuously between explicit stop requests. Install it after installing BabyMind:
+
+```bash
+bash scripts/install-cognitive-service.sh
+systemctl --user status babymind-cognitive.service
+systemctl --user disable --now babymind-cognitive.service
+```
+
+The service uses a per-installation file lock to prevent duplicate instances,
+waits at least five seconds between cycles, handles SIGTERM/SIGINT, records
+recoverable errors, backs off exponentially, and stops after five consecutive
+failures. It runs as the logged-in user, not root. It does not expand the
+Cognitive Core action allowlist. It is a persistent process, not proof of
+subjective awareness. Logs are available through
+`journalctl --user -u babymind-cognitive.service`.
+
+For foreground debugging, run
+`babymind cognitive service --interval 60 --agent BM-02` and stop with Ctrl+C.
+
+## Independent specialist model routing
+
+The 50 role definitions remain intact. By default, all roles continue to use
+the configured BabyMind provider. To route individual roles or domains to
+different OpenAI-compatible model endpoints, set
+`BABYMIND_AGENT_MODEL_MAP` to a JSON object. A route key may be a role ID
+(such as `BM-03`), a role domain (such as `development`), or `*` for a
+fallback route. Role IDs take precedence over domains, which take precedence
+over `*`. Example:
+
+```json
+{
+  "BM-03": {"base_url": "http://127.0.0.1:9001/v1", "model": "coder-model"},
+  "research": {"base_url": "http://127.0.0.1:9002/v1", "model": "research-model"},
+  "*": {"base_url": "http://127.0.0.1:9003/v1", "model": "general-model"}
+}
+```
+
+Endpoints must use HTTPS or loopback HTTP. API keys are never placed in the
+JSON map; use `api_key_env` to name an environment variable containing the
+secret. Unmapped roles use the configured shared provider. Each configured
+route is lazily initialized and cached. This makes independent model selection
+possible without pretending that 50 roles are 50 separate models. It does not
+download models or guarantee that multiple local models fit in available RAM.
+Inspect routing with `babymind cognitive routing`; secrets are not displayed.
+
+
+## Routing across missions and the background service
+
+Per-role routing is used by direct specialist conversations, cognitive cycles,
+and all 50 role passes in both CLI and web missions. Self-edit proposal
+generation is routed through the coding specialist (BM-03). The existing
+shared provider remains the fallback for roles without a specific route.
+
+The systemd installer creates `~/.config/babymind/models.env` with mode 0600
+and adds it as an optional EnvironmentFile. Put `BABYMIND_AGENT_MODEL_MAP='{"BM-03":{"base_url":"http://127.0.0.1:9001/v1","model":"coder"}}'`
+there to configure a role-specific local model for the background service.
+Keep any API key in a separate environment assignment whose value is not
+committed to source control. Restart the service after changing the file.
