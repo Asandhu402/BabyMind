@@ -92,7 +92,13 @@ def verify_packaged_staging() -> None:
             if (result.get("status") != "applied" or not result.get("sandboxed")
                     or result.get("source_scope") != "staged-copy"
                     or not (result.get("tests") or {}).get("summary", {}).get("passed")):
-                raise PackagedDevelopmentError(f"Staged self-edit did not pass: {result.get('status')} {result.get('reason', '')}")
+                summary = (result.get("tests") or {}).get("summary") or {}
+                raise PackagedDevelopmentError(
+                    "Staged self-edit did not pass: "
+                    f"status={result.get('status')} sandboxed={result.get('sandboxed')} "
+                    f"source_scope={result.get('source_scope')} tests={summary} "
+                    f"reason={result.get('reason', '')}"
+                )
             from . import broker
             check = broker.execute(
                 [runner.venv_python(), "-c", "from babymind import _packaged_test_value; assert _packaged_test_value() == 42"],
