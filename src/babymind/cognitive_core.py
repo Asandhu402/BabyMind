@@ -193,7 +193,7 @@ class CognitiveCore:
             "questions only as falsifiable observable hypotheses; assume neither answer. Return one JSON object "
             "with understanding, plan, action, expected, reflection, learning, confidence. action.type must be "
             "create_goal, complete_goal, record_question, write_note, or wait. create_goal needs title and description; "
-            "complete_goal needs goal_id; record_question/write_note need content. confidence is 0..1. No extra prose.")
+            "complete_goal needs goal_id; record_question/write_note need content. Return only understanding, plan, action, and expected. No extra prose.")
         user = ("OBSERVATION:\n"+json.dumps(observation,ensure_ascii=False)+
             "\nACTIVE GOALS:\n"+json.dumps(goals,ensure_ascii=False)+
             "\nRECENT EXPERIENCES AND LEARNINGS:\n"+json.dumps(experiences,ensure_ascii=False)+
@@ -203,14 +203,43 @@ class CognitiveCore:
         raw = provider.complete(system,user).strip()
         if raw.startswith(chr(96)*3): raw = raw.split("\n",1)[-1].removesuffix(chr(96)*3).strip()
         try: result = json.loads(raw)
-        except json.JSONDecodeError as error: raise ValueError(f"Cognitive response was not valid JSON: {error.msg}") from error
-        if not isinstance(result,dict): raise ValueError("Cognitive response must be a JSON object.")
+        except json.JSONDecodeError as error: raise ValueError(f"Cognitive planning response was not valid JSON: {error.msg}") from error
+        if not isinstance(result,dict): raise ValueError("Cognitive planning response must be a JSON object.")
         action = result.get("action")
-        if not isinstance(action,dict): raise ValueError("Cognitive response must contain an action object.")
+        if not isinstance(action,dict): raise ValueError("Cognitive planning response must contain an action object.")
         understanding,plan = _clean(result.get("understanding")),_clean(result.get("plan"))
-        expected,reflection,learning = _clean(result.get("expected")),_clean(result.get("reflection")),_clean(result.get("learning"))
+        expected = _clean(result.get("expected"))
         outcome,verified = self._apply_action(action)
-        try: confidence = float(result.get("confidence",0.5))
+
+        reflection_system = (
+            "You are BabyMind performing the post-action reflection stage. Use the supplied observation, "
+            "prediction, actual action result, and verification flag. Distinguish what was verified from "
+            "what remains uncertain. Do not claim consciousness or invent experiences. Return one JSON object "
+            "with reflection, learning, and confidence (0..1). No extra prose."
+        )
+        reflection_user = json.dumps({
+            "observation": observation, "understanding": understanding, "plan": plan,
+            "action": action, "expected": expected, "actual_outcome": outcome,
+            "verified": verified, "prior_experiences": experiences,
+        }, ensure_ascii=False)
+        reflection_raw = provider.complete(reflection_system, reflection_user).strip()
+        if reflection_raw.startswith(chr(96)*3):
+            reflection_raw = reflection_raw.split("\n",1)[-1].removesuffix(chr(96)*3).strip()
+        reflection_error = ""
+        try:
+            reflection_result = json.loads(reflection_raw)
+            if not isinstance(reflection_result,dict):
+                raise ValueError("Reflection response must be a JSON object.")
+        except (json.JSONDecodeError, ValueError) as error:
+            reflection_error = str(error)
+            reflection_result = {
+                "reflection": "Post-action reflection failed; the action outcome remains recorded.",
+                "learning": "A failed reflection must be retried and must not be treated as successful learning.",
+                "confidence": 0.0,
+            }
+        reflection = _clean(reflection_result.get("reflection"))
+        learning = _clean(reflection_result.get("learning"))
+        try: confidence = float(reflection_result.get("confidence",0.5))
         except (TypeError,ValueError): confidence = 0.5
         confidence = max(0.0,min(1.0,confidence))
         stamp = _now()
@@ -228,5 +257,5 @@ class CognitiveCore:
             finally: db.close()
         return {"cycle_id":cycle_id,"agent_id":normalized,"observed":observation,
             "understanding":understanding,"plan":plan,"action":action,"expected":expected,
-            "outcome":outcome,"verified":verified,"reflection":reflection,"learning":learning,
+            "outcome":outcome,"verified":verified,"reflection":reflection,"learning":learning,"reflection_error":reflection_error,
             "confidence":confidence,"active_goals":self.active_goals()}
