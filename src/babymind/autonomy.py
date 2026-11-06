@@ -88,6 +88,49 @@ class AutonomyController:
         return {"snapshot": current, "changed": bool(changes), "changes": changes,
                 "baseline_available": prior is not None}
 
+    def execute_goal(self, provider, goal_id: str, *, max_steps: int = 10,
+                     agent_id: str = "BM-02") -> dict[str, Any]:
+        """Work toward one existing goal using finite, individually verified cycles."""
+        if not 1 <= max_steps <= 10:
+            raise ValueError("max_steps must be between 1 and 10")
+        target = next((goal for goal in self.core.active_goals(50)
+                       if goal["id"] == goal_id), None)
+        if target is None:
+            raise ValueError("No active goal matches the supplied goal ID.")
+        objective = (
+            f"Goal ID: {target['id']}\nTitle: {target['title']}\n"
+            f"Description: {target['description']}\n"
+            "Advance this goal in small, reversible steps. Use only the local cognitive "
+            "action allowlist. Record research questions or verified progress as notes. "
+            "Mark the goal complete only when the stated objective is genuinely complete."
+        )
+        steps = []
+        for index in range(max_steps):
+            try:
+                result = self.core.run_cycle(provider, agent_id=agent_id, objective=objective)
+                steps.append(result)
+            except KeyboardInterrupt:
+                return {"status": "paused_by_user", "goal_id": goal_id,
+                        "steps_completed": len(steps), "steps": steps}
+            except Exception as error:
+                message = f"Goal execution step failed: {type(error).__name__}: {_clean(error, 500)}"
+                try:
+                    self.core._apply_action({"type": "write_note", "content": message})
+                except Exception:
+                    pass
+                steps.append({"step": index + 1, "verified": False, "error": message})
+                break
+            still_active = any(goal["id"] == goal_id for goal in self.core.active_goals(50))
+            if not still_active:
+                return {"status": "completed", "goal_id": goal_id,
+                        "steps_completed": len(steps), "steps": steps,
+                        "verification": "Target goal no longer appears among active goals after the completion action."}
+        still_active = any(goal["id"] == goal_id for goal in self.core.active_goals(50))
+        return {"status": "step_limit_reached" if still_active else "completed",
+                "goal_id": goal_id, "steps_completed": len(steps), "steps": steps,
+                "verification": "Target goal remains active; no completion is claimed." if still_active
+                else "Target goal no longer appears among active goals."}
+
     def run(self, provider, *, cycles: int = 5, interval: float = 0,
             agent_id: str = "BM-02") -> dict[str, Any]:
         if not 1 <= cycles <= MAX_AUTONOMY_CYCLES:
