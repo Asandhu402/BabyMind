@@ -49,6 +49,21 @@ class WorktreeTests(unittest.TestCase):
             with self.assertRaises(worktree.WorktreeError):
                 worktree.create_worktree(Path(tmp))
 
+    def test_preverification_worktree_includes_dirty_and_untracked_files(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_repo(root)
+            (root / "src" / "f.txt").write_text("working copy change\\n")
+            (root / "tests").mkdir()
+            (root / "tests" / "new_test.py").write_text("VALUE = 42\\n")
+            tree = worktree.create_worktree(root, include_working_tree=True)
+            try:
+                self.assertEqual((tree / "src" / "f.txt").read_text(), "working copy change\\n")
+                self.assertEqual((tree / "tests" / "new_test.py").read_text(), "VALUE = 42\\n")
+                self.assertEqual((root / "src" / "f.txt").read_text(), "working copy change\\n")
+            finally:
+                worktree.discard_worktree(root, tree)
+
 
 class TaskGraphStoreTests(unittest.TestCase):
     def test_durable_state_and_resume(self):
