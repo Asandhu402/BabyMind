@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from babymind import builder
+from babymind import builder, sandbox
 
 
 class StaticProvider:
@@ -140,6 +140,8 @@ class BuilderExecutionTests(unittest.TestCase):
         self.temp.cleanup()
 
     def test_approved_plan_writes_files_and_runs_the_entry_point(self) -> None:
+        if not sandbox.available():
+            self.skipTest("generated code execution requires an available OS sandbox")
         plan = builder.build_plan("Hello App", "app.py", _sample_payload()["files"])
         result = builder.apply_plan(plan, plan["plan_hash"])
         app_dir = self.root / "apps" / "hello-app"
@@ -157,6 +159,8 @@ class BuilderExecutionTests(unittest.TestCase):
         self.assertTrue((self.root / "apps" / "static-site" / "index.html").is_file())
 
     def test_failing_entry_point_is_reported_not_raised(self) -> None:
+        if not sandbox.available():
+            self.skipTest("generated code execution requires an available OS sandbox")
         files = [{"path": "app.py", "content": "raise SystemExit(3)\n"}]
         plan = builder.build_plan("Broken App", "app.py", files)
         result = builder.apply_plan(plan, plan["plan_hash"])
