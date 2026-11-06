@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -400,6 +401,26 @@ class GraphMissionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
+    def test_parallel_phase_receives_only_prior_phases(self) -> None:
+        import re
+        from babymind.agents import PHASES
+        class RecordingProvider:
+            def __init__(self):
+                self.prompts = {}
+            def complete(self, system, user):
+                agent_id = re.search(r'Specialist identity: .*?\((BM-\d+)\)', system).group(1)
+                self.prompts[agent_id] = user
+                return 'Contribution from ' + agent_id
+        provider = RecordingProvider()
+        mission = Orchestrator(provider, self.store, max_seconds=300).run_now(BRIEF, mode='graph')
+        self.assertEqual(mission['status'], 'completed')
+        for agent in AGENTS:
+            for other in AGENTS:
+                if other.phase == agent.phase:
+                    self.assertNotIn('Contribution from ' + other.agent_id, provider.prompts[agent.agent_id])
+            if PHASES.index(agent.phase):
+                self.assertIn('Contribution from', provider.prompts[agent.agent_id])
+
     def test_graph_mode_records_all_50_roles(self) -> None:
         provider = FakeProvider()
         orchestrator = Orchestrator(provider, self.store, max_seconds=300)
@@ -417,6 +438,36 @@ class GraphSelfEditTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp.cleanup()
+
+    def test_role_failure_defers_dependents_and_prevents_self_edit(self) -> None:
+        class FailingProvider:
+            def complete(self, system, user):
+                if 'BM-02' in system:
+                    raise RuntimeError('model failed')
+                return 'A contribution.'
+        orchestrator = Orchestrator(FailingProvider(), self.store, max_seconds=300)
+        with patch.object(Orchestrator, '_run_self_edit') as edit:
+            mission = orchestrator.run_now(BRIEF, mode='graph', self_edit=True)
+        edit.assert_not_called()
+        self.assertEqual(mission['agents_recorded'], 50)
+        self.assertEqual(mission['status'], 'failed')
+        self.assertEqual(mission['counts'].get('error'), 1)
+        self.assertEqual(mission['counts'].get('deferred'), 49)
+        self.assertEqual(mission['self_edit']['status'], 'skipped')
+
+    def test_graph_deadline_stops_scheduling_and_skips_self_edit(self) -> None:
+        class DeadlineProvider:
+            def complete(self, system, user):
+                orchestrator.max_seconds = 0
+                return 'A contribution.'
+        orchestrator = Orchestrator(DeadlineProvider(), self.store, max_seconds=300)
+        with patch.object(Orchestrator, '_run_self_edit') as edit:
+            mission = orchestrator.run_now(BRIEF, mode='graph', self_edit=True)
+        edit.assert_not_called()
+        self.assertEqual(mission['agents_recorded'], 50)
+        self.assertEqual(mission['status'], 'partial')
+        self.assertIn('Time limit reached', mission['summary'])
+        self.assertEqual(mission['self_edit']['status'], 'skipped')
 
     def test_graph_mode_runs_self_edit_when_completed(self) -> None:
         provider = FakeProvider()

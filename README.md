@@ -186,6 +186,12 @@ Current capability status (honest, matches the code):
   verification/rollback path without running all 50 roles. This is not an
   arbitrary-project agent; review changes and keep independent backups. See
   [autonomy](docs/AUTONOMY.md#opt-in-repository-aware-self-development).
+- The requested acceptance target is Ubuntu 26.10 x86-64; current hosted CI
+  uses Ubuntu 26.04 and is not a substitute for a 26.10 acceptance run.
+- Chat's opt-in **Team** mode plans and runs a small dependency graph over
+  2–4 existing roles, then shows their unverified contributions and an answer.
+  It uses one model, no tools, and is not autonomous coding or research. See
+  [team chat](docs/TEAMWORK.md) for privacy, limits and test coverage.
 - Chat, history, local memory, advisory development review, mission control,
   read-only GitHub research, and optional integrations exist. A review is model
   output, not independent verification; the autonomous development platform is

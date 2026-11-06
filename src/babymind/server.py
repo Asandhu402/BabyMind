@@ -1425,6 +1425,9 @@ class Handler(BaseHTTPRequestHandler):
         context = "\n".join(reversed(context_parts))
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
         research_result = None
+        team_result = None
+        if payload.get("teamwork") is True and (payload.get("collaborate") or payload.get("deep_research") is True or payload.get("document_research") is True):
+            raise ValueError("Team mode cannot be combined with other collaboration or research modes.")
         if payload.get("deep_research") is True or payload.get("document_research") is True:
             if payload.get("collaborate") or (payload.get("deep_research") is True and payload.get("document_research") is True):
                 raise ValueError("Research modes cannot be combined with each other or collaborative chat.")
@@ -1443,6 +1446,18 @@ class Handler(BaseHTTPRequestHandler):
             if payload.get("remember"):
                 COORDINATOR.memory.remember(agent_id, task, response)
             used_agents = [agent_id]
+        elif payload.get("teamwork") is True:
+            from .teamwork import run_team
+            team_result = run_team(COORDINATOR, task, history=context,
+                                   use_memory=bool(payload.get("use_memory")))
+            response = team_result["response"]
+            used_agents = [role["agent_id"] for role in team_result["roles"] if role["status"] != "skipped"]
+            if (team_result["status"] == "completed" or team_result["synthesis_error"]) and "BM-01" not in used_agents:
+                used_agents.append("BM-01")
+            if not used_agents:
+                used_agents = [agent_id]
+            if payload.get("remember"):
+                COORDINATOR.memory.remember(agent_id, task, response)
         elif payload.get("collaborate"):
             first = COORDINATOR.ask(agent_id, prompt, use_memory=bool(payload.get("use_memory")))
             reviewer = COORDINATOR.ask("BM-49", (
@@ -1492,7 +1507,7 @@ class Handler(BaseHTTPRequestHandler):
             "agent_id": agent_id, "agent_name": agent.name,
             "agents_involved": used_agents,
             "remembered": bool(payload.get("remember")),
-            "research": research_result,
+            "research": research_result, "team": team_result,
         })
 
 

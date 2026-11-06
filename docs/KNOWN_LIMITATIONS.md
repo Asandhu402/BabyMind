@@ -5,6 +5,10 @@ missing, not what is planned.
 
 ## Platform and packaging
 
+- The requested acceptance-testing target is Ubuntu 26.10 x86-64. The present
+  checkout was tested only on Debian 12/Python 3.11, and the existing hosted CI
+  jobs use Ubuntu 26.04; neither establishes Ubuntu 26.10 acceptance.
+
 - The supported portable target is Debian-based Linux on x86-64 with glibc 2.43+ (Ubuntu 26.04 LTS; the release is built and tested on Ubuntu 26.04 LTS). Debian 13 ships glibc 2.41 and is below the portable-archive floor, though source builds with Python 3.13+ remain supported there. Python 3.13+ is required for source builds, along with a graphical desktop. Historically, a hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response while BabyMind still supported Python 3.10/3.11; that combination is no longer supported. A clean Ubuntu Desktop session and broader capabilities remain unverified.
 - The one-command installer is exercised in CI on GitHub-hosted
   **Ubuntu 26.04 LTS** (bootstrap preparation, Qt build and packaged app).
@@ -68,8 +72,9 @@ missing, not what is planned.
 ## Autonomy
 
 - **50 roles are 50 prompts over one model**, executed sequentially by default.
-  There is no multi-model parallelism, no debate protocol beyond the shared
-  digest, and no learned routing.
+  There is no multi-model parallelism or learned routing. Opt-in team chat can
+  route 2–4 text-only roles through a validated dependency graph, but does not
+  give them tools or independent execution. See [team chat](TEAMWORK.md).
 - A mission only edits source when started with `self_edit: true`. The frozen
   desktop edits a staged copy; it does not rebuild or activate those edits in the
   running application. The loop attempts a patch proposed by the Coding Agent,
@@ -78,8 +83,9 @@ missing, not what is planned.
   can stop the loop earlier. This is not an unrestricted iterative engineer.
 - The patch comes from a 4B-class local model. Expect small, local changes, not
   architectural rewrites.
-- Missions stop at the time budget. Unrun roles are recorded as `deferred`; they
-  are not retried automatically.
+- Missions stop scheduling at the time budget; model calls already running may
+  continue until their provider returns or times out. Unrun roles are recorded
+  as `deferred`; they are not retried automatically.
 - The model is a 4B-class local GGUF. Long briefs and deep architectural
   reasoning will exceed it. Quality depends on the model you install.
 

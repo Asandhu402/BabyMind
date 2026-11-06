@@ -553,40 +553,59 @@ class Orchestrator:
                                   depends_on=list(previous)))
             previous = [agent.agent_id for agent in members]
 
-        lock = threading.Lock()
-
         def worker(task, context):
             agent = AGENT_BY_ID[task.agent_id]
-            with lock:
-                rows = list(self.store.get(mission_id)["runs"])
+            # A parallel role sees only finished earlier phases, not whichever
+            # peers happened to finish first. Catalogue order is deterministic.
+            phase_index = PHASES.index(agent.phase)
             recorded = [
-                AgentRun(row["agent_id"], row["agent_name"], row["phase"], row["status"],
-                         output=row.get("output") or "", error=row.get("error") or "")
-                for row in rows
+                AgentRun(previous.agent_id, previous.name, previous.phase, "contributed",
+                         output=context[previous.agent_id].output)
+                for previous in AGENTS
+                if previous.agent_id in context
+                and context[previous.agent_id].status == "completed"
+                and PHASES.index(previous.phase) < phase_index
             ]
             run = self._run_agent(agent, brief, recorded)
             self.store.add_run(mission_id, run)
             if self.on_update:
                 self.on_update(mission_id, run)
-            return run.output or run.error or ""
+            if run.status != "contributed":
+                raise RuntimeError(run.error or "Role produced no contribution.")
+            return run.output
 
         runner = TaskGraphRunner(worker, max_workers=4)
-        result = runner.run(tasks, should_cancel=lambda: self.store.is_cancelled(mission_id))
-        if self.store.is_cancelled(mission_id) or result["cancelled"]:
+        result = runner.run(tasks, should_cancel=lambda: (
+            self.store.is_cancelled(mission_id) or time.monotonic() - started >= self.max_seconds
+        ))
+        # Record every role, including graph-skipped dependents and workers that
+        # failed before recording. Running calls may finish after cancellation.
+        rows = list(self.store.get(mission_id)["runs"])
+        recorded_ids = {row["agent_id"] for row in rows}
+        for item in result["tasks"]:
+            if item["agent_id"] not in recorded_ids:
+                agent = AGENT_BY_ID[item["agent_id"]]
+                status = "error" if item["status"] == "failed" else "deferred"
+                self.store.add_run(mission_id, AgentRun(agent.agent_id, agent.name, agent.phase,
+                                                       status, error=item.get("error") or "Not run."))
+        rows = list(self.store.get(mission_id)["runs"])
+        contributed = sum(row["status"] == "contributed" for row in rows)
+        errors = sum(row["status"] == "error" for row in rows)
+        deferred = [row["agent_id"] for row in rows if row["status"] == "deferred"]
+        if self.store.is_cancelled(mission_id):
             status = "cancelled"
-        elif result["failed"] == 0 and result["skipped"] == 0:
-            status = "completed"
-        elif result["completed"] > 0:
+        elif contributed == 0:
+            status = "failed"
+        elif errors or deferred or result["failed"] or result["skipped"] or result["cancelled"]:
             status = "partial"
         else:
-            status = "failed"
-        summary = self._summarise(mission_id, status, result["completed"],
-                                  result["failed"],
-                                  [t["task_id"] for t in result["tasks"] if t["status"] == "skipped"],
+            status = "completed"
+        summary = self._summarise(mission_id, status, contributed, errors, deferred,
                                   round(time.monotonic() - started, 1))
+        if result["cancelled"] and not self.store.is_cancelled(mission_id):
+            summary += " Time limit reached; running model calls were allowed to finish."
         if self_edit:
-            with lock:
-                rows = list(self.store.get(mission_id)["runs"])
+            rows = list(self.store.get(mission_id)["runs"])
             recorded = [
                 AgentRun(row["agent_id"], row["agent_name"], row["phase"], row["status"],
                          output=row.get("output") or "", error=row.get("error") or "")

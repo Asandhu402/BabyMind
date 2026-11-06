@@ -155,7 +155,7 @@ class TaskGraphRunner:
                     pending.clear()
                     for future in list(futures):
                         task_id = futures.pop(future)
-                        if not future.done():
+                        if future.cancelled() or not future.done():
                             results[task_id] = TaskResult(
                                 task_id, by_id[task_id].agent_id, "skipped", error="Cancelled.")
                         else:
