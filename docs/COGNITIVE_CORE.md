@@ -15,7 +15,7 @@ No third-party source files are vendored. No runtime dependencies were added. Ex
 
 ## Architecture
 
-Every role routed through BabyMindCoordinator.ask() receives the same grounded Cognitive Core context: stable software identity, observed host facts, known capability boundaries, and current autonomous goals. The 50 role definitions are unchanged.
+Every role routed through BabyMindCoordinator.ask() and every mission role pass receives the same grounded Cognitive Core context: stable software identity, observed host facts, known capability boundaries, current autonomous goals, and recent lessons. The 50 role definitions are unchanged.
 
 The cycle sequence is:
 
@@ -27,7 +27,7 @@ The cycle sequence is:
 6. **Reflect** — the model records a concise retrospective.
 7. **Learn** — the model records a reusable lesson and the cycle persists its confidence estimate.
 
-Identity, goals, notes, and cycle fields are encrypted at rest with BabyMind's existing SecureTextStore.
+Identity text, goal titles/descriptions, note contents, and cognitive-cycle text fields are encrypted at rest with BabyMind's existing SecureTextStore. Operational metadata such as timestamps, role IDs, goal status, verification flags, and confidence values remains queryable in SQLite.
 
 ## Controlled autonomy
 
