@@ -5,8 +5,8 @@ missing, not what is planned.
 
 ## Platform and packaging
 
-- The supported portable target is Debian-based Linux on x86-64 with glibc 2.39+ (Debian 13+ / Ubuntu 24.04+), Python 3.13+ for source builds, and a graphical desktop. A hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response while BabyMind still supported Python 3.10/3.11; that combination is no longer supported. A clean Ubuntu Desktop session and broader capabilities remain unverified.
-- The one-command installer is exercised on real Ubuntu runners through APT
+- The supported portable target is Debian-based Linux on x86-64 with glibc 2.43+ (Ubuntu 26.04+; the release is built and tested on Ubuntu 26.10). Debian 13 ships glibc 2.41 and is below the portable-archive floor, though source builds with Python 3.13+ remain supported there. Python 3.13+ is required for source builds, along with a graphical desktop. Historically, a hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response while BabyMind still supported Python 3.10/3.11; that combination is no longer supported. A clean Ubuntu Desktop session and broader capabilities remain unverified.
+- The one-command installer is exercised on real Ubuntu 26.10 runners through APT
   (bootstrap preparation, Qt build and packaged app). Debian and Ubuntu
   derivatives are the only supported distribution family. A fresh-machine run
   with the production model remains unverified.

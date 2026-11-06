@@ -1,7 +1,8 @@
 # BabyMind Linux portable desktop
 
-The supported desktop target is Debian-based Linux on 64-bit x86 (AMD64), with glibc 2.39 or newer (for
-example Debian 13+ or Ubuntu 24.04+), a graphical X11/Wayland desktop, and standard
+The supported desktop target is Debian-based Linux on 64-bit x86 (AMD64), with glibc 2.43 or newer (for
+example Ubuntu 26.04+; Debian 13 ships glibc 2.41 and is below the floor for the portable archive, though
+source builds work there), a graphical X11/Wayland desktop, and standard
 Qt WebEngine system libraries (NSS, XCB, xkbcommon, OpenGL/Mesa, ALSA). This is
 not an AppImage and is not guaranteed to run on every Linux distribution.
 
@@ -19,7 +20,7 @@ It installs the default model in `~/.babymind`; keep sufficient disk space for
 distribution packages, build tools, the model, and previous versions.
 Installing requires network access to your distribution's mirrors, python.org,
 GitHub, PyPI and Hugging Face (python.org is skipped when a suitable Python is
-already installed). Python packages are not hash-locked. Bootstrap preparation and the APT installation path are exercised in CI on Ubuntu. Debian and Ubuntu derivatives are the only supported distribution family.
+already installed). Python packages are not hash-locked. Bootstrap preparation and the APT installation path are exercised in CI on Ubuntu 26.10. Debian and Ubuntu derivatives are the only supported distribution family.
 
 Alternatively, extract the **complete** release archive and double-click `BabyMind`, or run
 `./BabyMind` from a terminal. Keep the `_internal` and `llama.cpp` directories
@@ -33,9 +34,9 @@ in the application folder. Deleting the application does not delete your data.
 To build from source, install Python 3.13+ (tested on 3.13, 3.14 and 3.15),
 venv/pip, a C++ compiler, CMake, curl and tar, then run `./build-linux.sh`. The build downloads Python packages
 and checksum-verifies the pinned llama.cpp source. It builds a generic x86-64
-CPU runtime and packages Qt 6.12 and Python with PyInstaller. Use a glibc 2.39
-build host (Ubuntu 24.04) for compatibility with Ubuntu 24.04; newer build hosts
-may produce binaries that require newer glibc. The archive and build dependencies are not vendored.
+CPU runtime and packages Qt 6.12 and Python with PyInstaller. The release is built and tested on Ubuntu 26.10,
+which sets the artifact's glibc floor at 2.43 (Ubuntu 26.04+); building on an older host would lower that floor
+at the cost of an older toolchain. The archive and build dependencies are not vendored.
 The first model download has not been verified in restricted/offline networks. See docs/LINUX_VERIFICATION.md in the source tree for the actual test status.
 
 The portable build includes a Python helper and bundled source seed. It can stage

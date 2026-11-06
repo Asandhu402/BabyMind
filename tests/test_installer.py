@@ -70,7 +70,7 @@ class InstallerShellTests(unittest.TestCase):
         # Simulate the supported OS without modifying the machine or changing
         # the commands under test.
         release = self.root / "os-release"
-        release.write_text('ID=ubuntu\nVERSION_ID="26.04"\n')
+        release.write_text('ID=ubuntu\nVERSION_ID="26.10"\n')
         script = (repo_script.read_text().replace('/etc/os-release', str(release))
                   .replace('python=/usr/bin/python3', f'python={self.root}/bin/python3')
                   # Keep interpreter discovery hermetic: the test must not pick up
