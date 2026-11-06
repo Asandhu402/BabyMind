@@ -20,7 +20,7 @@ It installs the default model in `~/.babymind`; keep sufficient disk space for
 distribution packages, build tools, the model, and previous versions.
 Installing requires network access to your distribution's mirrors, python.org,
 GitHub, PyPI and Hugging Face (python.org is skipped when a suitable Python is
-already installed). Python packages are not hash-locked. Bootstrap preparation and the APT installation path are exercised in CI on Ubuntu 26.10. Debian and Ubuntu derivatives are the only supported distribution family.
+already installed). Python packages are not hash-locked. Bootstrap preparation and the APT installation path are exercised in CI configured for Ubuntu 26.10 (a self-hosted runner is required until GitHub publishes a hosted `ubuntu-26.10` label; see [testing on Ubuntu 26.10](UBUNTU_26_10_TESTING.md)). Debian and Ubuntu derivatives are the only supported distribution family.
 
 Alternatively, extract the **complete** release archive and double-click `BabyMind`, or run
 `./BabyMind` from a terminal. Keep the `_internal` and `llama.cpp` directories

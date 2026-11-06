@@ -34,7 +34,7 @@ security boundary. This is a status summary, not an acceptance report.
   installation and verification.
 
 Remaining gates include a reviewed execution and workspace boundary, recovery
-and installation acceptance, real-model tests (the hosted real-model job now
+and installation acceptance, real-model tests (the Ubuntu 26.10 real-model job now
 runs automatically on every push and pull request instead of on request, but
 its last recorded run failed, so a passing real-model acceptance is still an
 open gate), desktop/UI testing and target hardware performance. No model

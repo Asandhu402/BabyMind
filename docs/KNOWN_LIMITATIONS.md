@@ -6,10 +6,14 @@ missing, not what is planned.
 ## Platform and packaging
 
 - The supported portable target is Debian-based Linux on x86-64 with glibc 2.43+ (Ubuntu 26.04+; the release is built and tested on Ubuntu 26.10). Debian 13 ships glibc 2.41 and is below the portable-archive floor, though source builds with Python 3.13+ remain supported there. Python 3.13+ is required for source builds, along with a graphical desktop. Historically, a hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response while BabyMind still supported Python 3.10/3.11; that combination is no longer supported. A clean Ubuntu Desktop session and broader capabilities remain unverified.
-- The one-command installer is exercised on real Ubuntu 26.10 runners through APT
+- The one-command installer is exercised in CI configured for Ubuntu 26.10
   (bootstrap preparation, Qt build and packaged app). Debian and Ubuntu
-  derivatives are the only supported distribution family. A fresh-machine run
-  with the production model remains unverified.
+  derivatives are the only supported distribution family. GitHub does not
+  publish a hosted `ubuntu-26.10` runner label yet, so these jobs require a
+  self-hosted Ubuntu 26.10 runner (see
+  [testing on Ubuntu 26.10](UBUNTU_26_10_TESTING.md)); until one is registered
+  they remain queued. A fresh-machine run with the production model remains
+  unverified.
 - There is no auto-updater, code signing, or self-repair supervisor.
 - Linux x86-64 is the sole supported desktop target.
 - The portable executable is not itself a Python interpreter. A bundled Python helper supports sandboxed staged-source tests; generated Python app execution is still unavailable.
@@ -101,9 +105,9 @@ missing, not what is planned.
 ## Data and model
 
 - No model is bundled in the repository. Installation downloads ~2.7 GB; the
-  installer, download and checksum verification now run automatically on every
-  CI push and pull request on a hosted Ubuntu VM, but other networks and a
-  normal desktop session remain untested.
+  installer, download and checksum verification run automatically on every
+  CI push and pull request on an Ubuntu 26.10 runner once one is registered, but
+  other networks and a normal desktop session remain untested.
 - The real-model acceptance job is permanent CI, not an opt-in dispatch, so a
   model that cannot answer its tested questions or emit a valid edit turns the
   build red. Its checks cover a fixed GUI question set, three source-mode chat

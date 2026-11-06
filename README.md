@@ -64,9 +64,13 @@ Run either of them from a checkout to install that checkout instead of
 downloading the newest source. `install-and-run-linux.sh` does the same work and
 then starts BabyMind.
 
-The apt path is exercised on real Ubuntu 26.10 runners in CI (bootstrap preparation,
-Qt build, packaged app, installer shell tests). Debian and Ubuntu derivatives are the only supported distribution family; the first-run
-GUI with the production model remains unverified on a clean desktop. See
+The apt path is exercised in CI, which is configured to run on Ubuntu 26.10
+(bootstrap preparation, Qt build, packaged app, installer shell tests). Debian and
+Ubuntu derivatives are the only supported distribution family; the first-run
+GUI with the production model remains unverified on a clean desktop. GitHub does
+not publish a hosted `ubuntu-26.10` runner label yet, so those jobs need a
+self-hosted Ubuntu 26.10 runner — see
+[testing on Ubuntu 26.10](docs/UBUNTU_26_10_TESTING.md),
 [verification](docs/LINUX_VERIFICATION.md) and
 [known limitations](docs/KNOWN_LIMITATIONS.md).
 
@@ -74,7 +78,7 @@ GUI with the production model remains unverified on a clean desktop. See
 
 The model is BabyMind's brain, so the real-model acceptance job runs on **every
 push and every pull request** - it is not a manual, opt-in dispatch. On a fresh
-Ubuntu 26.10 VM it runs the actual `install-linux.sh` (package installation, the
+Ubuntu 26.10 runner it runs the actual `install-linux.sh` (package installation, the
 2.71 GB model download and its SHA-256 check, the local build), starts the
 installed desktop under Xvfb and drives it through the **full** extended
 question set with the real model, then runs the real model through source-mode
