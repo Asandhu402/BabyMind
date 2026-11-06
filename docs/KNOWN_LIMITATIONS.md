@@ -137,3 +137,12 @@ missing, not what is planned.
   behavior remain unverified.
 - There is no diff viewer beyond the text `diff` field, no terminal emulator, and
   no project explorer tree in the UI yet (the API exposes `/api/dev/tree`).
+
+## Source context selection
+
+Self-edit and repair select a limited, lexical subset of the configured BabyMind
+source root; they do not index or understand an entire arbitrary project. Large
+files are often excerpts only. The instruction not to replace an incompletely
+shown file is not enforced by the edit engine, and test success cannot establish
+that a patch is correct. Filename exclusions are not a guarantee against secrets
+embedded in source; selected content is sent to the configured provider.
