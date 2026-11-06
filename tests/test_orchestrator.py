@@ -79,6 +79,21 @@ class OrchestratorTests(unittest.TestCase):
         order = [phase["phase"] for phase in phase_catalogue()]
         self.assertEqual(phases, sorted(phases, key=order.index))
 
+    def test_mission_routes_each_role_to_its_specialist_model(self) -> None:
+        from babymind.agents import AGENTS
+        class RoutedProvider:
+            def __init__(self):
+                self.agent_ids = []
+            def complete(self, system_prompt, user_prompt):
+                return "Fallback response."
+            def complete_for(self, agent_id, system_prompt, user_prompt):
+                self.agent_ids.append(agent_id)
+                return "Specialist response."
+        provider = RoutedProvider()
+        mission = Orchestrator(provider, self.store, max_seconds=300).run_now(BRIEF)
+        self.assertEqual(mission["status"], "completed")
+        self.assertEqual(provider.agent_ids, [agent.agent_id for agent in AGENTS])
+
     def test_a_provider_failure_is_recorded_not_hidden(self) -> None:
         mission = Orchestrator(FakeProvider(fail_at=7), self.store, max_seconds=300).run_now(BRIEF)
         self.assertEqual(mission["status"], "partial")
