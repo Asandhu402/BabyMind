@@ -19,8 +19,8 @@ misleading, or adversarial. This is bounded, single-depth research, not
 GPT Researcher or a fact-checking guarantee. Only the first 1,200 characters of
 each page are given to the model. The model may fail to follow the citation or
 untrusted-data instructions. Search and fetch network timeouts apply, but a
-whole-request deadline or cancellation is not implemented. No document
-research, independent agents, or multi-model routing was added by this feature.
+whole-request deadline or cancellation is not implemented. Independent agents
+or multi-model routing are not implemented.
 
 The mode is off by default. It cannot be combined with collaborative chat or
 attachments in the UI. It uses the current question, not earlier chat messages,
@@ -31,6 +31,29 @@ The search uses pinned public DNS and permits redirects only to the same search
 host; page fetching retains BabyMind's public-address, redirect, response-size,
 and content-type checks. This is not a complete defense against malicious
 content or a network security audit.
+
+## Research a selected text document
+
+Attach one plain-text file (up to 12,000 bytes), enable **Research document**,
+and submit a question of at most 500 characters. This mode performs no web
+search and does not send the file to the search provider. It uses up to three
+1,200-character excerpts ranked lexically against the question, with numbered
+references giving filename, line range, and one-based character offsets. Long
+lines can span multiple excerpts; those offsets identify the actual fragment.
+The model only sees the selected excerpts and cannot inspect the rest. Omitted
+content is reported. Citation-number validation does not establish that a
+statement is supported, or that the document is trustworthy.
+
+The uploaded text is sent to the configured model and processed as untrusted
+content; only use a model provider you trust. The question and generated report
+are saved in the encrypted conversation; the attachment itself is not stored as
+a separate record, though the report or an explicitly saved memory can repeat
+its contents. As with other memory, the local encryption key is accessible to
+the local user. This is not a complete document-research system: the mode
+supports a single small text attachment, not PDFs, office documents, multiple
+files, OCR, semantic search, or independent research agents. The separate
+optional Docling integration remains available for document conversion, but is
+not connected to this mode.
 
 ## Context card
 
@@ -70,3 +93,7 @@ npm ci && npm run test:ui
 Real model/internet acceptance and sandbox tests must be run separately using
 that machine's configured model and the existing scripts/security instructions.
 This change does not add or upgrade any runtime dependency.
+
+The document-research mode was tested with a scripted model and HTTP/DOM
+fixtures on Debian 12 x86-64 and Python 3.11; real-model inference and Ubuntu
+26.10 acceptance were not available for this change.

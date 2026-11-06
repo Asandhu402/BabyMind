@@ -1425,16 +1425,20 @@ class Handler(BaseHTTPRequestHandler):
         context = "\n".join(reversed(context_parts))
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
         research_result = None
-        if payload.get("deep_research") is True:
-            if payload.get("collaborate"):
-                raise ValueError("Deep research cannot be combined with collaborative chat.")
-            from .research_engine import investigate, format_report
+        if payload.get("deep_research") is True or payload.get("document_research") is True:
+            if payload.get("collaborate") or (payload.get("deep_research") is True and payload.get("document_research") is True):
+                raise ValueError("Research modes cannot be combined with each other or collaborative chat.")
+            from .research_engine import investigate, investigate_document, format_report
             memories = COORDINATOR.memory.relevant(task, limit=3) if payload.get("use_memory") else []
             if payload.get("use_memory"):
                 profile = COORDINATOR.memory.get_profile()
                 if profile:
                     memories = [{"task": "User context card", "response": profile}] + memories[:2]
-            research_result = investigate(COORDINATOR.provider, task, memories=memories)
+            if payload.get("document_research") is True:
+                research_result = investigate_document(COORDINATOR.provider, task,
+                                                       payload.get("research_document"), memories=memories)
+            else:
+                research_result = investigate(COORDINATOR.provider, task, memories=memories)
             response = format_report(research_result)
             if payload.get("remember"):
                 COORDINATOR.memory.remember(agent_id, task, response)

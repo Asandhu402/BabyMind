@@ -16,6 +16,9 @@ MAX_QUERIES = 3
 MAX_PAGES = 6
 MAX_SOURCE_CHARS = 1200
 MAX_REPORT_CHARS = 12000
+MAX_DOCUMENT_BYTES = 12000
+MAX_DOCUMENT_CHUNKS = 3
+_DOCUMENT_STOP = frozenset("the and for with from that this what which when where how why are was were about document please explain summarize".split())
 
 
 def _plan(provider, query: str) -> tuple[list[str], bool]:
@@ -109,6 +112,11 @@ def investigate(provider, query: str, *, memories: list[dict] | None = None) -> 
         return {'status': 'no_sources', 'queries': queries, 'sources': [], 'errors': errors,
                 'report': 'No source pages could be read; no sourced report was generated.',
                 'citation_check': {'valid': False, 'reason': 'No sources were read.'}}
+    return _synthesize(provider, query, sources, queries=queries, errors=errors, memories=memories)
+
+
+def _synthesize(provider, query: str, sources: list[dict], *, queries: list[str],
+                errors: list[str], memories: list[dict] | None) -> dict:
     notes = []
     for item in (memories or [])[:3]:
         notes.append({'task': str(item.get('task', ''))[:300], 'response': str(item.get('response', ''))[:300]})
@@ -131,7 +139,7 @@ def investigate(provider, query: str, *, memories: list[dict] | None = None) -> 
     invalid = sorted(number for number in numbers if number < 1 or number > len(sources))
     # URLs supplied by the model are not automatically trusted as retrieved sources.
     mentioned_urls = {url.rstrip('.,;:!?') for url in re.findall(r"https?://[^\s<>\]\)\"']+", report)}
-    unknown_urls = mentioned_urls - {source['url'] for source in sources}
+    unknown_urls = mentioned_urls - {source['url'] for source in sources if 'url' in source}
     valid = bool(numbers) and not invalid and not truncated and not unknown_urls
     reasons = []
     if not numbers: reasons.append('No numbered source citations were found.')
@@ -143,7 +151,52 @@ def investigate(provider, query: str, *, memories: list[dict] | None = None) -> 
             'sources': [{k: v for k, v in source.items() if k != 'text'} for source in sources],
             'errors': errors, 'report': report,
             'citation_check': {'valid': valid, 'reason': ' '.join(reasons) or
-                               'Citation numbers refer to retrieved pages; claims were not fact-checked.'}}
+                               'Citation numbers refer to provided sources; claims were not fact-checked.'}}
+
+
+def investigate_document(provider, query: str, document: dict, *, memories: list[dict] | None = None) -> dict:
+    """Analyze explicitly supplied text without accessing the filesystem or network.
+
+    The browser-selected document is split into bounded windows and ranked
+    lexically against the question. References identify the selected line range,
+    not the entire document. Retrieved content is always untrusted.
+    """
+    if not isinstance(query, str) or not query.strip() or len(query.strip()) > 500:
+        raise ValueError('Research question must contain 1–500 characters.')
+    if not isinstance(document, dict) or set(document) != {'name', 'content'}:
+        raise ValueError('Provide one selected text document with name and content.')
+    name, text = document['name'], document['content']
+    if (not isinstance(name, str) or not name.strip() or len(name) > 120
+            or any(ord(char) < 32 or ord(char) == 127 for char in name)
+            or '/' in name or "\\" in name):
+        raise ValueError('Document name must be a simple filename of at most 120 characters.')
+    if not isinstance(text, str) or not text.strip() or '\x00' in text:
+        raise ValueError('Document must contain non-empty plain text without NUL bytes.')
+    try:
+        name.encode('utf-8')
+        query.encode('utf-8')
+        if len(text.encode('utf-8')) > MAX_DOCUMENT_BYTES:
+            raise ValueError('Document exceeds the 12 KB text limit.')
+    except UnicodeEncodeError as error:
+        raise ValueError('Document must contain valid UTF-8 text.') from error
+    terms = {word for word in re.findall(r'[\w]{3,}', query.casefold()) if word not in _DOCUMENT_STOP}
+    candidates = []
+    for offset in range(0, len(text), MAX_SOURCE_CHARS):
+        excerpt = text[offset:offset + MAX_SOURCE_CHARS]
+        start = text.count('\n', 0, offset) + 1
+        end = start + excerpt.count('\n') - int(excerpt.endswith('\n'))
+        tokens = set(re.findall(r'[\w]{3,}', excerpt.casefold()))
+        candidates.append((len(terms & tokens), offset, start, max(start, end), excerpt))
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    chosen = sorted(candidates[:MAX_DOCUMENT_CHUNKS], key=lambda item: item[1])
+    sources = [{'id': index + 1, 'kind': 'document', 'title': name.strip(),
+                'location': f'lines {start}–{end}, characters {offset + 1}–{offset + len(excerpt)}', 'text': excerpt,
+                'truncated': len(candidates) > len(chosen)}
+               for index, (_, offset, start, end, excerpt) in enumerate(chosen)]
+    errors = []
+    if len(candidates) > len(chosen):
+        errors.append('Only selected document excerpts were analyzed; other parts were omitted.')
+    return _synthesize(provider, query.strip(), sources, queries=[], errors=errors, memories=memories)
 
 
 def format_report(result: dict) -> str:
@@ -151,9 +204,9 @@ def format_report(result: dict) -> str:
     parts = [result['report']]
     if result['sources']:
         parts.append('Sources read:\n' + '\n'.join(
-            f"[{s['id']}] {s['title']} — {s['url']}" for s in result['sources']))
+            f"[{s['id']}] {s['title']} — {s.get('url') or s.get('location', 'document')}" for s in result['sources']))
     parts.append('Citation check: ' + result['citation_check']['reason'])
     if result['errors']:
         parts.append('Research limitations:\n' + '\n'.join('- ' + error for error in result['errors']))
-    parts.append('Source excerpts and model output are unverified; check cited pages independently.')
+    parts.append('Source excerpts and model output are unverified; check cited sources independently.')
     return '\n\n'.join(parts)
