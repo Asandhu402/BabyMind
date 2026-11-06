@@ -865,7 +865,7 @@ class Handler(BaseHTTPRequestHandler):
                 from .selfdev import run_tests
                 self.send_json(run_tests(timeout=min(int(payload.get("timeout", 300) or 300), 600)))
             elif path == "/api/taskgraph/run":
-                from .taskgraph import Task, TaskGraphRunner
+                from .taskgraph import Task, TaskGraphRunner, TaskGraphStore
                 raw = payload.get("tasks")
                 if not isinstance(raw, list):
                     raise ValueError("Provide a 'tasks' list.")
@@ -878,9 +878,17 @@ class Handler(BaseHTTPRequestHandler):
                     digest = "\n".join(f"- {tid}: {res.output[:200]}" for tid, res in context.items())
                     prompt = task.brief + ("\n\nCompleted dependencies:\n" + digest if digest else "")
                     return COORDINATOR.ask(task.agent_id, prompt).response
-                graph_runner = TaskGraphRunner(worker, max_workers=min(int(payload.get("max_workers", 4) or 4), 8))
+                graph_runner = TaskGraphRunner(worker, max_workers=min(max(1, int(payload.get("max_workers", 4) or 4)), 8))
                 graph_id = str(payload.get("id", "")).strip() or secrets.token_urlsafe(8)
-                self.send_json({"id": graph_id, **graph_runner.run(tasks, graph_id=graph_id)})
+                graph_store = TaskGraphStore(DATA_HOME)
+                self.send_json({"id": graph_id, **graph_runner.run(
+                    tasks, graph_id=graph_id, store=graph_store,
+                    resume=bool(payload.get("resume", False)),
+                )})
+            elif path.startswith("/api/missions/") and path.endswith("/resume"):
+                mission_id = path.rstrip("/").split("/")[-2]
+                resumed_id = orchestrator().resume(mission_id)
+                self.send_json({"id": resumed_id, "status": "resuming"}, 202)
             elif path == "/api/taskgraph/cancel":
                 from .taskgraph import cancel_running
                 self.send_json(cancel_running(str(payload.get("id", "")).strip()))
