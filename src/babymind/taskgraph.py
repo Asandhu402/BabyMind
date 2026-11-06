@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, Future, wait, FIRST_COMPLETED
@@ -268,8 +269,22 @@ class TaskGraphStore:
         path = self._path(graph_id)
         tmp = path.with_suffix(f".{threading.get_ident()}.tmp")
         with self._lock:
-            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            with tmp.open("w", encoding="utf-8") as stream:
+                json.dump(payload, stream, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
             tmp.replace(path)
+            # Persist the directory entry as well as the file contents.
+            try:
+                directory_fd = os.open(self.dir, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            except OSError:
+                # Some filesystems do not support directory fsync; the
+                # atomic replace still prevents readers seeing partial JSON.
+                pass
 
     def load(self, graph_id: str) -> dict | None:
         import json
