@@ -345,6 +345,25 @@ class GraphMissionTests(unittest.TestCase):
         self.assertIn("task-graph mode", mission["summary"])
         self.assertEqual(provider.calls, 50)
 
+    def test_interrupted_graph_mission_resumes_from_durable_checkpoint(self) -> None:
+        provider = FakeProvider()
+        orchestrator = Orchestrator(provider, self.store, max_seconds=300)
+        mission = orchestrator.run_now(BRIEF, mode="graph")
+        self.assertEqual(mission["status"], "completed")
+        self.assertEqual(provider.calls, 50)
+
+        # Simulate a process interruption after graph checkpoints were written.
+        self.store.set_status(mission["id"], "failed", "simulated interruption")
+        resumed_id = orchestrator.resume(mission["id"])
+        self.assertEqual(resumed_id, mission["id"])
+        orchestrator._threads[resumed_id].join(timeout=10)
+        self.assertFalse(orchestrator._threads[resumed_id].is_alive())
+
+        recovered = self.store.get(resumed_id)
+        self.assertEqual(recovered["status"], "completed")
+        self.assertEqual(recovered["agents_recorded"], 50)
+        self.assertEqual(provider.calls, 50, "completed role tasks must not call the model again")
+
 
 class GraphSelfEditTests(unittest.TestCase):
     def setUp(self) -> None:
