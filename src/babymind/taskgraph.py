@@ -238,9 +238,11 @@ class TaskGraphRunner:
 
 
 class TaskGraphStore:
-    """Durable, resumable graph state: every run is persisted as JSON under
-    ``<root>/state/taskgraph/`` so a crashed or cancelled graph can resume
-    without re-running completed tasks."""
+    """Durable, encrypted graph state under ``<root>/state/taskgraph/``.
+
+    Checkpoints are authenticated with the installation mission key and saved
+    after each completed task so interrupted graphs can resume safely.
+    """
 
     def __init__(self, root) -> None:
         home = Path(root)
