@@ -92,3 +92,52 @@ babymind cognitive evaluate
 This command performs deterministic local checks for grounded identity, host observation, preservation of all 50 roles, explicit capability boundaries, identity persistence, memory surviving a database reopen, rejection of an unallowlisted shell action, a scripted autonomous cycle, reuse of prior reflection in the next planning context, and Cognitive Core context reaching every role. The persistence probes use a temporary isolated database and do not add goals or notes to the user's real memory. No model endpoint, network access, or external service is required.
 
 The scripted cycle check validates that a future planning call receives a prior reflection; it does not measure the quality of a real model's reasoning. The command exits non-zero if a check fails or cannot be completed. Its score is an operational software-test score only. It is not a consciousness score and cannot establish subjective experience, sentience, free will, or whether the environment is simulated.
+
+
+## Persistent background service
+
+The optional Linux user service runs BabyMind's existing bounded cognitive cycle
+continuously between explicit stop requests. Install it after installing BabyMind:
+
+```bash
+bash scripts/install-cognitive-service.sh
+systemctl --user status babymind-cognitive.service
+systemctl --user disable --now babymind-cognitive.service
+```
+
+The service uses a per-installation file lock to prevent duplicate instances,
+waits at least five seconds between cycles, handles SIGTERM/SIGINT, records
+recoverable errors, backs off exponentially, and stops after five consecutive
+failures. It runs as the logged-in user, not root. It does not expand the
+Cognitive Core action allowlist. It is a persistent process, not proof of
+subjective awareness. Logs are available through
+`journalctl --user -u babymind-cognitive.service`.
+
+For foreground debugging, run
+`babymind cognitive service --interval 60 --agent BM-02` and stop with Ctrl+C.
+
+## Independent specialist model routing
+
+The 50 role definitions remain intact. By default, all roles continue to use
+the configured BabyMind provider. To route individual roles or domains to
+different OpenAI-compatible model endpoints, set
+`BABYMIND_AGENT_MODEL_MAP` to a JSON object. A route key may be a role ID
+(such as `BM-03`), a role domain (such as `development`), or `*` for a
+fallback route. Role IDs take precedence over domains, which take precedence
+over `*`. Example:
+
+```json
+{
+  "BM-03": {"base_url": "http://127.0.0.1:9001/v1", "model": "coder-model"},
+  "research": {"base_url": "http://127.0.0.1:9002/v1", "model": "research-model"},
+  "*": {"base_url": "http://127.0.0.1:9003/v1", "model": "general-model"}
+}
+```
+
+Endpoints must use HTTPS or loopback HTTP. API keys are never placed in the
+JSON map; use `api_key_env` to name an environment variable containing the
+secret. Unmapped roles use the configured shared provider. Each configured
+route is lazily initialized and cached. This makes independent model selection
+possible without pretending that 50 roles are 50 separate models. It does not
+download models or guarantee that multiple local models fit in available RAM.
+Inspect routing with `babymind cognitive routing`; secrets are not displayed.
