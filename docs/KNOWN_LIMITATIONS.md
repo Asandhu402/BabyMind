@@ -93,8 +93,8 @@ missing, not what is planned.
 ## Applications BabyMind can build
 
 - The app builder produces Python/HTML/CSS/JS applications inside a folder. It
-  does not compile C#/Java/Rust/Go projects, sign mobile apps, produce iOS
-  builds (requires macOS and Xcode), or submit anything to a store.
+  does not compile C#/Java/Rust/Go projects, produce packages for other
+  operating systems or CPU architectures, or submit anything to an app store.
 - Nothing is installed system-wide; generated apps run from their folder.
 - Dependency installation for generated projects is not automated.
 
