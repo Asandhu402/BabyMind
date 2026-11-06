@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Build an x86-64 CPU-only portable directory on Linux (glibc >= 2.35).
+# Build an x86-64 CPU-only portable directory on Debian-based Linux (glibc >= 2.35).
 set -euo pipefail
 cd "$(dirname "$0")"
-[[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'Build requires Linux x86-64.' >&2; exit 1; }
+[[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'Build requires Debian-based Linux x86-64.' >&2; exit 1; }
+[[ -r /etc/os-release ]] || { echo 'Cannot identify the Linux distribution.' >&2; exit 1; }
+# shellcheck source=/dev/null
+. /etc/os-release
+case " ${ID:-} ${ID_LIKE:-} " in
+  *" debian "*|*" ubuntu "*) ;;
+  *) echo "Build requires a Debian-based distribution; detected ${ID:-unknown}." >&2; exit 1 ;;
+esac
 python=${BABYMIND_BUILD_PYTHON:-python3}
 command -v "$python" >/dev/null || { echo "Python interpreter not found: $python" >&2; exit 1; }
 "$python" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)' || {
