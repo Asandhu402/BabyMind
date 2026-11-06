@@ -8,6 +8,7 @@ from babymind.research import (
     license_policy,
     _PinnedHTTPSHandler,
     _SafeRedirectHandler,
+    _SearchRedirectHandler,
     _destination,
     _validate_public_url,
     fetch_page,
@@ -19,6 +20,8 @@ class ResearchTests(unittest.TestCase):
     def test_destination_rejects_non_http_and_credentials(self):
         self.assertEqual(_destination("javascript:alert(1)"), "")
         self.assertEqual(_destination("https://user:pass@example.com"), "")
+        self.assertEqual(_destination("https://[malformed"), "")
+        self.assertEqual(_destination("https://duckduckgo.com/l/?uddg=https%3A%2F%2F%5Bmalformed"), "")
 
     def test_destination_unwraps_duckduckgo_redirect(self):
         self.assertEqual(
@@ -32,13 +35,13 @@ class ResearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             search_web("valid", 11)
 
-    @patch("babymind.research.urlopen")
+    @patch("babymind.research.build_opener")
     def test_search_parses_result_titles_and_snippets(self, mocked):
         class Response(BytesIO):
             def __enter__(self): return self
             def __exit__(self, *args): self.close()
             def geturl(self): return "https://html.duckduckgo.com/html/?q=test"
-        mocked.return_value = Response(
+        mocked.return_value.open.return_value = Response(
             b'<a class="result__a" href="https://example.com">Example title</a>'
             b'<td class="result__snippet">Useful summary</td>'
         )
@@ -64,6 +67,14 @@ class ResearchTests(unittest.TestCase):
             self.assertEqual(handler.https_open(object()), "ok")
         self.assertIn("context", do_open.call_args.kwargs)
         self.assertNotIn("check_hostname", do_open.call_args.kwargs)
+
+    def test_search_redirect_rejects_other_hosts_before_following(self):
+        handler = _SearchRedirectHandler()
+        request = type("RequestStub", (), {"full_url": "https://html.duckduckgo.com/html/"})()
+        for url in ("http://127.0.0.1/", "https://example.com/", "https://user@html.duckduckgo.com/",
+                    "https://html.duckduckgo.com:8443/"):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                handler.redirect_request(request, None, 302, "Found", {}, url)
 
     def test_redirect_handler_rejects_private_redirect_target(self):
         handler = _SafeRedirectHandler()

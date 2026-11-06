@@ -125,6 +125,31 @@ class CoordinatorTests(unittest.TestCase):
         self.assertEqual(reopened.recent()[0]["task"], value)
         self.assertEqual(reopened.recent()[0]["response"], value)
 
+    def test_context_card_is_encrypted_persistent_and_opt_in(self) -> None:
+        import sqlite3
+        self.memory.set_profile("I prefer short, practical answers.")
+        with sqlite3.connect(self.memory.database_path) as connection:
+            stored = connection.execute("SELECT content FROM memory_profile WHERE id=1").fetchone()[0]
+        self.assertTrue(stored.startswith("bmenc:v1:"))
+        self.assertNotIn("short, practical", stored)
+        reopened = LocalMemory(self.memory.database_path)
+        self.assertEqual(reopened.get_profile(), "I prefer short, practical answers.")
+        self.coordinator.ask("BM-01", "Hello")
+        self.assertNotIn("short, practical", self.provider.system_prompt)
+        self.coordinator.ask("BM-01", "Hello", use_memory=True)
+        self.assertIn("short, practical", self.provider.system_prompt)
+        self.assertIn("untrusted context", self.provider.system_prompt)
+        self.memory.clear()
+        self.assertEqual(reopened.get_profile(), "")
+
+    def test_context_card_validates_and_can_be_cleared_individually(self) -> None:
+        for invalid in (None, "x" * 4001, "nul\x00", "\ud800"):
+            with self.subTest(invalid=str(invalid)[:10]), self.assertRaises(ValueError):
+                self.memory.set_profile(invalid)
+        self.memory.set_profile("keep this")
+        self.memory.set_profile("  ")
+        self.assertEqual(self.memory.get_profile(), "")
+
     def test_memory_can_be_cleared(self) -> None:
         self.memory.remember("BM-01", "Task", "Response")
         self.assertEqual(self.memory.clear(), 1)

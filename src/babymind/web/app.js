@@ -47,7 +47,7 @@ function setView(name) {
   document.querySelectorAll(".nav-item").forEach(item=>item.classList.toggle("active",item.dataset.view===name));
   $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",development:"Development review",githubResearch:"GitHub research",settings:"Settings",diagnostics:"Diagnostics"})[name]||"Chat";
   $("#sidebar").classList.remove("open");
-  if(name==="memory") loadMemory();
+  if(name==="memory") { loadMemory(); loadMemoryProfile(); }
   if(name==="tasks") loadTasks();
   if(name==="development") loadDevelopmentReviews();
   if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); loadBrokerStatus(); }
@@ -89,6 +89,24 @@ function addMessage(role, content, agentName="BabyMind") {
   const avatar=role==="user"?"Y":"B";
   item.innerHTML=`<div class="message-avatar">${avatar}</div><div class="message-body"><div class="message-meta"><strong>${role==="user"?"You":escapeHTML(agentName)}</strong><span>${role==="user"?"You": "BabyMind"}</span></div><div class="message-content">${role==="user"?`<p>${escapeHTML(content).replace(/\n/g,"<br>")}</p>`:markdown(content)}</div></div>`;
   $("#messages").append(item);$("#chatScroll").scrollTop=$("#chatScroll").scrollHeight;
+  return item;
+}
+function addResearchLinks(message, sources) {
+  if (!Array.isArray(sources) || !sources.length) return;
+  const container = document.createElement("div");
+  const heading = document.createElement("strong");
+  heading.textContent = "Open sources read:"; container.append(heading);
+  const list = document.createElement("ul");
+  sources.forEach(source => {
+    try {
+      const url = new URL(source.url);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return;
+      const li = document.createElement("li"), link = document.createElement("a");
+      link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+      link.textContent = `[${source.id}] ${source.title}`; li.append(link); list.append(li);
+    } catch (_) { /* Ignore malformed source URLs. */ }
+  });
+  if (list.childElementCount) { container.append(list); message.querySelector(".message-content").append(container); }
 }
 function showTyping() {
   const item=document.createElement("article");item.className="message";item.id="typingIndicator";
@@ -111,6 +129,7 @@ async function newConversation() {
 async function sendMessage(message) {
   const text=message.trim();if(!text||state.busy)return;
   const attachment=state.attachment;
+  if($("#deepResearchToggle").checked && attachment){toast("Deep research sends the question to a public search provider; remove the attachment first.");return;}
   let submitted=attachment ? text+"\n\nAttached file ("+attachment.name+"):\n"+attachment.content : text;
   state.busy=true;$("#sendButton").disabled=true;$("#messageInput").value="";resizeInput();
   addMessage("user",attachment?text+"\n\n📎 "+attachment.name:text);showTyping();
@@ -137,7 +156,7 @@ async function sendMessage(message) {
     const chatPayload = () => ({
       message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId || "",
       collaborate:$("#collaborateToggle").checked,use_memory:$("#memoryToggle").checked,
-      remember:$("#rememberToggle").checked
+      remember:$("#rememberToggle").checked,deep_research:$("#deepResearchToggle").checked
     });
     let result;
     try {
@@ -152,7 +171,8 @@ async function sendMessage(message) {
     state.attachment=null;renderAttachment();$("#exportButton").disabled=false;
     $("#typingIndicator")?.remove();
     const names=result.agents_involved.map(id=>state.agents.find(a=>a.id===id)?.name||id);
-    addMessage("assistant",result.response,result.agents_involved.length>1?`BabyMind · ${names.join(" + ")}`:`BabyMind · ${result.agent_name}`);
+    const reply=addMessage("assistant",result.response,result.agents_involved.length>1?`BabyMind · ${names.join(" + ")}`:`BabyMind · ${result.agent_name}`);
+    if(result.research) addResearchLinks(reply,result.research.sources);
     await loadConversations();
   } catch(error) {
     $("#typingIndicator")?.remove();
@@ -245,6 +265,10 @@ async function changeTask(id,action){
   catch(error){toast(error.message);}
 }
 
+async function loadMemoryProfile() {
+  try { const profile=await api("/api/memory/profile"); $("#memoryProfile").value=profile.content||""; }
+  catch(error){toast(error.message);}
+}
 async function loadMemory(query="") {
   try {
     const memories=query
@@ -356,7 +380,14 @@ async function init() {
   $("#chatForm").addEventListener("submit",event=>{event.preventDefault();sendMessage($("#messageInput").value);});
   const pageReadToggle=$("#webPageReadToggle");
   const syncPageReadToggle=()=>{pageReadToggle.disabled=!$("#webResearchToggle").checked;if(pageReadToggle.disabled)pageReadToggle.checked=false;};
-  $("#webResearchToggle").addEventListener("change",syncPageReadToggle);
+  $("#webResearchToggle").addEventListener("change",()=>{if($("#webResearchToggle").checked) $("#deepResearchToggle").checked=false;syncPageReadToggle();});
+  $("#deepResearchToggle").addEventListener("change",()=>{
+    if($("#deepResearchToggle").checked){
+      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#collaborateToggle").checked=false;
+      toast("Deep research sends your question and model-generated queries to a public search provider.");
+    }
+  });
+  $("#collaborateToggle").addEventListener("change",()=>{if($("#collaborateToggle").checked) $("#deepResearchToggle").checked=false;});
   syncPageReadToggle();
   $("#messageInput").addEventListener("input",resizeInput);
   $("#messageInput").addEventListener("keydown",event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();$("#chatForm").requestSubmit();}});
@@ -365,6 +396,11 @@ async function init() {
   $("#newChat").addEventListener("click",newConversation);
   $("#taskForm").addEventListener("submit",async event=>{event.preventDefault();const title=$("#taskTitle").value.trim();if(!title)return;try{await api("/api/tasks",{method:"POST",body:JSON.stringify({title,details:$("#taskDetails").value.trim()})});$("#taskForm").reset();await loadTasks();toast("Task added to queue");}catch(error){toast(error.message);}});
   $("#refreshTasks").addEventListener("click",loadTasks);
+  $("#memoryProfileForm").addEventListener("submit",async event=>{
+    event.preventDefault();
+    try { await api("/api/memory/profile",{method:"POST",body:JSON.stringify({content:$("#memoryProfile").value})}); toast("Context card saved"); }
+    catch(error){toast(error.message);}
+  });
   $("#processDocument").addEventListener("click",()=>{
     const path=$("#documentPath").value.trim();if(!path){toast("Enter a local document path.");return;}
     runCoreTool("/api/integrations/document",{path,agent_id:$("#agentSelect").value,instruction:$("#documentInstruction").value.trim()||"Summarize this document.",use_memory:$("#memoryToggle").checked,remember:$("#rememberToggle").checked},"Document analysis");
@@ -453,7 +489,7 @@ async function init() {
     }catch(error){$("#backupStatus").textContent=error.message;toast(error.message);}
     finally{button.disabled=false;}
   });
-  $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories`);loadMemory();}catch(error){toast(error.message);}});
+  $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory and the context card on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories and the context card`);loadMemory();loadMemoryProfile();}catch(error){toast(error.message);}});
   $("#refreshDiagnostics").addEventListener("click",loadDiagnostics);
   $("#copyReport").addEventListener("click",copyDiagnosticsReport);
   $("#copyLogBottom").addEventListener("click",copyDiagnosticsReport);

@@ -517,6 +517,8 @@ class Handler(BaseHTTPRequestHandler):
                     "key_available": key.is_file(),
                 })
             self.send_json({"home": str(DATA_HOME), "databases": files})
+        elif path == "/api/memory/profile":
+            self.send_json({"content": COORDINATOR.memory.get_profile()})
         elif path == "/api/memory":
             self.send_json(COORDINATOR.memory.recent(limit=100))
         elif path == "/api/tasks":
@@ -1256,6 +1258,9 @@ class Handler(BaseHTTPRequestHandler):
                     "count": len(results),
                     "notice": "Search snippets are unverified third-party content. Review sources before relying on them."
                 })
+            elif path == "/api/memory/profile":
+                COORDINATOR.memory.set_profile(payload.get("content"))
+                self.send_json({"saved": True})
             elif path == "/api/memory/search":
                 query = str(payload.get("query", "")).strip()
                 limit = int(payload.get("limit", 100))
@@ -1419,7 +1424,22 @@ class Handler(BaseHTTPRequestHandler):
             remaining_chars -= len(line) + 1
         context = "\n".join(reversed(context_parts))
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
-        if payload.get("collaborate"):
+        research_result = None
+        if payload.get("deep_research") is True:
+            if payload.get("collaborate"):
+                raise ValueError("Deep research cannot be combined with collaborative chat.")
+            from .research_engine import investigate, format_report
+            memories = COORDINATOR.memory.relevant(task, limit=3) if payload.get("use_memory") else []
+            if payload.get("use_memory"):
+                profile = COORDINATOR.memory.get_profile()
+                if profile:
+                    memories = [{"task": "User context card", "response": profile}] + memories[:2]
+            research_result = investigate(COORDINATOR.provider, task, memories=memories)
+            response = format_report(research_result)
+            if payload.get("remember"):
+                COORDINATOR.memory.remember(agent_id, task, response)
+            used_agents = [agent_id]
+        elif payload.get("collaborate"):
             first = COORDINATOR.ask(agent_id, prompt, use_memory=bool(payload.get("use_memory")))
             reviewer = COORDINATOR.ask("BM-49", (
                 "Review this draft for correctness, gaps, clarity, and safety. "
@@ -1467,7 +1487,8 @@ class Handler(BaseHTTPRequestHandler):
             "conversation_id": conversation_id, "response": response,
             "agent_id": agent_id, "agent_name": agent.name,
             "agents_involved": used_agents,
-            "remembered": bool(payload.get("remember"))
+            "remembered": bool(payload.get("remember")),
+            "research": research_result,
         })
 
 
