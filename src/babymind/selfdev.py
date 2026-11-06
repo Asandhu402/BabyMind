@@ -193,7 +193,7 @@ def _test_problem_ids(result: dict) -> set[str]:
     and looking only at stderr makes a completed failing suite appear incomplete.
     """
     import re
-    output = "\\n".join((result.get("stderr") or "", result.get("stdout") or ""))
+    output = "\n".join((result.get("stderr") or "", result.get("stdout") or ""))
     return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", output, re.MULTILINE))
 
 
