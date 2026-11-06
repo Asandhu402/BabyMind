@@ -91,10 +91,16 @@ class _PageParser(HTMLParser):
 
 def _destination(raw: str) -> str:
     """Accept only ordinary HTTP(S) result destinations, never DDG redirect URLs."""
-    parsed = urlparse(raw)
+    try:
+        parsed = urlparse(raw)
+    except ValueError:
+        return ""
     if parsed.netloc.lower() == "duckduckgo.com" and parsed.path == "/l/":
         target = parse_qs(parsed.query).get("uddg", [""])[0]
-        dest = urlparse(target)
+        try:
+            dest = urlparse(target)
+        except ValueError:
+            return ""
         if dest.scheme in {"http", "https"} and dest.hostname and not dest.username and not dest.password:
             return target
     if parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username and not parsed.password:
@@ -173,6 +179,16 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(request, file_pointer, code, message, headers, new_url)
 
 
+class _SearchRedirectHandler(HTTPRedirectHandler):
+    """Never contact another host as a consequence of a search redirect."""
+    def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+        parsed = urlparse(new_url)
+        if (parsed.scheme != "https" or parsed.hostname != "html.duckduckgo.com"
+                or parsed.username or parsed.password or parsed.port not in {None, 443}):
+            raise ValueError("Search provider redirected to an unexpected host.")
+        return super().redirect_request(request, file_pointer, code, message, headers, new_url)
+
+
 def search_web(query: str, limit: int = 5) -> list[dict[str, str]]:
     """Search the public web for result titles/snippets."""
     clean = " ".join(str(query).split())
@@ -185,7 +201,8 @@ def search_web(query: str, limit: int = 5) -> list[dict[str, str]]:
         headers={"User-Agent": "BabyMind/0.4 (local personal research assistant)", "Accept": "text/html"},
     )
     try:
-        with urlopen(request, timeout=12) as response:
+        opener = build_opener(ProxyHandler({}), _PinnedHTTPSHandler(), _SearchRedirectHandler())
+        with opener.open(request, timeout=12) as response:
             if response.geturl().split("/", 3)[:3] != ["https:", "", "html.duckduckgo.com"]:
                 raise RuntimeError("Search provider redirected to an unexpected host.")
             html = response.read(MAX_RESPONSE_BYTES + 1)

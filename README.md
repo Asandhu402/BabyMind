@@ -147,6 +147,16 @@ instead of a silent mis-launch. See
 and what remains fixed (the SHA-256-pinned 4B, the llama.cpp engine). No dial
 raises the model's reasoning ceiling.
 
+## Research and persistent context
+
+Chat's opt-in **Deep research** mode searches multiple queries, reads public
+pages, and produces a numbered-source report with visible retrieval and citation
+warnings. The Memory view provides a user-edited, encrypted context card used
+only when **Use memory** is enabled. Neither feature guarantees factual accuracy
+or automatically learns. Search queries leave the device. See
+[research and context card](docs/RESEARCH_ENGINE.md) for privacy, limits and
+verification details.
+
 ## Safety and capabilities
 
 Current capability status (honest, matches the code):

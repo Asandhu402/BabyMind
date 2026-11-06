@@ -422,6 +422,70 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
         self.assertEqual(messages[-1]["content"], "Hello from BabyMind")
 
+    def test_deep_research_chat_is_opt_in_persisted_and_memory_controlled(self) -> None:
+        from babymind.memory import LocalMemory
+        server.COORDINATOR.memory = LocalMemory(Path(self.temp.name) / "memory.sqlite3")
+        server.COORDINATOR.memory.remember("BM-01", "renewable energy", "User prefers concise reports")
+        server.COORDINATOR.memory.set_profile("Use simple language")
+        class ResearchProvider:
+            def __init__(self): self.calls = []
+            def complete(self, system, prompt):
+                self.calls.append((system, prompt))
+                return json.dumps({"queries": ["energy facts"]}) if len(self.calls) == 1 else "Evidence [1]."
+        provider = ResearchProvider()
+        search_queries = []
+        def search(query, limit):
+            search_queries.append(query)
+            return [{"url": "https://example.com/page"}]
+        with patch.object(server.COORDINATOR, "provider", provider), \
+             patch("babymind.research.search_web", side_effect=search), \
+             patch("babymind.research.fetch_page", return_value={
+                 "url": "https://example.com/page", "title": "Evidence", "text": "Renewable facts", "truncated": 0}):
+            status, _, body = self.request("/api/chat", {"message": "renewable energy", "agent_id": "BM-01",
+                                                       "deep_research": True, "use_memory": True, "remember": True})
+        self.assertEqual(status, 200, body)
+        result = json.loads(body)
+        self.assertEqual(result['research']['status'], 'completed')
+        self.assertIn('Evidence [1]', result['response'])
+        self.assertIn('https://example.com/page', result['response'])
+        self.assertIn('prefers concise reports', provider.calls[1][1])
+        self.assertIn('Use simple language', provider.calls[1][1])
+        self.assertTrue(all('prefers concise reports' not in q for q in search_queries))
+        self.assertEqual(len(server.COORDINATOR.memory.recent()), 2)
+        status, _, body = self.request('/api/conversations/' + result['conversation_id'])
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)[-1]['content'], result['response'])
+        with server.db() as connection:
+            stored = connection.execute('SELECT content FROM messages ORDER BY id').fetchall()
+        self.assertTrue(all(row['content'].startswith('bmenc:v1:') for row in stored))
+
+    def test_deep_research_rejects_conflicting_mode_without_search_or_save(self) -> None:
+        with patch('babymind.research.search_web') as search:
+            status, _, body = self.request('/api/chat', {'message': 'question', 'deep_research': True,
+                                                        'collaborate': True})
+        self.assertEqual(status, 400, body)
+        search.assert_not_called()
+        with server.db() as connection:
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM conversations').fetchone()[0], 0)
+
+    def test_context_card_api_save_read_and_clear(self) -> None:
+        from babymind.memory import LocalMemory
+        server.COORDINATOR.memory = LocalMemory(Path(self.temp.name) / "memory.sqlite3")
+        status, _, body = self.request('/api/memory/profile', {'content': 'Use metric units'})
+        self.assertEqual(status, 200, body)
+        status, _, body = self.request('/api/memory/profile')
+        self.assertEqual(json.loads(body)['content'], 'Use metric units')
+        self.assertEqual(self.request('/api/memory/profile', {'content': 'x' * 4001})[0], 400)
+        self.assertEqual(self.request('/api/memory/clear', {})[0], 200)
+        self.assertEqual(json.loads(self.request('/api/memory/profile')[2])['content'], '')
+
+    def test_plain_chat_does_not_start_research(self) -> None:
+        with patch('babymind.research_engine.investigate') as research, \
+             patch.object(server.COORDINATOR, 'ask', return_value=SimpleNamespace(response='normal')):
+            status, _, body = self.request('/api/chat', {'message': 'hello'})
+        self.assertEqual(status, 200, body)
+        research.assert_not_called()
+
     def test_chat_treats_null_conversation_id_as_new_conversation(self) -> None:
         fake_result = SimpleNamespace(response="Fresh conversation response")
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result):

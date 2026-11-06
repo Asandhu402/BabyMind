@@ -37,6 +37,9 @@ class LocalMemory:
                 )
                 """
             )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS memory_profile (id INTEGER PRIMARY KEY CHECK (id = 1), content TEXT NOT NULL)"
+            )
             # Upgrade older plaintext rows without changing their IDs or order.
             rows = connection.execute(
                 "SELECT id, task, response FROM memories"
@@ -145,7 +148,30 @@ class LocalMemory:
         ranked.sort(key=lambda entry: (entry[0], entry[1]), reverse=True)
         return [entry[2] for entry in ranked[:limit]]
 
+    def get_profile(self) -> str:
+        """Return the explicitly user-edited context card, or an empty string."""
+        with self._connect() as connection:
+            row = connection.execute("SELECT content FROM memory_profile WHERE id=1").fetchone()
+        return self.secure.decrypt(row[0]) if row else ""
+
+    def set_profile(self, content: str) -> None:
+        """Replace the user-controlled context card, encrypting it at rest."""
+        if not isinstance(content, str) or len(content) > 4000 or "\x00" in content:
+            raise ValueError("Context card must be text of at most 4,000 characters without NUL bytes.")
+        try:
+            content.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise ValueError("Context card must be valid UTF-8 text.") from error
+        with self._connect() as connection:
+            if not content.strip():
+                connection.execute("DELETE FROM memory_profile WHERE id=1")
+            else:
+                connection.execute("INSERT OR REPLACE INTO memory_profile (id, content) VALUES (1, ?)",
+                                   (self.secure.encrypt(content),))
+
     def clear(self) -> int:
         with self._connect() as connection:
             cursor = connection.execute("DELETE FROM memories")
-            return int(cursor.rowcount)
+            count = int(cursor.rowcount)
+            connection.execute("DELETE FROM memory_profile")
+            return count

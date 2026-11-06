@@ -154,3 +154,12 @@ Aider replacement. Verification uses the same baseline/rollback and sandbox
 limitations described above, including potentially pre-existing failures; an
 applied result does not prove the task was fulfilled. Its filesystem checks are
 not race-resistant and the model sees selected source and failure output.
+
+## Research and context card
+
+Deep research uses one shared model, bounded parallel searches, and only short
+page excerpts; citation-number validation is not fact-checking. Public search
+queries leave the device. The user-edited context card is opt-in at inference,
+not autonomous learning. Real-model, public search, desktop, and Ubuntu 26.10
+acceptance have not been completed for this feature. See
+[research and context card](RESEARCH_ENGINE.md).
