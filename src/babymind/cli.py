@@ -22,6 +22,11 @@ def build_parser() -> argparse.ArgumentParser:
     cognitive_actions = cognitive_parser.add_subparsers(dest="cognitive_action", required=True)
     cognitive_actions.add_parser("status", help="Show persistent identity, observed environment, goals, and cycle metrics")
     cognitive_actions.add_parser("evaluate", help="Run deterministic local checks of operational self-awareness")
+    cognitive_actions.add_parser("benchmark", help="Run repeatable operational capability benchmarks")
+    autonomy_parser = cognitive_actions.add_parser("autonomy", help="Run bounded autonomous cycles with environment drift checks")
+    autonomy_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 26), help="Number of cycles (1-25)")
+    autonomy_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
+    autonomy_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
     cycle_parser = cognitive_actions.add_parser("cycle", help="Run one observe-to-learn cognitive cycle")
     cycle_parser.add_argument("--agent", default="BM-02", help="Existing role ID to run this cycle through")
     autonomous_parser = cognitive_actions.add_parser("run", help="Run a bounded number of autonomous cognitive cycles")
@@ -161,6 +166,23 @@ def main() -> None:
             report = run_self_evaluation(core)
             print(json.dumps(report, indent=2, ensure_ascii=False))
             if not report["all_passed"]:
+                raise SystemExit(1)
+        elif args.cognitive_action == "benchmark":
+            from .benchmarks import run_benchmarks
+            report = run_benchmarks(core)
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if not report["all_passed"]:
+                raise SystemExit(1)
+        elif args.cognitive_action == "autonomy":
+            from .autonomy import AutonomyController
+            if not 0 <= args.interval <= 3600:
+                raise SystemExit("Interval must be between 0 and 3600 seconds.")
+            report = AutonomyController(core).run(
+                BabyMindCoordinator().provider,
+                cycles=args.cycles, interval=args.interval, agent_id=args.agent,
+            )
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["status"] != "completed" or report["verified_cycles"] != report["completed_cycles"]:
                 raise SystemExit(1)
         else:
             if args.cognitive_action == "run" and not 0 <= args.interval <= 3600:
