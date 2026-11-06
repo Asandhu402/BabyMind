@@ -93,6 +93,11 @@ const flush = () => new Promise((r) => setTimeout(r, 80));
   await flush();
   check("copy report yields full markdown", clipboard.startsWith("## BabyMind diagnostics report"));
 
+  clipboard = "";
+  doc.querySelector("#copyLogBottom").click();
+  await flush();
+  check("bottom Copy log button copies the full report", clipboard.startsWith("## BabyMind diagnostics report"));
+
   // 6. Copy log path copies the JSONL path.
   clipboard = "";
   doc.querySelector("#copyLogPath").click();
