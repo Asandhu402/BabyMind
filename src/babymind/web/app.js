@@ -45,7 +45,7 @@ function setView(name) {
   document.querySelectorAll(".view").forEach(view=>view.classList.remove("active"));
   const target=$("#"+name+"View") || $("#chatView"); target.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(item=>item.classList.toggle("active",item.dataset.view===name));
-  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",development:"Development review",githubResearch:"GitHub research",settings:"Settings",diagnostics:"Diagnostics"})[name]||"Chat";
+  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",development:"Development review",githubResearch:"GitHub research",settings:"Settings",diagnostics:"Diagnostics",self:"Self & autonomy"})[name]||"Chat";
   $("#sidebar").classList.remove("open");
   if(name==="memory") { loadMemory(); loadMemoryProfile(); }
   if(name==="tasks") loadTasks();
@@ -53,6 +53,7 @@ function setView(name) {
   if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); loadBrokerStatus(); }
   if(name==="diagnostics") loadDiagnostics();
   if(name==="mission" && window.babymindLoadMission) window.babymindLoadMission();
+  if(name==="self" && window.babymindLoadSelf) window.babymindLoadSelf();
 }
 function renderAgentSelect() {
   $("#agentSelect").innerHTML=state.agents.map(agent=>`<option value="${agent.id}">${agent.id} · ${escapeHTML(agent.name)}</option>`).join("");
@@ -179,6 +180,7 @@ async function sendMessage(message) {
     const names=result.agents_involved.map(id=>state.agents.find(a=>a.id===id)?.name||id);
     const reply=addMessage("assistant",result.response,result.agents_involved.length>1?`BabyMind · ${names.join(" + ")}`:`BabyMind · ${result.agent_name}`);
     if(result.research) addResearchLinks(reply,result.research.sources);
+    if(result.introspection && window.babymindRenderSelfCheck) window.babymindRenderSelfCheck(reply,result.introspection);
     await loadConversations();
   } catch(error) {
     $("#typingIndicator")?.remove();

@@ -32,6 +32,7 @@ from .providers import ProviderError
 from .secure_store import SecureTextStore
 from .lan_tls import create_lan_tls_context
 from .research import fetch_page, search_web
+from .autonomy import AutonomyEngine, autonomy_enabled
 
 WEB = Path(__file__).resolve().parent / "web"
 DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
@@ -43,6 +44,27 @@ INFERENCE_SEMAPHORE = threading.BoundedSemaphore(1)
 COORDINATOR = BabyMindCoordinator()
 # Reviewed app-builder plans live in memory only and are single-use.
 BUILDER_LOCK = threading.RLock()
+
+# The autonomy engine is created lazily so importing this module never starts
+# threads or touches the model endpoint.
+AUTONOMY_LOCK = threading.RLock()
+_AUTONOMY: AutonomyEngine | None = None
+
+
+def autonomy_engine() -> AutonomyEngine:
+    """Return the process-wide autonomy engine, creating it on first use."""
+    global _AUTONOMY
+    with AUTONOMY_LOCK:
+        if _AUTONOMY is None:
+            # Keep the workspace and the stop flag under DATA_HOME so autonomy is
+            # confined to this installation's data directory rather than a
+            # hard-coded path in the user's home.
+            _AUTONOMY = AutonomyEngine(
+                COORDINATOR.provider,
+                database_path=DATA_HOME / "autonomy.sqlite3",
+                workspace=DATA_HOME / "autonomy" / "workspace",
+            )
+        return _AUTONOMY
 BUILDER_PLANS: dict[str, dict] = {}
 BUILDER_PLAN_TTL = 1_800
 # Mission control state is created lazily so tests can relocate DATA_HOME.
@@ -473,6 +495,34 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/sandbox":
             from .sandbox import status as sandbox_status
             self.send_json(sandbox_status(probe=False))
+        elif path == "/api/self/status":
+            self.send_json(COORDINATOR.selfmodel.self_report())
+        elif path == "/api/self/introspections":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(int(query.get("limit", ["20"])[0]), 50))
+            except (TypeError, ValueError):
+                limit = 20
+            self.send_json(COORDINATOR.selfmodel.recent_introspections(limit))
+        elif path == "/api/self/dissent":
+            self.send_json(COORDINATOR.selfmodel.recent_dissent(20))
+        elif path == "/api/autonomy/status":
+            self.send_json(autonomy_engine().status() | {"permitted_by_environment": autonomy_enabled()})
+        elif path == "/api/autonomy/audit":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(int(query.get("limit", ["50"])[0]), 500))
+            except (TypeError, ValueError):
+                limit = 50
+            engine = autonomy_engine()
+            self.send_json({
+                "entries": engine.audit_log(limit),
+                "chain": engine.verify_audit_chain(),
+            })
+        elif path == "/api/autonomy/goals":
+            query = parse_qs(urlparse(self.path).query)
+            status = query.get("status", ["active"])[0]
+            self.send_json(autonomy_engine().goals(status if status in ("active", "completed", "abandoned") else "active", limit=100))
         elif path == "/api/dev/status":
             from .selfdev import status as selfdev_status
             self.send_json(selfdev_status())
@@ -952,6 +1002,91 @@ class Handler(BaseHTTPRequestHandler):
                 from .selfdev import rollback
                 self.send_json(rollback(str(payload.get("checkpoint_id", "")),
                                         agent_id=str(payload.get("agent_id", "BM-47"))))
+            elif path == "/api/self/voice":
+                mode = str(payload.get("mode", "")).strip()
+                try:
+                    self.send_json({
+                        "voice_mode": COORDINATOR.selfmodel.set_voice_mode(mode),
+                        "directive": COORDINATOR.selfmodel.voice_directive(),
+                    })
+                except ValueError as error:
+                    self.send_json({"error": str(error)}, 400)
+            elif path == "/api/self/belief":
+                kind = str(payload.get("kind", "")).strip()
+                claim = str(payload.get("claim", "")).strip()
+                if not claim:
+                    raise ValueError("A belief requires a claim.")
+                self.send_json(COORDINATOR.selfmodel.add_belief(
+                    kind,
+                    claim,
+                    confidence=float(payload.get("confidence", 0.5) or 0.5),
+                    evidence=str(payload.get("evidence", "")),
+                    source=str(payload.get("source", "user") or "user"),
+                ), 201)
+            elif path == "/api/self/belief/revise":
+                belief_id = str(payload.get("id", "")).strip()
+                claim = str(payload.get("claim", "")).strip()
+                if not belief_id or not claim:
+                    raise ValueError("Revising a belief requires its id and a new claim.")
+                revised = COORDINATOR.selfmodel.revise_belief(
+                    belief_id,
+                    claim,
+                    confidence=payload.get("confidence"),
+                    evidence=str(payload.get("evidence", "")),
+                    source=str(payload.get("source", "user") or "user"),
+                )
+                if revised is None:
+                    self.send_json({"error": "Belief not found."}, 404)
+                else:
+                    self.send_json(revised)
+            elif path == "/api/autonomy/start":
+                engine = autonomy_engine()
+                # Autonomy is armed either by the environment or by an explicit
+                # confirmation from the operator. Once armed it runs unattended
+                # until a budget is spent or someone stops it.
+                if not (autonomy_enabled() or payload.get("confirm") is True):
+                    self.send_json({
+                        "started": False,
+                        "state": engine.state,
+                        "reason": (
+                            "Autonomy is armed deliberately. Set BABYMIND_AUTONOMY=1 before "
+                            "starting BabyMind, or send confirm=true to arm it for this session."
+                        ),
+                    }, 403)
+                else:
+                    self.send_json(engine.start(
+                        cycles=payload.get("cycles"),
+                        interval=float(payload.get("interval", 5) or 5),
+                    ))
+            elif path == "/api/autonomy/stop":
+                self.send_json(autonomy_engine().stop(
+                    reason=str(payload.get("reason", "Stopped from the BabyMind interface."))
+                ))
+            elif path == "/api/autonomy/pause":
+                self.send_json(autonomy_engine().pause())
+            elif path == "/api/autonomy/resume":
+                self.send_json(autonomy_engine().resume())
+            elif path == "/api/autonomy/reset":
+                self.send_json(autonomy_engine().reset())
+            elif path == "/api/autonomy/goal":
+                title = str(payload.get("title", "")).strip()
+                if not title:
+                    raise ValueError("A goal requires a title.")
+                self.send_json(autonomy_engine().add_goal(
+                    title,
+                    str(payload.get("description", "")),
+                    priority=int(payload.get("priority", 5) or 5),
+                    created_by=str(payload.get("created_by", "user") or "user"),
+                ), 201)
+            elif path == "/api/autonomy/cycle":
+                engine = autonomy_engine()
+                if engine.state not in ("running", "paused"):
+                    self.send_json({
+                        "error": "Start autonomy before stepping it, or the loop is not active."
+                    }, 409)
+                else:
+                    engine.cycles_run += 1
+                    self.send_json(engine.run_cycle(engine.cycles_run).to_dict())
             elif path == "/api/sandbox/self-test":
                 from .sandbox import self_test
                 from .selfdev import dev_root
@@ -1307,7 +1442,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self.validate_browser_origin():
             return
-        if path.startswith("/api/development-reviews/"):
+        if path.startswith("/api/self/belief/"):
+            belief_id = path.rsplit("/", 1)[-1]
+            if COORDINATOR.selfmodel.retire_belief(belief_id):
+                self.send_json({"retired": belief_id})
+            else:
+                self.send_json({"error": "Belief not found."}, 404)
+        elif path.startswith("/api/development-reviews/"):
             try:
                 development_reviews().delete(path.rsplit("/", 1)[-1])
                 self.send_json({"deleted": 1})
@@ -1426,6 +1567,7 @@ class Handler(BaseHTTPRequestHandler):
         prompt = f"Recent conversation context (oldest first):\n{context}\n\nCurrent user message:\n{task}" if context else task
         research_result = None
         team_result = None
+        introspection = None
         if payload.get("teamwork") is True and (payload.get("collaborate") or payload.get("deep_research") is True or payload.get("document_research") is True):
             raise ValueError("Team mode cannot be combined with other collaboration or research modes.")
         if payload.get("deep_research") is True or payload.get("document_research") is True:
@@ -1477,9 +1619,11 @@ class Handler(BaseHTTPRequestHandler):
             result = COORDINATOR.ask(
                 agent_id, prompt,
                 use_memory=bool(payload.get("use_memory")),
-                remember=bool(payload.get("remember"))
+                remember=bool(payload.get("remember")),
+                introspect=payload.get("introspect") is not False,
             )
             response = result.response
+            introspection = result.introspection
             used_agents = [agent_id]
         with db() as connection:
             timestamp = now()
@@ -1508,6 +1652,7 @@ class Handler(BaseHTTPRequestHandler):
             "agents_involved": used_agents,
             "remembered": bool(payload.get("remember")),
             "research": research_result, "team": team_result,
+            "introspection": introspection,
         })
 
 
