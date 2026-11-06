@@ -855,5 +855,109 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertIn("read-only readiness report", report["notice"])
 
 
+class DiagnosticsEndpointTests(unittest.TestCase):
+    """Integration coverage for the in-app Diagnostics window endpoints."""
+
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory()
+        self.original_db = server.DB_PATH
+        self.original_home = server.DATA_HOME
+        self.original_memory = server.COORDINATOR.memory
+        server.DATA_HOME = Path(self.temp.name) / "data"
+        server.DATA_HOME.mkdir(parents=True, exist_ok=True)
+        server.DB_PATH = server.DATA_HOME / "app.sqlite3"
+        server.init_db()
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        self.httpd.auth_token = None
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+        self.base = f"http://127.0.0.1:{self.httpd.server_port}"
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=2)
+        server.DB_PATH = self.original_db
+        server.DATA_HOME = self.original_home
+        server.COORDINATOR.memory = self.original_memory
+        self.temp.cleanup()
+
+    def json_request(self, path: str, payload: dict | None = None, method: str | None = None):
+        data = None if payload is None else json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"} if data is not None else {}
+        request = Request(self.base + path, data=data, headers=headers, method=method)
+        try:
+            with urlopen(request, timeout=3) as response:
+                return response.status, response.read()
+        except HTTPError as error:
+            return error.code, error.read()
+
+    def interactions(self) -> list:
+        status, body = self.json_request("/api/diagnostics/interactions")
+        self.assertEqual(status, 200, body)
+        return json.loads(body)["interactions"]
+
+    def test_unknown_api_route_is_logged_with_error_details(self) -> None:
+        status, _ = self.json_request("/api/definitely-not-a-route")
+        self.assertEqual(status, 404)
+        entries = self.interactions()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["method"], "GET")
+        self.assertEqual(entries[0]["path"], "/api/definitely-not-a-route")
+        self.assertEqual(entries[0]["status"], 404)
+        self.assertFalse(entries[0]["ok"])
+        self.assertIn("Not found", entries[0]["error"])
+
+    def test_diagnostics_endpoints_are_not_self_logged(self) -> None:
+        self.json_request("/api/diagnostics/interactions")
+        self.json_request("/api/diagnostics/report")
+        self.assertEqual(self.interactions(), [])
+
+    def test_failed_post_logs_actionable_error(self) -> None:
+        status, body = self.json_request("/api/memory/search", {"query": "x", "limit": "abc"})
+        self.assertEqual(status, 400, body)
+        entries = self.interactions()
+        self.assertTrue(any(entry["path"] == "/api/memory/search" and not entry["ok"] for entry in entries), entries)
+
+    def test_client_error_is_recorded_and_exported_in_report(self) -> None:
+        status, body = self.json_request("/api/diagnostics/client-error", {
+            "message": "TypeError: boom", "stack": "at render (app.js:1)\n  next line", "url": "/chat"})
+        self.assertEqual(status, 201)
+        entries = self.interactions()
+        self.assertEqual(entries[-1]["kind"], "client_error")
+        self.assertEqual(entries[-1]["error"], "TypeError: boom")
+        self.assertIn("at render", entries[-1]["detail"])
+        status, body = self.json_request("/api/diagnostics/report")
+        self.assertEqual(status, 200)
+        report = json.loads(body)["report"]
+        self.assertIn("## BabyMind diagnostics report", report)
+        self.assertIn("BabyMind:", report)
+        self.assertIn("CLIENT /chat", report)
+        self.assertIn("TypeError: boom", report)
+
+    def test_report_endpoint_returns_markdown_for_copy_paste(self) -> None:
+        self.json_request("/api/definitely-not-a-route")
+        status, body = self.json_request("/api/diagnostics/report")
+        self.assertEqual(status, 200)
+        report = json.loads(body)["report"]
+        self.assertIn("GET /api/definitely-not-a-route", report)
+        self.assertIn("error:", report)
+
+    def test_delete_clears_logged_interactions(self) -> None:
+        self.json_request("/api/definitely-not-a-route")
+        self.assertEqual(len(self.interactions()), 1)
+        status, body = self.json_request("/api/diagnostics/interactions", method="DELETE")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["deleted"], 1)
+        self.assertEqual(self.interactions(), [])
+
+    def test_get_interactions_honours_limit(self) -> None:
+        for index in range(5):
+            self.json_request("/api/definitely-not-a-route")
+        status, body = self.json_request("/api/diagnostics/interactions?limit=2")
+        entries = json.loads(body)["interactions"]
+        self.assertEqual(len(entries), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

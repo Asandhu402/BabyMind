@@ -92,3 +92,17 @@ body.light .task-create-form input,body.light .task-create-form textarea{backgro
 .settings-card .task-primary{margin-top:7px}
 .settings-card .setting-status{line-height:1.6;overflow-wrap:anywhere}
 body.light .integration-input{background:#fafaff;color:#252438}
+.diagnostics-actions{display:flex;gap:9px;margin-top:22px;flex-wrap:wrap}
+.diagnostics-summary{max-width:1050px;width:100%;margin:0 auto 14px;color:var(--muted);font:11px "DM Mono",monospace}
+.diagnostic-list{max-width:1050px;width:100%;margin:0 auto;display:grid;gap:8px}
+.diagnostic-row{border:1px solid var(--line);border-left:3px solid var(--green);background:rgba(255,255,255,.025);border-radius:10px;padding:11px 13px}
+.diagnostic-row.error{border-left-color:var(--danger)}
+.diagnostic-row-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.diagnostic-row-top code{font:10px "DM Mono",monospace;color:#c3b3ff;background:rgba(165,138,255,.08);padding:3px 7px;border-radius:5px;overflow-wrap:anywhere}
+.diagnostic-kind{font:9px "DM Mono";letter-spacing:.8px;border-radius:5px;padding:3px 7px;border:1px solid}
+.diagnostic-kind.ok{color:var(--green);border-color:rgba(120,216,174,.3);background:rgba(120,216,174,.06)}
+.diagnostic-kind.fail{color:var(--danger);border-color:rgba(255,133,142,.35);background:rgba(255,133,142,.08)}
+.diagnostic-kind.client{color:#e6bd7e;border-color:rgba(235,184,109,.35);background:rgba(235,184,109,.08)}
+.diagnostic-meta{margin-left:auto;color:#8b8fa0;font:10px "DM Mono"}
+.diagnostic-error-text{margin-top:9px;color:#ffb3ba;font:11px "DM Mono",monospace;background:rgba(255,133,142,.05);border:1px solid rgba(255,133,142,.16);border-radius:7px;padding:8px 10px;overflow-wrap:anywhere}
+.diagnostic-error-text.detail{color:#d8b4b4;border-color:var(--line);background:rgba(255,255,255,.02)}

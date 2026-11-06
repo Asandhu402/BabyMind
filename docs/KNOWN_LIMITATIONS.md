@@ -115,10 +115,18 @@ missing, not what is planned.
   competence or advice quality.
 - Conversations, missions, and memory are encrypted at rest with a local key file on Linux. It is readable by the same user and does not protect against a compromised account.
 - Knowledge-graph and voice integrations remain optional and unverified here.
+- The interaction diagnostics log (`~/.babymind/interactions.jsonl`) is metadata-only
+  (route, status, timing, error text) and unencrypted; error messages may embed local
+  paths. It is capped at 500 entries/256 KB, can be cleared from the Diagnostics window,
+  and its markdown report is generated on demand — but anything you paste elsewhere is
+  no longer under BabyMind's control.
 
 ## Interface
 
 - The mission and self-development views were syntax-checked and served by the
   test server, but were not driven through a real browser in this environment.
+  The diagnostics window likewise passed syntax checks, `node --check` on its
+  client code, and server-route tests, but was not exercised in a real browser
+  here.
 - There is no diff viewer beyond the text `diff` field, no terminal emulator, and
   no project explorer tree in the UI yet (the API exposes `/api/dev/tree`).

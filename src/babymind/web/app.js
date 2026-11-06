@@ -27,17 +27,31 @@ async function api(path, options={}, retried=false) {
   if(!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
 }
+// Record uncaught client errors (UI bugs, failed fetches that escape try/catch) in the
+// same local diagnostics log the server uses. Throttled so a render loop can never spam it.
+const clientErrorThrottle={count:0,last:0};
+function reportClientError(message,stack){
+  const now=Date.now();
+  if(clientErrorThrottle.count>=20) return;
+  if(now-clientErrorThrottle.last<500) return;
+  clientErrorThrottle.count+=1;clientErrorThrottle.last=now;
+  const token=localStorage.getItem("babymind_access_token")||"";
+  fetch("/api/diagnostics/client-error",{method:"POST",headers:{"Content-Type":"application/json",...(token?{"X-BabyMind-Token":token}:{})},body:JSON.stringify({message:String(message||"Unknown error").slice(0,500),stack:String(stack||"").slice(0,2000),url:location.pathname})}).catch(()=>{});
+}
+window.addEventListener("error",event=>reportClientError(event.message||"Uncaught error",event.error&&event.error.stack));
+window.addEventListener("unhandledrejection",event=>{const reason=event.reason;reportClientError((reason&&reason.message)||String(reason),reason&&reason.stack);});
 function setView(name) {
   state.view=name;
   document.querySelectorAll(".view").forEach(view=>view.classList.remove("active"));
   const target=$("#"+name+"View") || $("#chatView"); target.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(item=>item.classList.toggle("active",item.dataset.view===name));
-  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",development:"Development review",githubResearch:"GitHub research",settings:"Settings"})[name]||"Chat";
+  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",development:"Development review",githubResearch:"GitHub research",settings:"Settings",diagnostics:"Diagnostics"})[name]||"Chat";
   $("#sidebar").classList.remove("open");
   if(name==="memory") loadMemory();
   if(name==="tasks") loadTasks();
   if(name==="development") loadDevelopmentReviews();
   if(name==="settings") { loadIntegrations(); loadWorkspaceReadiness(); loadBrokerStatus(); }
+  if(name==="diagnostics") loadDiagnostics();
   if(name==="mission" && window.babymindLoadMission) window.babymindLoadMission();
 }
 function renderAgentSelect() {
@@ -147,6 +161,38 @@ async function sendMessage(message) {
   } finally {state.busy=false;$("#sendButton").disabled=false;$("#messageInput").focus();}
 }
 
+function renderDiagnosticEntry(entry){
+  const time=new Date(entry.time).toLocaleString();
+  const duration=entry.duration_ms!=null?` · ${Math.round(entry.duration_ms)} ms`:"";
+  const badge=entry.kind==="client_error"?'<span class="diagnostic-kind client">CLIENT</span>':entry.ok?'<span class="diagnostic-kind ok">OK</span>':'<span class="diagnostic-kind fail">ERROR</span>';
+  const statusText=entry.kind==="client_error"?"":` · HTTP ${entry.status}`;
+  const errorBlock=entry.error?`<div class="diagnostic-error-text">${escapeHTML(entry.error)}</div>`:"";
+  const detailBlock=entry.detail?`<div class="diagnostic-error-text detail">${escapeHTML(entry.detail)}</div>`:"";
+  return `<article class="diagnostic-row ${entry.ok?"ok":"error"}"><div class="diagnostic-row-top">${badge}<code>${escapeHTML(entry.method)} ${escapeHTML(entry.path)}</code><span class="diagnostic-meta">${escapeHTML(time)}${escapeHTML(statusText)}${escapeHTML(duration)}</span></div>${errorBlock}${detailBlock}</article>`;
+}
+async function loadDiagnostics(){
+  const summary=$("#diagnosticsSummary"),list=$("#diagnosticList");
+  try{
+    const data=await api("/api/diagnostics/interactions?limit=200");
+    const entries=data.interactions||[];
+    const errors=entries.filter(item=>!item.ok);
+    summary.textContent=`${entries.length} interactions recorded · ${errors.length} with errors · newest first · local file interactions.jsonl`;
+    list.innerHTML=entries.slice().reverse().map(renderDiagnosticEntry).join("")||'<div class="empty-state">No interactions recorded yet. Use BabyMind, then click Refresh.</div>';
+  }catch(error){
+    summary.textContent="Diagnostics unavailable";
+    list.innerHTML=`<div class="empty-state">${escapeHTML(error.message)}</div>`;
+  }
+}
+async function fetchDiagnosticsReport(){const data=await api("/api/diagnostics/report");return data.report;}
+async function copyText(text){
+  try{await navigator.clipboard.writeText(text);return true;}
+  catch(_){
+    const area=document.createElement("textarea");area.value=text;area.style.position="fixed";area.style.opacity="0";
+    document.body.appendChild(area);area.select();
+    let ok=false;try{ok=document.execCommand("copy");}catch(_){}
+    area.remove();return ok;
+  }
+}
 const taskLabels={queued:"Queued",active:"Active · manual",paused:"Paused",completed:"Completed",cancelled:"Cancelled",terminated:"Terminated"};
 function taskButtons(task){
   const actions=[];
@@ -385,6 +431,10 @@ async function init() {
     finally{button.disabled=false;}
   });
   $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories`);loadMemory();}catch(error){toast(error.message);}});
+  $("#refreshDiagnostics").addEventListener("click",loadDiagnostics);
+  $("#copyReport").addEventListener("click",async()=>{try{const report=await fetchDiagnosticsReport();const copied=await copyText(report);toast(copied?"Diagnostics report copied — paste it anywhere for help":"Clipboard blocked by the browser; use Download .md instead");}catch(error){toast(error.message);}});
+  $("#downloadReport").addEventListener("click",async()=>{try{const report=await fetchDiagnosticsReport();const blob=new Blob([report],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="babymind-diagnostics.md";link.click();URL.revokeObjectURL(url);}catch(error){toast(error.message);}});
+  $("#clearDiagnostics").addEventListener("click",async()=>{if(!confirm("Delete all recorded interactions from the local diagnostics log?"))return;try{const result=await api("/api/diagnostics/interactions",{method:"DELETE"});toast(`Cleared ${result.deleted} recorded interactions`);loadDiagnostics();}catch(error){toast(error.message);}});
   $("#openSidebar").addEventListener("click",()=>$("#sidebar").classList.add("open"));
   $("#closeSidebar").addEventListener("click",()=>$("#sidebar").classList.remove("open"));
   const savedTheme=localStorage.getItem("babymind_theme")||"dark";
