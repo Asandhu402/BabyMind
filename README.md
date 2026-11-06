@@ -12,18 +12,18 @@ over one model, not independent people or independently trained agents.
 
 ## Python compatibility
 
-BabyMind supports CPython **3.11 through 3.15**. The current CI matrix builds
-and tests Python 3.11, 3.12, 3.14 and 3.15. The desktop uses PySide6 6.12 or
-newer (within the Qt 6 series), which publishes wheels for Python 3.15.
-The installer checks the system Python version before downloading the model
-so an unsupported interpreter fails early instead of wasting bandwidth.
+BabyMind supports CPython **3.11 through 3.15**. CI builds and tests Python
+3.11, 3.12, 3.14 and 3.15. The desktop uses PySide6 6.12 or newer within the
+Qt 6 series, which publishes wheels for Python 3.15. The installer checks the
+system Python version before downloading the model so an unsupported
+interpreter fails early instead of wasting bandwidth.
 
 ## Install on Ubuntu with one command
 
 On Ubuntu 22.04 or newer, x86-64, open a terminal as your normal user and run:
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git ca-certificates && bash -c 'set -e; d=$(mktemp -d); trap "rm -rf -- \\"$d\\"" EXIT; git clone --depth 1 https://github.com/Asandhu402/BabyMind.git "$d/repo"; bash "$d/repo/install-linux.sh"'
+sudo apt-get update && sudo apt-get install -y git ca-certificates && bash -c 'set -e; d=$(mktemp -d); trap "rm -rf -- \"$d\"" EXIT; git clone --depth 1 https://github.com/Asandhu402/BabyMind.git "$d/repo"; bash "$d/repo/install-linux.sh"'
 ```
 
 This command downloads and executes the current repository's installer. Review
@@ -37,11 +37,10 @@ It may prompt for your sudo password. Open **BabyMind** from Applications when
 finished, or run `~/.local/bin/babymind`.
 
 The installer and one real-model chat response passed on a hosted Ubuntu 22.04
-VM with an Xvfb virtual display. Separate CI builds and fixture tests cover
-Ubuntu 22.04 and 24.04, including the supported Python matrix; the synthetic
-model used there does not measure the pinned model's quality. A clean Ubuntu
-Desktop session and broader model capabilities remain unverified; see
-[verification](docs/LINUX_VERIFICATION.md).
+VM with an Xvfb virtual display. Separate CI builds and fixture tests passed on
+Ubuntu 22.04 and 24.04; the synthetic model used there does not measure the
+pinned model's quality. A clean Ubuntu Desktop session and broader model
+capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
 
 ## Install and run with one command
 
