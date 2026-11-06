@@ -177,6 +177,25 @@ jobs:
           bash bootstrap-linux.sh --dry-run | tee "$RUNNER_TEMP/plan.txt"
           grep -q "would build CPython" "$RUNNER_TEMP/plan.txt"
           grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
+  ui-diagnostics:
+    # Exercises the web client's Diagnostics view headlessly with jsdom on the
+    # hosted 24.04 image (a real 26.10 desktop is not needed for DOM logic).
+    # Loads the real index.html and app.js, and asserts the view renders the
+    # interaction log, copies per-entry/report/log-path to the clipboard,
+    # issues DELETE for Clear log, and posts uncaught client errors back to
+    # the server. This is not a real-browser pass - see docs/KNOWN_LIMITATIONS.md.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless DOM
+        run: npm ci
+      - name: Run Diagnostics UI checks
+        run: node tests/test_diagnostics_ui.js
+
   real-model-installer:
     # Permanent, not opt-in: the pinned model is the application's brain, so
     # every push and every pull request must prove that the real installer,

@@ -90,6 +90,13 @@ request or manual dispatch - runs the same complete set of jobs, and no job is
 gated by a condition; `tests/test_real_model_ci.py` fails the build if a gate
 or a job-selecting switch is ever added back.
 
+A permanent `ui-diagnostics` job runs the web client's Diagnostics view headlessly
+(jsdom) on the hosted Ubuntu 24.04 image: it loads the real `index.html` and
+`app.js`, and asserts the interaction log renders, entries are copyable
+per-entry and as a full report, the log path and Clear log work, and uncaught
+client errors are posted to the server. It is a DOM-level check, not a
+real-browser pass; see [known limitations](docs/KNOWN_LIMITATIONS.md).
+
 A passing run shows the installer, the pinned model and CPU inference still work
 together on the tested questions. It is not proof of role competence, of
 correct advice, of behavior on a real Ubuntu Desktop session, or of packaged

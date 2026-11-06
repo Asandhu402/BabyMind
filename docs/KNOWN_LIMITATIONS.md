@@ -127,8 +127,10 @@ missing, not what is planned.
 
 - The mission and self-development views were syntax-checked and served by the
   test server, but were not driven through a real browser in this environment.
-  The diagnostics window likewise passed syntax checks, `node --check` on its
-  client code, and server-route tests, but was not exercised in a real browser
-  here.
+  The diagnostics window passes syntax checks, `node --check`, a permanent
+  jsdom functional test (`tests/test_diagnostics_ui.js` / CI `ui-diagnostics`
+  job) that drives the real DOM logic, and server-route tests — but it has not
+  been exercised in a real browser here; rendering, layout and real clipboard
+  behavior remain unverified.
 - There is no diff viewer beyond the text `diff` field, no terminal emulator, and
   no project explorer tree in the UI yet (the API exposes `/api/dev/tree`).
