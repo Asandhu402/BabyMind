@@ -15,7 +15,14 @@ fail() { printf 'BabyMind install-and-run stopped: %s\n' "$*" >&2; exit 1; }
 REPO=${BABYMIND_GITHUB_REPO:-Asandhu402/BabyMind}
 REF=${BABYMIND_GITHUB_REF:-main}
 
-[[ $(uname -s) == Linux ]] || fail 'This installer only supports Linux.'
+[[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || fail 'This installer requires Debian-based Linux on x86-64.'
+[[ -r /etc/os-release ]] || fail 'Cannot identify this operating system.'
+# shellcheck source=/dev/null
+. /etc/os-release
+case " ${ID:-} ${ID_LIKE:-} " in
+  *" debian "*|*" ubuntu "*) ;;
+  *) fail "Only Debian-based distributions (Debian, Ubuntu and derivatives) are supported; detected ${ID:-unknown}." ;;
+esac
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P || true)
 if [[ -n $script_dir && -f $script_dir/bootstrap-linux.sh ]]; then
