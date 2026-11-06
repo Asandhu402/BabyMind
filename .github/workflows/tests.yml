@@ -6,10 +6,6 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      real_model_test:
-        description: Run the expensive real-model installer and GUI smoke test
-        type: boolean
-        default: false
       chat_test_only:
         description: Run extended production-model GUI questions without the 50-role test
         type: boolean
@@ -22,7 +18,9 @@ permissions:
   contents: read
 jobs:
   linux:
-    if: github.event_name != 'workflow_dispatch' || (!inputs.real_model_test && !inputs.chat_test_only && !inputs.diagnose_source_only)
+    # Skipped only for the two manual diagnosis variants below, which exist to
+    # reproduce a failure without paying for the portable build.
+    if: github.event_name != 'workflow_dispatch' || (!inputs.chat_test_only && !inputs.diagnose_source_only)
     strategy:
       fail-fast: false
       # Build on Ubuntu 24.04 so the portable artifact needs glibc 2.39 (Ubuntu
@@ -217,9 +215,18 @@ jobs:
             exit "$status"
           fi
   real-model-installer:
-    # Manual and opt-in: this downloads ~2.71 GB and builds the installer on
-    # an ephemeral Ubuntu VM. Xvfb is not a full Ubuntu Desktop session.
-    if: github.event_name == 'workflow_dispatch' && (inputs.real_model_test || inputs.chat_test_only)
+    # Permanent, not opt-in: the pinned model is the application's brain, so
+    # every push and every pull request must prove that the real installer,
+    # the real ~2.71 GB model and real CPU inference still work together. This
+    # is the most expensive job in the workflow: it downloads ~2.71 GB, builds
+    # the installer and runs a 50-role mission on an ephemeral Ubuntu VM. Xvfb
+    # is not a full Ubuntu Desktop session.
+    concurrency:
+      # A newer commit on the same branch or pull request supersedes this run,
+      # so a model download and 50-role mission are never stacked up. The
+      # newest commit still runs the job, so nothing goes untested.
+      group: real-model-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     # The installer requires Python 3.13+, which Ubuntu 26.04 provides (3.14).
     runs-on: ubuntu-26.04
     timeout-minutes: 110

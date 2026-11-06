@@ -535,3 +535,40 @@ What has been run:
 What has **not** been run: the dnf, pacman and zypper package lists on those
 distributions, the from-source CPython build end to end (only its plan and its
 failure handling), and a fresh-machine install with the production model.
+
+## Real-model acceptance is now permanent CI (2026-11-06)
+
+The `real-model-installer` job in `.github/workflows/tests.yml` used to be a
+manual `workflow_dispatch` behind the `real_model_test` input, so the pinned
+model - the application's brain - was only exercised when someone remembered to
+ask for it. That input is gone. The job now has no trigger condition, so it
+runs on every push to `main`, on every pull request against `main`, and on
+`workflow_dispatch`. Nothing in the job changed except when it runs: the same
+fresh Ubuntu 26.04 VM still runs the real `install-linux.sh` in a disposable
+home (Ubuntu packages, the ~2.71 GB production-model download and its SHA-256
+verification, the local build), starts the installed Qt desktop under Xvfb and
+drives it with the real model, then runs the 50-role mission, the coding test
+and the disposable real-source self-edit through `verify_real_model_roles.py`.
+
+A per-branch `concurrency` group with `cancel-in-progress: true` was added so a
+newer commit on the same branch or pull request supersedes the in-flight run
+instead of stacking another model download and 50-role CPU mission. The newest
+commit always still runs the job.
+
+What this does and does not establish:
+
+- **It does** mean a regression that breaks the installer, the model download,
+  the pinned checksum, llama-server startup, GUI launch under a virtual
+  display, or the model's answers to the tested questions is reported on the
+  commit that caused it rather than at some later, manual re-run.
+- **It does not** mean the checks pass. The last recorded hosted run
+  ([41939836348](https://github.com/Asandhu402/BabyMind/actions/runs/41939836348),
+  reported above under "Packaged source-staging development") **failed** its
+  real-source self-edit because the model returned malformed JSON, and the
+  harness records any failure as a red job. Until the model reliably emits a
+  valid edit, this job is expected to fail, and it will fail on every push.
+- It is not a clean Ubuntu Desktop session, not a measure of role competence,
+  and not proof that the packaged app can upgrade itself.
+- Whether this job is a *required* status check for merging is a repository
+  setting on `main`; it is not controlled by this workflow file and was not
+  changed here.

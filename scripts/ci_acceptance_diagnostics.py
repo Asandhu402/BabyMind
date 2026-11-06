@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Expose the tail of an opt-in CI acceptance step as a check annotation."""
+"""Expose the tail of a CI acceptance step as a check annotation."""
 import re
 import sys
 from pathlib import Path

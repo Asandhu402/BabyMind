@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Opt-in smoke test of the installed GUI and its real local model.
+"""Smoke test of the installed GUI and its real local model.
 
-Run only in a disposable graphical test environment. The caller must install
-python3-websocket, provide DISPLAY (for example via xvfb-run), and pass the
-installed executable. Qt remote debugging is bound to loopback for this test;
-never enable it in a normal user session.
+CI runs this on every push and pull request. Use only a disposable graphical
+test environment: the caller must install python3-websocket, provide DISPLAY
+(for example via xvfb-run), and pass the installed executable. Qt remote
+debugging is bound to loopback for this test; never enable it in a normal user
+session.
 """
 from __future__ import annotations
 

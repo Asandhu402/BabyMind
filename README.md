@@ -72,6 +72,23 @@ GUI with the production model remains unverified on a clean desktop. See
 [verification](docs/LINUX_VERIFICATION.md) and
 [known limitations](docs/KNOWN_LIMITATIONS.md).
 
+## Continuous testing
+
+The model is BabyMind's brain, so the real-model acceptance job runs on **every
+push and every pull request** - it is not a manual, opt-in dispatch. On a fresh
+Ubuntu VM it runs the actual `install-linux.sh` (package installation, the
+2.71 GB model download and its SHA-256 check, the local build), starts the
+installed desktop under Xvfb and drives it with the real model, then runs the
+real model through chat questions, a coding task, a sandboxed self-edit and a
+50-role mission on a disposable copy of this source.
+
+A passing run shows the installer, the pinned model and CPU inference still work
+together on the tested questions. It is not proof of role competence, of
+correct advice, of behavior on a real Ubuntu Desktop session, or of packaged
+self-upgrade. It is also slow: allow for the download plus a 50-role CPU
+mission, and expect it to fail when the model cannot answer the tested
+questions or produce a valid edit.
+
 ## Portable desktop
 
 The target is a graphical Linux desktop with glibc 2.39 or newer (Ubuntu 24.04+,
