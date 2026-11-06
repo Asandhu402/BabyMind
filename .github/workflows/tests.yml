@@ -4,23 +4,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # No dispatch switches: every trigger runs exactly the same, complete set of
+  # jobs, so nothing can be left untested by choosing the wrong one.
   workflow_dispatch:
-    inputs:
-      chat_test_only:
-        description: Run extended production-model GUI questions without the 50-role test
-        type: boolean
-        default: false
-      diagnose_source_only:
-        description: Run Ubuntu 22.04 source tests and annotate failures without building the package
-        type: boolean
-        default: false
 permissions:
   contents: read
 jobs:
   linux:
-    # Skipped only for the two manual diagnosis variants below, which exist to
-    # reproduce a failure without paying for the portable build.
-    if: github.event_name != 'workflow_dispatch' || (!inputs.chat_test_only && !inputs.diagnose_source_only)
     strategy:
       fail-fast: false
       # Build on Ubuntu 24.04 so the portable artifact needs glibc 2.39 (Ubuntu
@@ -181,45 +171,13 @@ jobs:
           bash bootstrap-linux.sh --dry-run | tee "$RUNNER_TEMP/plan.txt"
           grep -q "would build CPython" "$RUNNER_TEMP/plan.txt"
           grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
-  diagnose-source:
-    if: github.event_name == 'workflow_dispatch' && inputs.diagnose_source_only
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.15'
-      - name: Allow unprivileged user namespaces for the sandbox backend
-        # Ubuntu 24.04+ restricts unprivileged user namespaces with AppArmor, so
-        # babymind.sandbox would report no backend and the suite would fail.
-        run: |
-          if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-      - name: Install Linux desktop test libraries
-        run: |
-          sudo apt-get update
-          if apt-cache show libasound2t64 >/dev/null 2>&1; then audio_package=libasound2t64; else audio_package=libasound2; fi
-          sudo apt-get install -y xvfb xauth libnss3 libgl1 libegl1 libgbm1 libdrm2 "$audio_package" libdbus-1-3 libfontconfig1 libfreetype6 libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrender1 libxrandr2 libxtst6 libxi6 libxss1 libxshmfence1 libxkbfile1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-render0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
-      - name: Run source tests with diagnostic annotations
-        run: |
-          python -m pip install -e '.[build]'
-          log="$RUNNER_TEMP/babymind-source-tests.log"
-          if python -m unittest discover -s tests -q >"$log" 2>&1; then
-            cat "$log"
-          else
-            status=$?
-            cat "$log"
-            python scripts/ci_acceptance_diagnostics.py "$log" 'Source tests' "$status"
-            exit "$status"
-          fi
   real-model-installer:
     # Permanent, not opt-in: the pinned model is the application's brain, so
     # every push and every pull request must prove that the real installer,
     # the real ~2.71 GB model and real CPU inference still work together. This
     # is the most expensive job in the workflow: it downloads ~2.71 GB, builds
-    # the installer and runs a 50-role mission on an ephemeral Ubuntu VM. Xvfb
+    # the installer, drives the installed desktop through the full extended
+    # question set and runs a 50-role mission on an ephemeral Ubuntu VM. Xvfb
     # is not a full Ubuntu Desktop session.
     concurrency:
       # A newer commit on the same branch or pull request supersedes this run,
@@ -229,7 +187,9 @@ jobs:
       cancel-in-progress: true
     # The installer requires Python 3.13+, which Ubuntu 26.04 provides (3.14).
     runs-on: ubuntu-26.04
-    timeout-minutes: 110
+    # Recorded runs needed 60-71 minutes for the 50-role mission alone, on top
+    # of the download, the build and the extended GUI question set.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - name: Record host and install GUI test tools
@@ -251,25 +211,21 @@ jobs:
             /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-installer.log" Installer "$status"
             exit "$status"
           fi
-      - name: Exercise installed Qt GUI and real-model response under Xvfb
-        env:
-          EXTENDED_CHAT: ${{ inputs.chat_test_only }}
+      - name: Exercise the installed Qt GUI with the full real-model question set
         run: |
           export HOME="$RUNNER_TEMP/babymind-test-home"
-          args=("$HOME/.local/bin/babymind" --log "$RUNNER_TEMP/babymind-desktop.log")
-          if [[ "$EXTENDED_CHAT" == 'true' ]]; then
-            args+=(--extended-chat --report "$RUNNER_TEMP/babymind-chat-report.json")
-          fi
           set +e
           xvfb-run -a /usr/bin/python3 scripts/verify_installed_desktop.py \
-            "${args[@]}" 2>&1 | tee "$RUNNER_TEMP/babymind-gui-test.log"
+            "$HOME/.local/bin/babymind" --log "$RUNNER_TEMP/babymind-desktop.log" \
+            --extended-chat --report "$RUNNER_TEMP/babymind-chat-report.json" \
+            2>&1 | tee "$RUNNER_TEMP/babymind-gui-test.log"
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-gui-test.log" GUI "$status"
             exit "$status"
           fi
       - name: Exercise real model roles, coding, and disposable source self-edit
-        if: ${{ !cancelled() && steps.installer.outcome == 'success' && !inputs.chat_test_only }}
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
         run: |
           export HOME="$RUNNER_TEMP/babymind-test-home"
           /usr/bin/python3 -m venv "$RUNNER_TEMP/acceptance-venv"
@@ -283,16 +239,16 @@ jobs:
             /usr/bin/python3 scripts/ci_acceptance_diagnostics.py "$RUNNER_TEMP/babymind-roles-test.log" Roles "$status"
             exit "$status"
           fi
-      - name: Upload extended chat report
-        if: ${{ !cancelled() && inputs.chat_test_only }}
+      - name: Upload the GUI question report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: babymind-gui-chat-report
           path: ${{ runner.temp }}/babymind-chat-report.json
           if-no-files-found: warn
           retention-days: 7
-      - name: Upload disposable test report
-        if: ${{ !cancelled() && steps.installer.outcome == 'success' && !inputs.chat_test_only }}
+      - name: Upload the real-model acceptance report
+        if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: babymind-real-model-test-report

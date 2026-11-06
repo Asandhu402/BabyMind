@@ -78,16 +78,22 @@ The model is BabyMind's brain, so the real-model acceptance job runs on **every
 push and every pull request** - it is not a manual, opt-in dispatch. On a fresh
 Ubuntu VM it runs the actual `install-linux.sh` (package installation, the
 2.71 GB model download and its SHA-256 check, the local build), starts the
-installed desktop under Xvfb and drives it with the real model, then runs the
-real model through chat questions, a coding task, a sandboxed self-edit and a
-50-role mission on a disposable copy of this source.
+installed desktop under Xvfb and drives it through the **full** extended
+question set with the real model, then runs the real model through source-mode
+chat questions, a coding task, a sandboxed self-edit and a 50-role mission on a
+disposable copy of this source.
+
+There are no manual variants of this workflow. Every trigger - push, pull
+request or manual dispatch - runs the same complete set of jobs, and no job is
+gated by a condition; `tests/test_real_model_ci.py` fails the build if a gate
+or a job-selecting switch is ever added back.
 
 A passing run shows the installer, the pinned model and CPU inference still work
 together on the tested questions. It is not proof of role competence, of
 correct advice, of behavior on a real Ubuntu Desktop session, or of packaged
-self-upgrade. It is also slow: allow for the download plus a 50-role CPU
-mission, and expect it to fail when the model cannot answer the tested
-questions or produce a valid edit.
+self-upgrade. It is also slow: the job allows 180 minutes for the download, the
+build, the GUI question set and a 50-role CPU mission, and it fails when the
+model cannot answer the tested questions or produce a valid edit.
 
 ## Portable desktop
 

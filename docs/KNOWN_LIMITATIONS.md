@@ -107,8 +107,9 @@ missing, not what is planned.
   normal desktop session remain untested.
 - The real-model acceptance job is permanent CI, not an opt-in dispatch, so a
   model that cannot answer its tested questions or emit a valid edit turns the
-  build red. Its checks cover specific arithmetic, one coding task and one
-  self-edit; they are not a measure of role competence or advice quality.
+  build red. Its checks cover a fixed GUI question set, three source-mode chat
+  questions, one coding task and two self-edits; they are not a measure of role
+  competence or advice quality.
 - Conversations, missions, and memory are encrypted at rest with a local key file on Linux. It is readable by the same user and does not protect against a compromised account.
 - Knowledge-graph and voice integrations remain optional and unverified here.
 

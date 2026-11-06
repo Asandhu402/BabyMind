@@ -555,6 +555,40 @@ newer commit on the same branch or pull request supersedes the in-flight run
 instead of stacking another model download and 50-role CPU mission. The newest
 commit always still runs the job.
 
+The same pass then removed the last optional paths from the workflow, so there
+is no way to trigger a partial BabyMind run:
+
+- `chat_test_only` is gone. The extended GUI question set (`--extended-chat`
+  plus its JSON report) is no longer a manual variant that replaced the 50-role
+  mission; it now runs on every real-model run, followed by the mission. The
+  job timeout went from 110 to 180 minutes, because recorded runs needed
+  3,601-4,235 seconds for the mission alone on top of the download, the build
+  and the question set. Both reports are uploaded on every run.
+- `diagnose_source_only` and the whole `diagnose-source` job are gone. That job
+  was a manual re-run of `source-latest` on the same runner (ubuntu-26.04,
+  Python 3.15) with the same annotation script; its only differences were
+  installing the `[build]` extra and desktop libraries that neither job uses,
+  because neither sets `BABYMIND_GUI_TEST`. No test imports PyInstaller, so
+  deleting it removed no coverage - `source-latest` already runs permanently.
+- `workflow_dispatch` now has no inputs at all, and no job in the file carries
+  a job-level `if:`. The three remaining step-level conditions only propagate
+  failures (`!cancelled()`, `steps.installer.outcome == 'success'`).
+- `tests/test_real_model_ci.py` (10 cases) now asserts all of that from the
+  workflow file. Run against the pre-change workflow it fails 4 of its 10 cases
+  (job-level gate, dispatch switch, step condition, partial GUI question set),
+  so it is not a vacuous check.
+
+What remains optional is not CI. The `documents`, `voice`, `browser` and
+`knowledge-graph` extras in `pyproject.toml` are still opt-in dependencies:
+`cognee` publishes no Python 3.15 wheels, so `knowledge-graph` cannot become a
+hard dependency of a project that supports 3.15, and `docling`,
+`faster-whisper` and `browser-use` are heavyweight third-party stacks. The
+model itself is not optional: `providers.create_provider()` accepts only
+`llama.cpp` and raises `ProviderError` for anything else, its unconfigured
+provider refuses to complete a request, and `first_run.prepare_local_engine()`
+refuses to start without the bundled `llama-server` and a model whose SHA-256
+matches the pin.
+
 What this does and does not establish:
 
 - **It does** mean a regression that breaks the installer, the model download,
