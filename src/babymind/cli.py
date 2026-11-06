@@ -37,6 +37,10 @@ def build_parser() -> argparse.ArgumentParser:
     autonomous_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 101), help="Number of cycles (1-100)")
     autonomous_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
     autonomous_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
+    service_parser = cognitive_actions.add_parser("service", help="Run the persistent Linux cognitive background service")
+    service_parser.add_argument("--interval", type=float, default=60, help="Seconds between cycles (5-3600)")
+    service_parser.add_argument("--agent", default="BM-02", help="Specialist role used for each cycle")
+    cognitive_actions.add_parser("routing", help="Show configured per-agent model routes without exposing secrets")
 
     mission_parser = subparsers.add_parser("mission", help="Run a mission across all 50 roles")
     mission_parser.add_argument("brief", help="Mission brief")
@@ -176,6 +180,18 @@ def main() -> None:
             report = run_benchmarks(core)
             print(json.dumps(report, indent=2, ensure_ascii=False))
             if not report["all_passed"]:
+                raise SystemExit(1)
+        elif args.cognitive_action == "routing":
+            from .model_router import ModelRouter
+            print(json.dumps(ModelRouter().routing_status(), indent=2, ensure_ascii=False))
+        elif args.cognitive_action == "service":
+            from .background import BackgroundService
+            try:
+                report = BackgroundService(interval=args.interval, agent_id=args.agent, core=core).run()
+            except (KeyError, ValueError, RuntimeError) as error:
+                raise SystemExit(str(error)) from error
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["status"] == "stopped_after_errors":
                 raise SystemExit(1)
         elif args.cognitive_action == "autonomy":
             from .autonomy import AutonomyController
