@@ -186,9 +186,15 @@ def load_test_baseline() -> dict | None:
 
 
 def _test_problem_ids(result: dict) -> set[str]:
-    """Extract unittest's failure/error headings for baseline comparison."""
+    """Extract unittest failure/error headings from either captured output stream.
+
+    The suite summary is parsed from stdout + stderr. Keep this evidence parser
+    consistent: unittest output can be redirected by a runner or test harness,
+    and looking only at stderr makes a completed failing suite appear incomplete.
+    """
     import re
-    return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", result.get("stderr") or "", re.MULTILINE))
+    output = "\\n".join((result.get("stderr") or "", result.get("stdout") or ""))
+    return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", output, re.MULTILINE))
 
 
 def _suite_diagnosis(result: dict) -> str:
@@ -203,7 +209,7 @@ def _suite_diagnosis(result: dict) -> str:
         f"ran={summary.get('ran', 0)} skipped={summary.get('skipped', 0)} "
         f"problems={summary.get('problems', 0)} identified={len(_test_problem_ids(result))} "
         f"exit={result.get('exit_code')} timed_out={result.get('timed_out')} "
-        f"truncated={result.get('truncated')} output_chars={len(result.get('stderr') or '')}"
+        f"truncated={result.get('truncated')} output_chars={len(result.get('stderr') or '') + len(result.get('stdout') or '')}"
     )
 
 
