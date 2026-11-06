@@ -145,6 +145,12 @@ class CommandTests(BootstrapFixture):
         result = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_build_script_is_limited_to_debian_based_x86_64(self):
+        build_script = (REPO / "build-linux.sh").read_text(encoding="utf-8")
+        self.assertIn("uname -m) == x86_64", build_script)
+        self.assertIn('case " ${ID:-} ${ID_LIKE:-} "', build_script)
+        self.assertIn("Build requires a Debian-based distribution", build_script)
+
     def test_downloads_retry_transfer_failures_and_stay_compatible_with_old_curl(self):
         # curl's --retry covers timeouts and 4xx/5xx only. A transfer failure
         # such as an HTTP/2 stream error (curl exit 92) aborted a hosted
