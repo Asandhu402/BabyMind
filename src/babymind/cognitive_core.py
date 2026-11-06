@@ -108,6 +108,23 @@ class CognitiveCore:
             finally: db.close()
         return [{"id":r["id"],"title":self.secure.decrypt(r["title"]),"description":self.secure.decrypt(r["description"]),"status":r["status"],"created_at":r["created_at"]} for r in rows]
 
+    def recent_notes(self, limit: int = 10) -> list[dict[str, str]]:
+        """Retrieve durable notes and research questions for future cycles."""
+        with self.lock:
+            db = self._connect()
+            try:
+                rows = db.execute(
+                    "SELECT id,kind,content,created_at FROM notes ORDER BY created_at DESC LIMIT ?",
+                    (max(1, min(limit, 30)),)
+                ).fetchall()
+            finally:
+                db.close()
+        return [{
+            "id": row["id"], "kind": row["kind"],
+            "content": self.secure.decrypt(row["content"]),
+            "created_at": row["created_at"],
+        } for row in rows]
+
     def recent_experiences(self, limit: int = 5) -> list[dict[str, Any]]:
         """Retrieve previous reflections and lessons so later cycles can use them."""
         with self.lock:
@@ -136,6 +153,7 @@ class CognitiveCore:
             f"Known boundaries: {json.dumps(env['capabilities'], sort_keys=True)}.\n"
             f"Active goals: {json.dumps(self.active_goals(5), ensure_ascii=False)}.\n"
             f"Recent learning: {json.dumps(self.recent_experiences(3), ensure_ascii=False)}.\n"
+            f"Recent research notes: {json.dumps(self.recent_notes(3), ensure_ascii=False)}.\n"
             "This is operational context, not evidence of subjective consciousness. Never claim an unverified capability or action.")
 
     def status(self) -> dict[str, Any]:
@@ -185,6 +203,7 @@ class CognitiveCore:
         agent = AGENT_BY_ID[normalized]
         observation, goals = environment_snapshot(), self.active_goals(10)
         experiences = self.recent_experiences(8)
+        notes = self.recent_notes(10)
         roster = [{"id":a.agent_id,"name":a.name,"phase":a.phase} for a in AGENTS]
         system = ("You are BabyMind's cognitive cycle, one software system using a shared local model. "
             "Do not claim consciousness, feelings, or proof of simulation. Use only observable facts. "
@@ -197,6 +216,7 @@ class CognitiveCore:
         user = ("OBSERVATION:\n"+json.dumps(observation,ensure_ascii=False)+
             "\nACTIVE GOALS:\n"+json.dumps(goals,ensure_ascii=False)+
             "\nRECENT EXPERIENCES AND LEARNINGS:\n"+json.dumps(experiences,ensure_ascii=False)+
+            "\nPERSISTENT RESEARCH NOTES:\n"+json.dumps(notes,ensure_ascii=False)+
             "\nAVAILABLE SPECIALIST ROLES:\n"+json.dumps(roster,ensure_ascii=False)+
             "\nCURRENT ROLE:\n"+agent_instructions(agent)+
             "\nChoose a useful next step and return the structured cycle.")
