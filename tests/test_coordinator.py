@@ -32,6 +32,14 @@ class CoordinatorTests(unittest.TestCase):
             provider=self.provider, memory=self.memory
         )
 
+    def test_specialist_requests_use_the_model_router(self):
+        from unittest.mock import patch
+        with patch.object(self.coordinator.model_router, "complete_for", return_value="Routed answer.") as routed:
+            result = self.coordinator.ask("BM-03", "Implement a feature")
+        self.assertEqual(result.response, "Routed answer.")
+        routed.assert_called_once()
+        self.assertEqual(routed.call_args.args[0], "BM-03")
+
     def test_one_provider_serves_different_agent_roles(self) -> None:
         first = self.coordinator.ask("BM-01", "Coordinate this")
         first_prompt = self.provider.system_prompt

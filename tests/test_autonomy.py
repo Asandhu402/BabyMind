@@ -10,7 +10,13 @@ import time
 import unittest
 from pathlib import Path
 
-from babymind.autonomy import DEFAULT_LIMITS, AutonomyEngine
+from unittest.mock import patch
+
+from babymind.autonomy import (
+    DEFAULT_LIMITS, ActionPolicy, AutonomyController, AutonomyEngine,
+)
+from babymind.benchmarks import run_benchmarks
+from babymind.cognitive_core import CognitiveCore
 
 
 class ScriptedProvider:
@@ -393,6 +399,106 @@ class AutonomyTests(unittest.TestCase):
         self.wait_for_exit(engine)
         self.assertEqual(engine.cycles_run, 3)
         self.assertIn("Cycle budget", engine.last_stop_reason)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class PolicyScriptedProvider:
+    def __init__(self):
+        self.calls = 0
+
+    def complete(self, system_prompt, user_prompt):
+        self.calls += 1
+        if "post-action reflection stage" in system_prompt:
+            return json.dumps({
+                "reflection": "Local result was verified.",
+                "learning": "Carry forward only verified outcomes.",
+                "confidence": 0.9,
+            })
+        return json.dumps({
+            "understanding": "The current environment is observed.",
+            "plan": "Create a small local goal.",
+            "action": {"type": "create_goal", "title": "Autonomy test", "description": "Bounded multi-cycle test."},
+            "expected": "A local goal should be persisted.",
+        })
+
+
+class AutonomyPolicyTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.core = CognitiveCore(Path(self.temp.name) / "cognitive.sqlite3")
+        self.controller = AutonomyController(self.core)
+
+    def test_permission_policy_is_allowlist_and_fail_closed(self):
+        self.assertTrue(ActionPolicy.authorize({"type": "wait"})["allowed"])
+        self.assertTrue(ActionPolicy.authorize({"type": "create_goal"})["allowed"])
+        self.assertFalse(ActionPolicy.authorize({"type": "shell"})["allowed"])
+        self.assertTrue(ActionPolicy.authorize({"type": "shell"})["requires_approval"])
+        self.assertFalse(ActionPolicy.authorize({"type": "invented_action"})["allowed"])
+
+    def test_environment_baseline_persists_and_detects_drift(self):
+        baseline = {
+            "system": "Linux", "distribution": "Ubuntu 26.10",
+            "kernel": "6.1", "architecture": "x86_64", "python": "3.14",
+            "python_executable": "/usr/bin/python3", "home_directory": "/home/test",
+            "babymind_home": "/home/test/.babymind",
+            "agent_count": 50, "agent_ids": [],
+            "capabilities": {},
+        }
+        changed = dict(baseline, kernel="6.2")
+        with patch("babymind.autonomy.environment_snapshot", side_effect=[baseline, baseline, changed]):
+            first = self.controller.observe_environment()
+            second = self.controller.observe_environment()
+            third = self.controller.observe_environment()
+        self.assertFalse(first["baseline_available"])
+        self.assertTrue(second["baseline_available"])
+        self.assertTrue(third["changed"])
+        self.assertEqual(third["changes"][0]["field"], "kernel")
+
+    def test_autonomy_is_finite_and_persists_multi_step_goal(self):
+        report = self.controller.run(PolicyScriptedProvider(), cycles=2)
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(report["completed_cycles"], 2)
+        self.assertEqual(len(self.core.active_goals()), 2)
+        self.assertIn("No arbitrary shell", report["autonomy_boundary"])
+
+    def test_goal_execution_uses_bounded_verified_steps(self):
+        _outcome, verified = self.core._apply_action({
+            "type": "create_goal", "title": "Finish probe", "description": "Complete this test goal."
+        })
+        self.assertTrue(verified)
+        goal_id = self.core.active_goals()[0]["id"]
+
+        class CompletingProvider:
+            def complete(self, system_prompt, user_prompt):
+                if "post-action reflection stage" in system_prompt:
+                    return json.dumps({"reflection": "Goal completion was verified.", "learning": "Verify goal state.", "confidence": 1.0})
+                return json.dumps({
+                    "understanding": "The requested goal is complete.",
+                    "plan": "Mark the target goal complete.",
+                    "action": {"type": "complete_goal", "goal_id": goal_id},
+                    "expected": "The target goal should no longer be active.",
+                })
+
+        report = self.controller.execute_goal(CompletingProvider(), goal_id, max_steps=2)
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(report["steps_completed"], 1)
+        self.assertFalse(any(goal["id"] == goal_id for goal in self.core.active_goals()))
+
+    def test_cycle_and_interval_limits_are_enforced(self):
+        with self.assertRaises(ValueError):
+            self.controller.run(PolicyScriptedProvider(), cycles=26)
+        with self.assertRaises(ValueError):
+            self.controller.run(PolicyScriptedProvider(), cycles=1, interval=3601)
+
+    def test_benchmark_reports_dimensions_without_consciousness_claim(self):
+        report = run_benchmarks(self.core)
+        self.assertIn("identity_and_environment", report["dimensions"])
+        self.assertGreaterEqual(report["total"], 10)
+        self.assertIn("cannot establish consciousness", report["interpretation"])
 
 
 if __name__ == "__main__":

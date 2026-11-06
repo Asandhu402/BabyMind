@@ -23,12 +23,25 @@ def build_parser() -> argparse.ArgumentParser:
     cognitive_actions = cognitive_parser.add_subparsers(dest="cognitive_action", required=True)
     cognitive_actions.add_parser("status", help="Show persistent identity, observed environment, goals, and cycle metrics")
     cognitive_actions.add_parser("evaluate", help="Run deterministic local checks of operational self-awareness")
+    cognitive_actions.add_parser("benchmark", help="Run repeatable operational capability benchmarks")
+    autonomy_parser = cognitive_actions.add_parser("autonomy", help="Run bounded autonomous cycles with environment drift checks")
+    autonomy_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 26), help="Number of cycles (1-25)")
+    autonomy_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
+    autonomy_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
+    goal_parser = cognitive_actions.add_parser("goal", help="Execute one existing goal in bounded verified steps")
+    goal_parser.add_argument("goal_id", help="ID of an active local goal")
+    goal_parser.add_argument("--max-steps", type=int, default=5, choices=range(1, 11), help="Maximum steps (1-10)")
+    goal_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each step")
     cycle_parser = cognitive_actions.add_parser("cycle", help="Run one observe-to-learn cognitive cycle")
     cycle_parser.add_argument("--agent", default="BM-02", help="Existing role ID to run this cycle through")
     autonomous_parser = cognitive_actions.add_parser("run", help="Run a bounded number of autonomous cognitive cycles")
     autonomous_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 101), help="Number of cycles (1-100)")
     autonomous_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
     autonomous_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
+    service_parser = cognitive_actions.add_parser("service", help="Run the persistent Linux cognitive background service")
+    service_parser.add_argument("--interval", type=float, default=60, help="Seconds between cycles (5-3600)")
+    service_parser.add_argument("--agent", default="BM-02", help="Specialist role used for each cycle")
+    cognitive_actions.add_parser("routing", help="Show configured per-agent model routes without exposing secrets")
 
     mission_parser = subparsers.add_parser("mission", help="Run a mission across all 50 roles")
     mission_parser.add_argument("brief", help="Mission brief")
@@ -134,7 +147,7 @@ def main() -> None:
         from .orchestrator import MissionStore, Orchestrator
         from .server import DATA_HOME
         store = MissionStore(DATA_HOME)
-        orchestrator = Orchestrator(BabyMindCoordinator().provider, store,
+        orchestrator = Orchestrator(BabyMindCoordinator().model_router, store,
                                     max_seconds=args.max_seconds)
         mission = orchestrator.run_now(args.brief)
         for run in mission["runs"]:
@@ -192,10 +205,50 @@ def main() -> None:
             print(json.dumps(report, indent=2, ensure_ascii=False))
             if not report["all_passed"]:
                 raise SystemExit(1)
+        elif args.cognitive_action == "benchmark":
+            from .benchmarks import run_benchmarks
+            report = run_benchmarks(core)
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if not report["all_passed"]:
+                raise SystemExit(1)
+        elif args.cognitive_action == "routing":
+            from .model_router import ModelRouter
+            print(json.dumps(ModelRouter().routing_status(), indent=2, ensure_ascii=False))
+        elif args.cognitive_action == "service":
+            from .background import BackgroundService
+            try:
+                report = BackgroundService(interval=args.interval, agent_id=args.agent, core=core).run()
+            except (KeyError, ValueError, RuntimeError) as error:
+                raise SystemExit(str(error)) from error
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["status"] == "stopped_after_errors":
+                raise SystemExit(1)
+        elif args.cognitive_action == "autonomy":
+            from .autonomy import AutonomyController
+            if not 0 <= args.interval <= 3600:
+                raise SystemExit("Interval must be between 0 and 3600 seconds.")
+            coordinator = BabyMindCoordinator()
+            report = AutonomyController(core).run(
+                coordinator.model_router,
+                cycles=args.cycles, interval=args.interval, agent_id=args.agent,
+            )
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["status"] != "completed" or report["verified_cycles"] != report["completed_cycles"]:
+                raise SystemExit(1)
+        elif args.cognitive_action == "goal":
+            from .autonomy import AutonomyController
+            coordinator = BabyMindCoordinator()
+            report = AutonomyController(core).execute_goal(
+                coordinator.model_router, args.goal_id,
+                max_steps=args.max_steps, agent_id=args.agent,
+            )
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["status"] != "completed":
+                raise SystemExit(1)
         else:
             if args.cognitive_action == "run" and not 0 <= args.interval <= 3600:
                 raise SystemExit("Interval must be between 0 and 3600 seconds.")
-            provider = BabyMindCoordinator().provider
+            provider = BabyMindCoordinator().model_router
             count = 1 if args.cognitive_action == "cycle" else args.cycles
             for index in range(count):
                 try:

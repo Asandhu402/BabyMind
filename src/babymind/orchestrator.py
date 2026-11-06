@@ -5,8 +5,9 @@ mission brief, the phase goal, and a bounded digest of what earlier roles said,
 then records a contribution against its own name. Nothing is silently dropped:
 a role that cannot run is recorded as ``deferred`` or ``error`` with a reason.
 
-All 50 roles share one local model, so a "50-agent" mission is 50 role-guided
-reasoning passes over the same weights — never 50 independent models.
+The 50 role definitions remain specialist perspectives. When a ModelRouter is
+provided, each mission role can use its own configured backend; otherwise the
+configured shared provider remains the fallback.
 """
 from __future__ import annotations
 
@@ -663,7 +664,7 @@ class Orchestrator:
             elif failure:
                 user += ("\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. The verification output was:\n"
                          + failure + "\nProduce a corrected patch that fixes exactly this failure.")
-            raw = self.provider.complete(system, user)
+            raw = self._complete("BM-03", system, user)
             proposal = parse_model_json(raw)
             if not isinstance(proposal, dict):
                 raise ValueError("the model did not return a JSON object")
@@ -718,12 +719,19 @@ class Orchestrator:
                 "detail": str(last.get("detail") or last.get("reason") or "the model proposed no edits.")[:300],
                 "attempts": outcome["attempts"], "trail": trail}
 
+    def _complete(self, agent_id: str, system: str, user: str) -> str:
+        """Use a role-specific model when the supplied provider supports routing."""
+        complete_for = getattr(self.provider, "complete_for", None)
+        if callable(complete_for):
+            return complete_for(agent_id, system, user)
+        return self.provider.complete(system, user)
+
     def _run_agent(self, agent: AgentSpec, brief: str, recorded: list[AgentRun]) -> AgentRun:
         system, user = _agent_prompt(agent, brief, build_digest(recorded))
         system += "\n\n" + self.cognitive.context_for_agent(agent)
         start = time.monotonic()
         try:
-            output = self.provider.complete(system, user)
+            output = self._complete(agent.agent_id, system, user)
         except Exception as error:
             return AgentRun(agent.agent_id, agent.name, agent.phase, "error",
                             seconds=time.monotonic() - start, error=str(error)[:500])

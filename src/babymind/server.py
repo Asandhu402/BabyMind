@@ -89,7 +89,10 @@ def orchestrator():
     from .orchestrator import Orchestrator
 
     budget = int(os.getenv("BABYMIND_MISSION_MAX_SECONDS", "900") or 900)
-    return Orchestrator(COORDINATOR.provider, mission_store(), max_seconds=budget)
+    # routed_provider() re-syncs the router's fallback to the live provider, so
+    # replacing COORDINATOR.provider (as callers and tests do) is honoured
+    # instead of silently falling back to whichever provider existed at startup.
+    return Orchestrator(COORDINATOR.routed_provider(), mission_store(), max_seconds=budget)
 
 
 @contextmanager

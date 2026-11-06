@@ -1,4 +1,4 @@
-"""Unified BabyMind coordinator backed by one shared model."""
+"""Unified BabyMind coordinator with optional per-specialist model routing."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,6 +7,7 @@ from .agents import AGENTS, AgentSpec, agent_instructions, validate_registry
 from .memory import LocalMemory
 from .cognitive_core import CognitiveCore
 from .providers import ChatProvider, create_provider
+from .model_router import ModelRouter
 from .selfmodel import SelfModel
 
 
@@ -49,7 +50,7 @@ def _ROLE_SYSTEM_PROMPT_HEADER(agent: AgentSpec) -> str:
 
 
 class BabyMindCoordinator:
-    """Use one model with role-specific instructions for all 50 agents and tools."""
+    """Coordinate 50 specialist roles over a shared fallback or independently routed models."""
 
     def __init__(
         self,
@@ -59,6 +60,7 @@ class BabyMindCoordinator:
     ) -> None:
         validate_registry(agents)
         self.provider = provider if provider is not None else create_provider()
+        self.model_router = ModelRouter(fallback=self.provider)
         self.memory = memory or LocalMemory()
         self.cognitive = CognitiveCore(self.memory.database_path.with_name("cognitive.sqlite3"))
         self.selfmodel = SelfModel(self.memory.database_path.with_name("selfmodel.sqlite3"))
@@ -70,11 +72,23 @@ class BabyMindCoordinator:
 
         return _ROLE_SYSTEM_PROMPT_HEADER(agent) + "\n\n" + independent_thinker_directive()
 
+    def routed_provider(self) -> ModelRouter:
+        """Return the model router with its fallback tracking the live provider.
+
+        ModelRouter captures its fallback at construction, but callers and tests
+        replace ``coordinator.provider`` afterwards. Re-syncing here keeps per-role
+        routing without letting a stale fallback silently swallow those swaps.
+        """
+        self.model_router.fallback = self.provider
+        return self.model_router
+
     def _complete(self, agent: AgentSpec, system_prompt: str, task: str, context: str = "") -> str:
         from .response_quality import strip_internal_reasoning
 
         prompt = f"Context:\n{context}\n\nTask:\n{task}" if context else task
-        return strip_internal_reasoning(self.provider.complete(system_prompt, prompt))
+        return strip_internal_reasoning(
+            self.routed_provider().complete_for(agent.agent_id, system_prompt, prompt)
+        )
 
     def ask(
         self,
@@ -121,8 +135,11 @@ class BabyMindCoordinator:
         if introspect:
             from .introspection import run_introspection
 
+            # The role draft follows any per-role model route; the self-critique
+            # stages deliberately use the shared fallback so that a routed
+            # endpoint cannot grade its own homework.
             result = run_introspection(
-                self.provider,
+                self.routed_provider(),
                 clean_task,
                 draft_fn=lambda task, context: self._complete(agent, system_prompt, task, context),
             )
@@ -139,10 +156,7 @@ class BabyMindCoordinator:
                 self.selfmodel.record_dissent(clean_task, result.dissent)
             introspection_payload = result.to_dict()
         else:
-            from .response_quality import strip_internal_reasoning
-
-            response = strip_internal_reasoning(self.provider.complete(system_prompt, clean_task))
-
+            response = self._complete(agent, system_prompt, clean_task)
         if remember:
             self.memory.remember(normalized_id, clean_task, response)
         return CoordinatorResult(
