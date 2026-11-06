@@ -1,11 +1,12 @@
 """Tests for the parallel task-graph runner."""
 from __future__ import annotations
 
+import tempfile
 import threading
 import time
 import unittest
 
-from babymind.taskgraph import Task, TaskGraphError, TaskGraphRunner, validate_graph
+from babymind.taskgraph import Task, TaskGraphError, TaskGraphRunner, TaskGraphStore, validate_graph
 
 
 def sample_tasks():
@@ -109,3 +110,44 @@ class TaskGraphCancellationTests(unittest.TestCase):
         self.assertFalse(t.is_alive())
         self.assertTrue(result_box["result"]["cancelled"])
         self.assertEqual(taskgraph.cancel_running("g1")["cancelled"], False)
+
+
+class TaskGraphPersistenceTests(unittest.TestCase):
+    def test_progress_is_saved_and_completed_tasks_resume_without_rerunning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = TaskGraphStore(directory)
+            calls = []
+
+            def worker(task, context):
+                calls.append(task.task_id)
+                return "result-" + task.task_id
+
+            tasks = sample_tasks()
+            first = TaskGraphRunner(worker, max_workers=2).run(
+                tasks, graph_id="mission-1", store=store, resume=True
+            )
+            self.assertEqual(first["completed"], 4)
+            self.assertEqual(set(store.completed_results("mission-1", tasks)), {"a", "b", "c", "d"})
+            original_calls = list(calls)
+
+            resumed = TaskGraphRunner(worker, max_workers=2).run(
+                tasks, graph_id="mission-1", store=store, resume=True
+            )
+            self.assertEqual(resumed["completed"], 4)
+            self.assertEqual(calls, original_calls, "completed tasks must not execute again")
+
+    def test_changed_graph_does_not_reuse_stale_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = TaskGraphStore(directory)
+            tasks = [Task("a", "BM-01", "original task")]
+            TaskGraphRunner(lambda task, context: "old").run(
+                tasks, graph_id="mission-2", store=store, resume=True
+            )
+            changed = [Task("a", "BM-01", "changed task")]
+            self.assertEqual(store.completed_results("mission-2", changed), {})
+            calls = []
+            result = TaskGraphRunner(
+                lambda task, context: calls.append(task.task_id) or "new"
+            ).run(changed, graph_id="mission-2", store=store, resume=True)
+            self.assertEqual(result["completed"], 1)
+            self.assertEqual(calls, ["a"])
