@@ -20,6 +20,19 @@ wired and what is required to make it actually run.
 permanent (no job-level `if:`, no dispatch switches), so this table is
 expectation, not opt-out.
 
+## Quick readiness check (run this on the 26.10 machine first)
+
+```bash
+bash scripts/check-ubuntu-26.10-ready.sh
+```
+
+Read-only: it verifies the OS release, architecture, glibc ≥ 2.43, apt-get,
+passwordless sudo, toolchain, Python 3.13-3.15, network reachability of GitHub,
+PyPI, Hugging Face, the Ubuntu archive and python.org, disk (≥ 10 GB), RAM
+(≥ 4 GB, 8 GB recommended), the unprivileged-user-namespace AppArmor state and
+Xvfb. It prints `READY` or lists every gap; fix those before registering the
+runner.
+
 ## The blocker: there is no hosted `ubuntu-26.10` label
 
 GitHub-hosted runners currently offer `ubuntu-22.04`, `ubuntu-24.04`,
