@@ -343,6 +343,26 @@ class Orchestrator:
         self._run(mission_id, clean, mode, self_edit)
         return self.store.get(mission_id)
 
+    def resume(self, mission_id: str) -> str:
+        """Resume an interrupted graph mission from its durable task checkpoint."""
+        mission = self.store.get(mission_id)
+        if mission["status"] not in {"running", "partial", "failed"}:
+            raise MissionError("Only running, partial, or failed missions can be resumed.")
+        mode = mission["mode"]
+        self_edit = mode.endswith("+self-edit")
+        base_mode = mode.removesuffix("+self-edit")
+        if base_mode != "graph":
+            raise MissionError("Automatic recovery is currently supported only for graph-mode missions.")
+        if mission_id in self._threads and self._threads[mission_id].is_alive():
+            raise MissionError("This mission is already running.")
+        thread = threading.Thread(
+            target=self._run_guarded, args=(mission_id, mission["brief"], base_mode, self_edit),
+            name=f"babymind-mission-resume-{mission_id}", daemon=True,
+        )
+        self._threads[mission_id] = thread
+        thread.start()
+        return mission_id
+
     def cancel(self, mission_id: str) -> None:
         self.store.request_cancel(mission_id)
 
@@ -438,7 +458,7 @@ class Orchestrator:
     def _run_graph(self, mission_id: str, brief: str, self_edit: bool = False) -> None:
         """Run the 50 roles as a dependency graph: each phase depends on the
         previous one, roles within a phase run in parallel."""
-        from .taskgraph import Task, TaskGraphRunner
+        from .taskgraph import Task, TaskGraphRunner, TaskGraphStore
 
         started = time.monotonic()
         tasks: list[Task] = []
@@ -456,6 +476,15 @@ class Orchestrator:
             agent = AGENT_BY_ID[task.agent_id]
             with lock:
                 rows = list(self.store.get(mission_id)["runs"])
+            # A process may stop after the encrypted mission record is written
+            # but before the graph checkpoint is replaced. Reuse that durable
+            # contribution instead of invoking the model and inserting a
+            # duplicate role run on recovery.
+            existing = next((row for row in rows
+                             if row["agent_id"] == task.agent_id
+                             and row["status"] == "contributed"), None)
+            if existing is not None:
+                return existing.get("output") or ""
             recorded = [
                 AgentRun(row["agent_id"], row["agent_name"], row["phase"], row["status"],
                          output=row.get("output") or "", error=row.get("error") or "")
@@ -467,8 +496,13 @@ class Orchestrator:
                 self.on_update(mission_id, run)
             return run.output or run.error or ""
 
+        graph_store = TaskGraphStore(self.store.home)
         runner = TaskGraphRunner(worker, max_workers=4)
-        result = runner.run(tasks, should_cancel=lambda: self.store.is_cancelled(mission_id))
+        result = runner.run(
+            tasks, graph_id=mission_id,
+            should_cancel=lambda: self.store.is_cancelled(mission_id),
+            store=graph_store, resume=True,
+        )
         if self.store.is_cancelled(mission_id) or result["cancelled"]:
             status = "cancelled"
         elif result["failed"] == 0 and result["skipped"] == 0:
