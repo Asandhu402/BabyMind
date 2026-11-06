@@ -197,8 +197,9 @@ def main() -> None:
             from .autonomy import AutonomyController
             if not 0 <= args.interval <= 3600:
                 raise SystemExit("Interval must be between 0 and 3600 seconds.")
+            coordinator = BabyMindCoordinator()
             report = AutonomyController(core).run(
-                BabyMindCoordinator().provider,
+                coordinator.model_router,
                 cycles=args.cycles, interval=args.interval, agent_id=args.agent,
             )
             print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -206,8 +207,9 @@ def main() -> None:
                 raise SystemExit(1)
         elif args.cognitive_action == "goal":
             from .autonomy import AutonomyController
+            coordinator = BabyMindCoordinator()
             report = AutonomyController(core).execute_goal(
-                BabyMindCoordinator().provider, args.goal_id,
+                coordinator.model_router, args.goal_id,
                 max_steps=args.max_steps, agent_id=args.agent,
             )
             print(json.dumps(report, indent=2, ensure_ascii=False))
@@ -216,7 +218,7 @@ def main() -> None:
         else:
             if args.cognitive_action == "run" and not 0 <= args.interval <= 3600:
                 raise SystemExit("Interval must be between 0 and 3600 seconds.")
-            provider = BabyMindCoordinator().provider
+            provider = BabyMindCoordinator().model_router
             count = 1 if args.cognitive_action == "cycle" else args.cycles
             for index in range(count):
                 try:
