@@ -179,13 +179,16 @@ python_ready() {
 python_libdir() { "$1" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")' 2>/dev/null; }
 
 # Highest minor first: anything already installed is preferred over downloads.
+# SYSTEM_PYTHON_DIR is where distributions install their interpreters; override it
+# (BABYMIND_BOOTSTRAP_SYSTEM_PYTHON_DIR) only for unusual prefixes or tests.
+SYSTEM_PYTHON_DIR=${BABYMIND_BOOTSTRAP_SYSTEM_PYTHON_DIR:-/usr/bin}
 scan_python() {
   local candidate
   for candidate in \
-      "$(command -v python3.15 2>/dev/null || true)" /usr/bin/python3.15 \
-      "$(command -v python3.14 2>/dev/null || true)" /usr/bin/python3.14 \
-      "$(command -v python3.13 2>/dev/null || true)" /usr/bin/python3.13 \
-      "$(command -v python3 2>/dev/null || true)" /usr/bin/python3; do
+      "$(command -v python3.15 2>/dev/null || true)" "$SYSTEM_PYTHON_DIR/python3.15" \
+      "$(command -v python3.14 2>/dev/null || true)" "$SYSTEM_PYTHON_DIR/python3.14" \
+      "$(command -v python3.13 2>/dev/null || true)" "$SYSTEM_PYTHON_DIR/python3.13" \
+      "$(command -v python3 2>/dev/null || true)" "$SYSTEM_PYTHON_DIR/python3"; do
     [[ -n $candidate && -x $candidate ]] || continue
     if python_ready "$candidate"; then
       printf '%s\n' "$candidate"

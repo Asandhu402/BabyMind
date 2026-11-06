@@ -246,7 +246,10 @@ exec '{sys.executable}' "$@"
                    + bootstrap + "\nBABYMIND_BOOTSTRAP\n")
         app_log = self.root / 'app.log'
         env = {**self.env, 'BABYMIND_BOOTSTRAP_SOURCE': str(self.source),
-               'APP_LOG': str(app_log), 'PATH': f"{self.bin}:{self.env['PATH']}"}
+               'APP_LOG': str(app_log),
+               # Only the fixture's interpreter exists: the host's must not leak in.
+               'BABYMIND_BOOTSTRAP_SYSTEM_PYTHON_DIR': str(self.root / 'no-system-python'),
+               'PATH': f"{self.bin}:{self.env['PATH']}"}
         result = subprocess.run(['bash', '-c', command], env=env, text=True,
                                 capture_output=True, timeout=180)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

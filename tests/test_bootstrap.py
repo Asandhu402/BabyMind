@@ -54,6 +54,10 @@ class BootstrapFixture(unittest.TestCase):
         self.log = self.root / "commands.log"
         self.tmpdir = self.root / "tmp"
         self.tmpdir.mkdir()
+        # Interpreter discovery must not depend on what the test host has in
+        # /usr/bin, so the fixture points it at an empty directory.
+        self.system_python_dir = self.root / "system-python"
+        self.system_python_dir.mkdir()
         self._stub("sudo", '#!/bin/bash\necho "sudo $*" >> "$FAKE_LOG"\nexec "$@"\n')
         self._stub("apt-cache", "#!/bin/sh\nexit 1\n")
         self._stub("apt-get", '#!/bin/bash\necho "apt-get $*" >> "$FAKE_LOG"\nexit 0\n')
@@ -72,6 +76,7 @@ class BootstrapFixture(unittest.TestCase):
             "BABYMIND_BOOTSTRAP_SOURCE": str(self.source),
             "BABYMIND_GITHUB_REPO": "Asandhu402/BabyMind",
             "BABYMIND_GITHUB_REF": "main",
+            "BABYMIND_BOOTSTRAP_SYSTEM_PYTHON_DIR": str(self.system_python_dir),
         }
         self.env = {**os.environ, **env}
         for name in ("BABYMIND_BOOTSTRAP_PYTHON", "BABYMIND_BOOTSTRAP_PM",
@@ -200,6 +205,15 @@ exit 0
         self.assertIn("Would try the distribution's Python 3.15 packages", result.stdout)
         self.assertIn("would build CPython", result.stdout)
         self.assertIn("from source into", result.stdout)
+
+    def test_finds_a_distribution_interpreter_installed_in_the_system_directory(self):
+        system_python = self._python_stub("python3.14-system", "3.14.4")
+        (self.system_python_dir / "python3.14").symlink_to(system_python)
+        for stub in ("python3", "python3.13", "python3.15"):
+            (self.bin / stub).unlink(missing_ok=True)
+        result = self.run_bootstrap("--prepare-only")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(str(self.system_python_dir / "python3.14"), result.stdout)
 
     def test_uses_an_explicitly_requested_interpreter(self):
         chosen = self._python_stub("python3.14-custom", "3.14.0")
