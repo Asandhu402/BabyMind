@@ -23,6 +23,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from . import __version__
+from . import interaction_log
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
 from .development_review import DevelopmentReviews, ReviewProcessLock
@@ -272,7 +274,23 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"[BabyMind] {self.address_string()} - {fmt % args}")
 
+    def log_interaction(self, status: int, payload: object) -> None:
+        path = (self.path or "").split("?", 1)[0]
+        if not path.startswith("/api/") or path.startswith("/api/diagnostics/"):
+            return
+        error = payload.get("error") if isinstance(payload, dict) else None
+        started = getattr(self, "_request_started", None)
+        duration = (time.monotonic() - started) * 1000 if started is not None else None
+        try:
+            interaction_log.record(
+                DATA_HOME, kind="api", method=getattr(self, "command", "?"), path=path,
+                status=status, duration_ms=duration, error=error,
+            )
+        except OSError:
+            pass  # Diagnostics must never break the request path.
+
     def send_json(self, payload: object, status: int = 200) -> None:
+        self.log_interaction(status, payload)
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -349,6 +367,7 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def do_GET(self) -> None:
+        self._request_started = time.monotonic()
         path = urlparse(self.path).path
         if not self.validate_host():
             return
@@ -371,6 +390,19 @@ class Handler(BaseHTTPRequestHandler):
                 "model_engine": "llama.cpp",
                 "model_available": model_ready, "model_name": model_name,
                 "privacy": "Local server; conversation data stays on this device."
+            })
+        elif path == "/api/diagnostics/interactions":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(int(query.get("limit", ["100"])[0]), 500))
+            except (TypeError, ValueError):
+                limit = 100
+            entries = interaction_log.recent(DATA_HOME, limit)
+            self.send_json({"interactions": entries, "count": len(entries), "generated_at": now()})
+        elif path == "/api/diagnostics/report":
+            self.send_json({
+                "report": interaction_log.export_report(DATA_HOME, version=__version__),
+                "generated_at": now(),
             })
         elif path == "/api/development-reviews":
             self.send_json(development_reviews().list())
@@ -511,6 +543,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(content)
 
     def do_POST(self) -> None:
+        self._request_started = time.monotonic()
         path = urlparse(self.path).path
         if not self.validate_host():
             return
@@ -520,7 +553,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self.read_json()
-            if path == "/api/development-reviews":
+            if path == "/api/diagnostics/client-error":
+                interaction_log.record(
+                    DATA_HOME, kind="client_error", method="CLIENT",
+                    path=str(payload.get("url") or "client"), status=0, ok=False,
+                    error=str(payload.get("message") or "Unknown client error"),
+                    detail=str(payload.get("stack") or "") or None,
+                )
+                self.send_json({"recorded": True}, 201)
+            elif path == "/api/development-reviews":
                 review_id = start_development_review(payload.get("task"), payload.get("context", ""))
                 self.send_json({"id": review_id}, 202)
             elif path.startswith("/api/development-reviews/") and path.endswith("/cancel"):
@@ -1197,6 +1238,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": f"BabyMind could not complete the request: {error}"}, 500)
 
     def do_DELETE(self) -> None:
+        self._request_started = time.monotonic()
         path = urlparse(self.path).path
         if not self.validate_host():
             return
@@ -1218,6 +1260,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 deleted = cursor.rowcount
             self.send_json({"deleted": deleted})
+        elif path == "/api/diagnostics/interactions":
+            self.send_json({"deleted": interaction_log.clear(DATA_HOME)})
         else:
             self.send_json({"error": "Not found"}, 404)
 
