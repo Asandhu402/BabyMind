@@ -146,3 +146,11 @@ files are often excerpts only. The instruction not to replace an incompletely
 shown file is not enforced by the edit engine, and test success cannot establish
 that a patch is correct. Filename exclusions are not a guarantee against secrets
 embedded in source; selected content is sent to the configured provider.
+
+The opt-in `babymind develop` loop can search, read windows, and submit
+hash-checked search/replace edits only in BabyMind's own configured development
+checkout. It is not a general project workspace or a shell-equipped OpenHands or
+Aider replacement. Verification uses the same baseline/rollback and sandbox
+limitations described above, including potentially pre-existing failures; an
+applied result does not prove the task was fulfilled. Its filesystem checks are
+not race-resistant and the model sees selected source and failure output.

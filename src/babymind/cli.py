@@ -23,6 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
     mission_parser.add_argument("--max-seconds", type=int, default=900,
                                help="Time budget for the whole mission (default 900)")
 
+    develop_parser = subparsers.add_parser("develop", help="Inspect and verify changes to BabyMind's configured source checkout")
+    develop_parser.add_argument("task", help="Description of the source change")
+    develop_parser.add_argument("--attempts", type=int, default=2, choices=range(1, 4),
+                                help="Maximum patch attempts (default 2)")
+
     github_parser = subparsers.add_parser("github", help="Search public GitHub repositories")
     github_parser.add_argument("query", help="Search text")
     github_parser.add_argument("--limit", type=int, default=5)
@@ -94,6 +99,16 @@ def main() -> None:
         for run in mission["runs"]:
             print(f"[{run['status']:11}] {run['agent_id']} {run['agent_name']:38} {run['phase']}")
         print(f"\n{mission['summary']}")
+    elif args.command == "develop":
+        import json
+        from .coding_engine import develop
+        try:
+            result = develop(BabyMindCoordinator().provider, args.task, attempts=args.attempts)
+        except (ValueError, RuntimeError) as error:
+            raise SystemExit(str(error)) from error
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if result["status"] != "applied":
+            raise SystemExit(1)
     elif args.command == "github":
         from .research import github_search
         for item in github_search(args.query, limit=args.limit):
