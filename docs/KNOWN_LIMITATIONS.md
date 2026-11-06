@@ -38,7 +38,13 @@ missing, not what is planned.
 - **Nested sandboxes are detected but still single-layer.** Running BabyMind
   inside a container/VM is reported by `sandbox.status()` and
   `/api/broker/status` (`nested_sandbox_detected`), but user namespaces inside
-  a user namespace add no second layer of isolation.
+  a user namespace add no second layer of isolation. Because of that, a handful
+  of tests that need their own OS sandbox (generated-app execution and the app
+  verifier) cannot run while the project's suite is itself executing inside
+  BabyMind's sandbox. The packaged staging check therefore reports them as
+  pre-existing problems - the same tolerance `apply_edits` applies - and only
+  refuses a staged edit that regresses the suite, runs nothing, or is not
+  sandboxed. Those tests still run normally in a source checkout and in CI.
 - **Limits are rlimits, not cgroups.** CPU time, file size, open files, process
   count, and address space/heap (RLIMIT_AS + RLIMIT_DATA, 2 GiB by default,
   `BABYMIND_SANDBOX_MEM_BYTES`) are capped, and refused limits are reported as

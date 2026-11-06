@@ -3,6 +3,10 @@
 
 This creates a staging workspace for source edits. It does not rebuild or
 activate the running PyInstaller executable.
+
+The seed is a complete source copy: the packaged self-development check runs the
+project's own test suite against it, so every top-level file the suite reads
+(installer scripts, LICENSE/NOTICE, SECURITY.md, .gitmodules) has to be there.
 """
 from __future__ import annotations
 
@@ -13,6 +17,30 @@ import subprocess
 import sys
 import sysconfig
 from pathlib import Path
+
+SEED_DIRECTORIES = ("src", "tests", "scripts", "docs", "quality", ".github")
+SECRET_FILENAMES = {".env"}
+# Build products that may sit next to the checkout when this script runs.
+GENERATED_SUFFIXES = (".spec",)
+
+
+def seed_root_files(repo: Path) -> list[Path]:
+    """Return the repository's top-level files to copy into the source seed.
+
+    Every regular file at the repository root is copied so the seeded copy can
+    run the project's own suite; only local secrets are skipped. Directories,
+    symlinks and generated data are handled by the caller.
+    """
+    files: list[Path] = []
+    for path in sorted(repo.iterdir()):
+        if path.is_symlink() or not path.is_file():
+            continue
+        if path.name in SECRET_FILENAMES or path.name.startswith(".env."):
+            continue
+        if path.name.endswith(GENERATED_SUFFIXES):
+            continue
+        files.append(path)
+    return files
 
 
 def build(repo: Path, package: Path) -> None:
@@ -55,15 +83,13 @@ def build(repo: Path, package: Path) -> None:
             shutil.copytree(metadata, site / metadata.name)
     shutil.copy2(Path(_cffi_backend.__file__).resolve(), site / Path(_cffi_backend.__file__).name)
     seed.mkdir()
-    for name in ("src", "tests", "scripts", "docs", "quality", ".github"):
+    for name in SEED_DIRECTORIES:
         source = repo / name
         if source.is_dir() and not source.is_symlink():
             shutil.copytree(source, seed / name, symlinks=True,
                             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    for name in ("pyproject.toml", "README.md", "build-linux.sh", "install-linux.sh", "run_desktop.py", ".gitmodules"):
-        source = repo / name
-        if source.is_file() and not source.is_symlink():
-            shutil.copy2(source, seed / name)
+    for source in seed_root_files(repo):
+        shutil.copy2(source, seed / source.name)
     license_dir = package / "licenses"
     license_dir.mkdir(exist_ok=True)
     for candidate in (Path(f"/usr/share/doc/python{sys.version_info.major}.{sys.version_info.minor}/copyright"),

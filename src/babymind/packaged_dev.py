@@ -61,6 +61,37 @@ def _seed_fingerprint(seed: Path) -> str:
     return digest.hexdigest()
 
 
+def staging_problems(result: dict) -> list[str]:
+    """Reasons a staged self-edit result is not acceptable evidence.
+
+    The suite must have run sandboxed against a staged copy and must not have
+    regressed. It is deliberately not required to be pristine: the suite runs
+    *inside* BabyMind's sandbox, where tests that need a nested OS sandbox
+    cannot run. `apply_edits` tolerates such pre-existing problems, and so does
+    this check, as long as they did not increase.
+    """
+    summary = (result.get("tests") or {}).get("summary") or {}
+    baseline = result.get("baseline") or {}
+    problems: list[str] = []
+    if result.get("status") != "applied":
+        problems.append(f"status={result.get('status')!r} ({result.get('reason') or 'no reason given'})")
+    if not result.get("sandboxed"):
+        problems.append("the verification suite was not sandboxed")
+    if result.get("source_scope") != "staged-copy":
+        problems.append(f"source_scope={result.get('source_scope')!r}")
+    if summary.get("ran", 0) <= summary.get("skipped", 0):
+        problems.append(
+            "the project's own suite ran no tests "
+            f"(ran={summary.get('ran', 0)}, skipped={summary.get('skipped', 0)})"
+        )
+    if summary.get("problems", 0) > baseline.get("problems", 0):
+        problems.append(
+            f"the project's own suite regressed ({summary.get('problems', 0)} problems "
+            f"over a baseline of {baseline.get('problems', 0)})"
+        )
+    return problems
+
+
 def verify_packaged_staging() -> None:
     """Exercise a staged edit with the bundled helper, without a model or GUI."""
     import tempfile
@@ -89,10 +120,21 @@ def verify_packaged_staging() -> None:
             content = original + "\ndef _packaged_test_value():\n    return 42\n"
             result = selfdev.apply_edits([{"path": "src/babymind/__init__.py", "content": content}],
                                          reason="disposable packaged staging check")
-            if (result.get("status") != "applied" or not result.get("sandboxed")
-                    or result.get("source_scope") != "staged-copy"
-                    or not (result.get("tests") or {}).get("summary", {}).get("passed")):
-                raise PackagedDevelopmentError(f"Staged self-edit did not pass: {result.get('status')} {result.get('reason', '')}")
+            problems = staging_problems(result)
+            if problems:
+                raise PackagedDevelopmentError("Staged self-edit did not pass: " + "; ".join(problems))
+            summary = (result.get("tests") or {}).get("summary") or {}
+            tolerated = summary.get("problems", 0)
+            if tolerated:
+                message = (
+                    f"NOTE packaged source staging tolerated {tolerated} pre-existing test problem(s) "
+                    f"out of {summary.get('ran', 0)} tests (nested OS sandbox unavailable inside the "
+                    "verification sandbox)."
+                )
+                print(message)
+                if os.environ.get("GITHUB_ACTIONS") == "true":
+                    safe = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                    print(f"::warning title=Packaged staging tolerated pre-existing problems::{safe}")
             from . import broker
             check = broker.execute(
                 [runner.venv_python(), "-c", "from babymind import _packaged_test_value; assert _packaged_test_value() == 42"],
