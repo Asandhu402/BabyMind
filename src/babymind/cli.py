@@ -27,6 +27,10 @@ def build_parser() -> argparse.ArgumentParser:
     autonomy_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 26), help="Number of cycles (1-25)")
     autonomy_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
     autonomy_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
+    goal_parser = cognitive_actions.add_parser("goal", help="Execute one existing goal in bounded verified steps")
+    goal_parser.add_argument("goal_id", help="ID of an active local goal")
+    goal_parser.add_argument("--max-steps", type=int, default=5, choices=range(1, 11), help="Maximum steps (1-10)")
+    goal_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each step")
     cycle_parser = cognitive_actions.add_parser("cycle", help="Run one observe-to-learn cognitive cycle")
     cycle_parser.add_argument("--agent", default="BM-02", help="Existing role ID to run this cycle through")
     autonomous_parser = cognitive_actions.add_parser("run", help="Run a bounded number of autonomous cognitive cycles")
@@ -183,6 +187,15 @@ def main() -> None:
             )
             print(json.dumps(report, indent=2, ensure_ascii=False))
             if report["status"] != "completed" or report["verified_cycles"] != report["completed_cycles"]:
+                raise SystemExit(1)
+        elif args.cognitive_action == "goal":
+            from .autonomy import AutonomyController
+            report = AutonomyController(core).execute_goal(
+                BabyMindCoordinator().provider, args.goal_id,
+                max_steps=args.max_steps, agent_id=args.agent,
+            )
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["status"] != "completed":
                 raise SystemExit(1)
         else:
             if args.cognitive_action == "run" and not 0 <= args.interval <= 3600:
