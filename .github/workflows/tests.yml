@@ -25,12 +25,17 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || (!inputs.real_model_test && !inputs.chat_test_only && !inputs.diagnose_source_only)
     strategy:
       fail-fast: false
+      # Build on Ubuntu 24.04 so the portable artifact needs glibc 2.39 (Ubuntu
+      # 24.04+), while exercising every supported interpreter: 3.13 is the
+      # supported floor and 3.15 is the current stable release.
       matrix:
         include:
-          - ubuntu: '22.04'
-            python: '3.11'
           - ubuntu: '24.04'
-            python: '3.12'
+            python: '3.13'
+          - ubuntu: '24.04'
+            python: '3.14'
+          - ubuntu: '24.04'
+            python: '3.15'
     runs-on: ubuntu-${{ matrix.ubuntu }}
     timeout-minutes: 45
     steps:
@@ -38,6 +43,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - name: Allow unprivileged user namespaces for the sandbox backend
+        # Ubuntu 24.04+ restricts unprivileged user namespaces with AppArmor, so
+        # babymind.sandbox would report no backend and the suite would fail.
+        run: |
+          if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
       - name: Install Linux desktop test libraries
         run: |
           sudo apt-get update
@@ -110,15 +122,46 @@ jobs:
           path: dist/BabyMind-Linux-x86_64.tar.gz
           if-no-files-found: error
           retention-days: 14
+  source-latest:
+    # Cheap source-only check on the newest Ubuntu LTS (glibc 2.42), so the
+    # portable build is not the only data point for Python 3.15.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.15'
+      - name: Allow unprivileged user namespaces for the sandbox backend
+        # Ubuntu 24.04+ restricts unprivileged user namespaces with AppArmor, so
+        # babymind.sandbox would report no backend and the suite would fail.
+        run: |
+          if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Install Python dependencies
+        run: python -m pip install -e .
+      - name: Test source
+        run: |
+          python -m compileall -q src tests
+          python -m unittest discover -s tests -q
+          for file in src/babymind/web/*.js; do node --check "$file"; done
   diagnose-source:
     if: github.event_name == 'workflow_dispatch' && inputs.diagnose_source_only
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.15'
+      - name: Allow unprivileged user namespaces for the sandbox backend
+        # Ubuntu 24.04+ restricts unprivileged user namespaces with AppArmor, so
+        # babymind.sandbox would report no backend and the suite would fail.
+        run: |
+          if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
       - name: Install Linux desktop test libraries
         run: |
           sudo apt-get update
@@ -140,7 +183,8 @@ jobs:
     # Manual and opt-in: this downloads ~2.71 GB and builds the installer on
     # an ephemeral Ubuntu VM. Xvfb is not a full Ubuntu Desktop session.
     if: github.event_name == 'workflow_dispatch' && (inputs.real_model_test || inputs.chat_test_only)
-    runs-on: ubuntu-22.04
+    # The installer requires Python 3.13+, which Ubuntu 26.04 provides (3.14).
+    runs-on: ubuntu-26.04
     timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4

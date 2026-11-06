@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from urllib.request import urlopen
 
+from . import MINIMUM_PYTHON
 from .agents import AGENTS, validate_registry
 
 
@@ -43,8 +44,9 @@ def run_diagnostics(
 
     add(
         "Python",
-        "PASS" if sys.version_info >= (3, 10) else "FAIL",
-        f"{platform.python_version()} (BabyMind requires Python 3.10+)",
+        "PASS" if sys.version_info >= MINIMUM_PYTHON else "FAIL",
+        f"{platform.python_version()} (BabyMind requires Python "
+        f"{MINIMUM_PYTHON[0]}.{MINIMUM_PYTHON[1]}+)",
     )
     try:
         validate_registry(AGENTS)

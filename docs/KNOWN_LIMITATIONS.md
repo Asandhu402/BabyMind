@@ -5,7 +5,7 @@ missing, not what is planned.
 
 ## Platform and packaging
 
-- The supported portable target is Linux x86-64 with glibc 2.35+ and a graphical desktop. A hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response; a clean Ubuntu Desktop session and broader capabilities remain unverified.
+- The supported portable target is Linux x86-64 with glibc 2.39+ (Ubuntu 24.04+), Python 3.13+ for source builds, and a graphical desktop. A hosted Ubuntu 22.04 VM with Xvfb passed the installer, real model download and one GUI chat response while BabyMind still supported Python 3.10/3.11; that combination is no longer supported. A clean Ubuntu Desktop session and broader capabilities remain unverified.
 - There is no auto-updater, code signing, or self-repair supervisor.
 - Linux x86-64 is the sole supported desktop target.
 - The portable executable is not itself a Python interpreter. A bundled Python helper supports sandboxed staged-source tests; generated Python app execution is still unavailable.
@@ -23,6 +23,14 @@ missing, not what is planned.
   unavailable. In source mode, `auto` now **fails closed** (treated as
   `require`) unless `BABYMIND_ALLOW_UNSANDBOXED_AUTO=true` is set explicitly;
   never set that for untrusted code.
+- **Ubuntu 24.04 and newer restrict unprivileged user namespaces** through
+  AppArmor (`kernel.apparmor_restrict_unprivileged_userns=1`). On such hosts
+  `sandbox.backend()` reports `none` and every sandboxed path - packaged
+  self-edits, generated apps and the sandboxed test suite - fails closed.
+  BabyMind does not change kernel settings for you; CI re-enables them with
+  `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` on a
+  disposable runner, and a desktop user who wants those features must decide
+  that for their own machine.
 - Memory is capped by RLIMIT_AS/RLIMIT_DATA (virtual address space/heap) and,
   when cgroup v2 delegation is available, an additional best-effort
   `memory.max` cgroup cap (reported as `CGROUP_MEM_SET`/`CGROUP_MEM_UNAVAILABLE`
@@ -30,7 +38,13 @@ missing, not what is planned.
 - **Nested sandboxes are detected but still single-layer.** Running BabyMind
   inside a container/VM is reported by `sandbox.status()` and
   `/api/broker/status` (`nested_sandbox_detected`), but user namespaces inside
-  a user namespace add no second layer of isolation.
+  a user namespace add no second layer of isolation. Because of that, a handful
+  of tests that need their own OS sandbox (generated-app execution and the app
+  verifier) cannot run while the project's suite is itself executing inside
+  BabyMind's sandbox. The packaged staging check therefore reports them as
+  pre-existing problems - the same tolerance `apply_edits` applies - and only
+  refuses a staged edit that regresses the suite, runs nothing, or is not
+  sandboxed. Those tests still run normally in a source checkout and in CI.
 - **Limits are rlimits, not cgroups.** CPU time, file size, open files, process
   count, and address space/heap (RLIMIT_AS + RLIMIT_DATA, 2 GiB by default,
   `BABYMIND_SANDBOX_MEM_BYTES`) are capped, and refused limits are reported as

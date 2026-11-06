@@ -10,9 +10,18 @@ BabyMind is a local-first AI workspace for **Linux x86-64** with a desktop
 window and a bundled CPU llama.cpp runtime. Its 50 specialist roles are prompts
 over one model, not independent people or independently trained agents.
 
+## Python support
+
+BabyMind requires **Python 3.13 or newer** and is tested on 3.13, 3.14 and 3.15
+(the current stable release). Python 3.10 reached end of life on 2026-10-01, so
+it is no longer supported. Ubuntu 26.04 ships Python 3.14; Ubuntu 24.04 ships
+3.12, so its users install `python3.13` first. See
+[Python support](docs/PYTHON_SUPPORT.md) for the upgrade policy and the pinned
+dependency set.
+
 ## Install on Ubuntu with one command
 
-On Ubuntu 22.04 or newer, x86-64, open a terminal as your normal user and run:
+On Ubuntu 24.04 or newer, x86-64, open a terminal as your normal user and run:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git ca-certificates && bash -c 'set -e; d=$(mktemp -d); trap "rm -rf -- \"$d\"" EXIT; git clone --depth 1 https://github.com/Asandhu402/BabyMind.git "$d/repo"; bash "$d/repo/install-linux.sh"'
@@ -29,9 +38,10 @@ It may prompt for your sudo password. Open **BabyMind** from Applications when
 finished, or run `~/.local/bin/babymind`.
 
 The installer and one real-model chat response passed on a hosted Ubuntu 22.04
-VM with an Xvfb virtual display. Separate CI builds and fixture tests passed on
-Ubuntu 22.04 and 24.04; the synthetic model used there does not measure the
-pinned model's quality. A clean Ubuntu Desktop session and broader model
+VM with an Xvfb virtual display, before the Python 3.13 baseline. CI now builds
+and tests on Ubuntu 24.04 with Python 3.13, 3.14 and 3.15, and source-tests on
+Ubuntu 26.04 with Python 3.15; the synthetic model used there does not measure
+the pinned model's quality. A clean Ubuntu Desktop session and broader model
 capabilities remain unverified; see [verification](docs/LINUX_VERIFICATION.md).
 
 ## Install and run with one command
@@ -51,8 +61,9 @@ internet, disk space, graphical desktop).
 
 ## Portable desktop
 
-The target is a graphical Linux desktop with glibc 2.35 or newer (for example
-Ubuntu 22.04+) and standard Qt WebEngine system libraries. Extract the complete
+The target is a graphical Linux desktop with glibc 2.39 or newer (Ubuntu 24.04+,
+because Qt 6.12 requires glibc 2.34 or newer and the release is built on 24.04)
+and standard Qt WebEngine system libraries. Extract the complete
 Linux portable archive and run `./BabyMind` (or open the executable in your file
 manager). On first launch BabyMind asks to download a roughly 2.71 GB model,
 verifies its SHA-256, and saves it under `~/.babymind/models`. The download

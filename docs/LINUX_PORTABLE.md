@@ -1,11 +1,11 @@
 # BabyMind Linux portable desktop
 
-The supported desktop target is 64-bit x86 Linux with glibc 2.35 or newer (for
-example Ubuntu 22.04 or later), a graphical X11/Wayland desktop, and standard
+The supported desktop target is 64-bit x86 Linux with glibc 2.39 or newer (for
+example Ubuntu 24.04 or later), a graphical X11/Wayland desktop, and standard
 Qt WebEngine system libraries (NSS, XCB, xkbcommon, OpenGL/Mesa, ALSA). This is
 not an AppImage and is not guaranteed to run on every Linux distribution.
 
-For Ubuntu 22.04+ x86-64, the repository includes `install-linux.sh`; the
+For Ubuntu 24.04+ x86-64, the repository includes `install-linux.sh`; the
 single-command bootstrap is in the main README. The installer uses sudo for
 system packages, builds in a temporary per-user cache, downloads and verifies
 the pinned model, and creates a per-user application-menu entry. Reinstalling
@@ -24,12 +24,12 @@ the download. Model loading can take several minutes and needs substantial RAM;
 CPU inference can be slow. Your data and model are stored in `~/.babymind`, not
 in the application folder. Deleting the application does not delete your data.
 
-To build from source, install Python 3.10+, venv/pip, a C++ compiler, CMake,
-curl and tar, then run `./build-linux.sh`. The build downloads Python packages
+To build from source, install Python 3.13+ (tested on 3.13, 3.14 and 3.15),
+venv/pip, a C++ compiler, CMake, curl and tar, then run `./build-linux.sh`. The build downloads Python packages
 and checksum-verifies the pinned llama.cpp source. It builds a generic x86-64
-CPU runtime and packages Qt and Python with PyInstaller. Use a glibc 2.35 build
-host for compatibility with Ubuntu 22.04; newer build hosts may produce binaries
-that require newer glibc. The archive and build dependencies are not vendored.
+CPU runtime and packages Qt 6.12 and Python with PyInstaller. Use a glibc 2.39
+build host (Ubuntu 24.04) for compatibility with Ubuntu 24.04; newer build hosts
+may produce binaries that require newer glibc. The archive and build dependencies are not vendored.
 The first model download has not been verified in restricted/offline networks. See docs/LINUX_VERIFICATION.md in the source tree for the actual test status.
 
 The portable build includes a Python helper and bundled source seed. It can stage

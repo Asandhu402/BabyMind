@@ -70,9 +70,13 @@ class InstallerShellTests(unittest.TestCase):
         # Simulate the supported OS without modifying the machine or changing
         # the commands under test.
         release = self.root / "os-release"
-        release.write_text('ID=ubuntu\nVERSION_ID="22.04"\n')
+        release.write_text('ID=ubuntu\nVERSION_ID="26.04"\n')
         script = (repo_script.read_text().replace('/etc/os-release', str(release))
-                  .replace('python=/usr/bin/python3', f'python={self.root}/bin/python3'))
+                  .replace('python=/usr/bin/python3', f'python={self.root}/bin/python3')
+                  # Keep interpreter discovery hermetic: the test must not pick up
+                  # a newer Python installed on the machine running the tests.
+                  .replace('for candidate in /usr/bin/python3.15 /usr/bin/python3.14 /usr/bin/python3.13 /usr/bin/python3; do',
+                           'for candidate in /nonexistent/python3.15 /nonexistent/python3.14 /nonexistent/python3.13; do'))
         self.script = self.source / "install-linux.sh"
         self.script.write_text(script)
         self.script.chmod(0o755)
@@ -92,6 +96,10 @@ chmod +x dist/BabyMind/BabyMind dist/BabyMind/llama.cpp/llama-server
         self._stub('sudo', '#!/bin/sh\necho "$*" >> "$FAKE_LOG"\nexit 0\n')
         self._stub('apt-cache', '#!/bin/sh\nexit 1\n')
         self._stub('python3', f'''#!/bin/bash
+if [[ ${{1:-}} == -c && ${{2:-}} == *version_info* ]]; then
+  [[ ${{OLD_PYTHON:-0}} != 1 ]] || exit 1
+  exit 0
+fi
 if [[ ${{1:-}} == -m && ${{2:-}} == babymind.install_model ]]; then
   echo "model" >> "$FAKE_LOG"
   [[ ${{FAIL_MODEL:-0}} != 1 ]] || exit 1
@@ -171,6 +179,14 @@ exec '{sys.executable}' "$@"
     def test_failed_model_does_not_publish_or_build(self):
         result = self.run_installer(FAIL_MODEL='1')
         self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.home / '.local/share/babymind/current').exists())
+
+    def test_python_older_than_3_13_is_rejected_before_model_or_build(self):
+        result = self.run_installer(OLD_PYTHON='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Python 3.13 or newer', result.stderr)
+        log = self.log.read_text() if self.log.exists() else ''
+        self.assertNotIn('model', log)
         self.assertFalse((self.home / '.local/share/babymind/current').exists())
 
     def test_existing_unmanaged_install_root_is_untouched(self):
