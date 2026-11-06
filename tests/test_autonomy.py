@@ -70,6 +70,29 @@ class AutonomyTests(unittest.TestCase):
         self.assertEqual(len(self.core.active_goals()), 2)
         self.assertIn("No arbitrary shell", report["autonomy_boundary"])
 
+    def test_goal_execution_uses_bounded_verified_steps(self):
+        _outcome, verified = self.core._apply_action({
+            "type": "create_goal", "title": "Finish probe", "description": "Complete this test goal."
+        })
+        self.assertTrue(verified)
+        goal_id = self.core.active_goals()[0]["id"]
+
+        class CompletingProvider:
+            def complete(self, system_prompt, user_prompt):
+                if "post-action reflection stage" in system_prompt:
+                    return json.dumps({"reflection": "Goal completion was verified.", "learning": "Verify goal state.", "confidence": 1.0})
+                return json.dumps({
+                    "understanding": "The requested goal is complete.",
+                    "plan": "Mark the target goal complete.",
+                    "action": {"type": "complete_goal", "goal_id": goal_id},
+                    "expected": "The target goal should no longer be active.",
+                })
+
+        report = self.controller.execute_goal(CompletingProvider(), goal_id, max_steps=2)
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(report["steps_completed"], 1)
+        self.assertFalse(any(goal["id"] == goal_id for goal in self.core.active_goals()))
+
     def test_cycle_and_interval_limits_are_enforced(self):
         with self.assertRaises(ValueError):
             self.controller.run(ScriptedProvider(), cycles=26)
