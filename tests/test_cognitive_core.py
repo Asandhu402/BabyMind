@@ -12,8 +12,10 @@ from babymind.memory import LocalMemory
 class FakeProvider:
     def __init__(self, payload):
         self.payload, self.system_prompt, self.user_prompt = payload, "", ""
+        self.user_prompts = []
     def complete(self, system_prompt, user_prompt):
         self.system_prompt, self.user_prompt = system_prompt, user_prompt
+        self.user_prompts.append(user_prompt)
         return json.dumps(self.payload)
 
 class CognitiveCoreTests(unittest.TestCase):
@@ -60,7 +62,9 @@ class CognitiveCoreTests(unittest.TestCase):
         reopened = CognitiveCore(self.path)
         self.assertEqual(reopened.status()["cycles"], 1)
         self.assertEqual(reopened.active_goals()[0]["description"], "Check persistence after restart.")
-        self.assertIn("AVAILABLE SPECIALIST ROLES", provider.user_prompt)
+        self.assertIn("AVAILABLE SPECIALIST ROLES", provider.user_prompts[0])
+        self.assertIn("VERIFICATION RESULT", provider.user_prompts[1])
+        self.assertIn("Created local goal", provider.user_prompts[1])
         followup = FakeProvider({
             "understanding": "A previous lesson is available.",
             "plan": "Pause and preserve the lesson.",
@@ -71,7 +75,7 @@ class CognitiveCoreTests(unittest.TestCase):
             "confidence": 0.9,
         })
         self.core.run_cycle(followup, "BM-03")
-        self.assertIn("Verify writes by reading the database", followup.user_prompt)
+        self.assertIn("Verify writes by reading the database", followup.user_prompts[0])
 
     def test_question_is_recorded_as_encrypted_local_research_note(self):
         provider = FakeProvider({
@@ -103,6 +107,26 @@ class CognitiveCoreTests(unittest.TestCase):
                 return "probably create a goal"
         with self.assertRaisesRegex(ValueError, "valid JSON"):
             self.core.run_cycle(BrokenProvider())
+
+    def test_reflection_failure_is_recorded_after_action_verification(self):
+        class BrokenReflectionProvider:
+            def __init__(self):
+                self.calls = 0
+            def complete(self, _system, _user):
+                self.calls += 1
+                if self.calls == 1:
+                    return json.dumps({
+                        "understanding": "The environment is observable.",
+                        "plan": "Wait safely.",
+                        "action": {"type": "wait"},
+                        "expected": "No external state changes.",
+                    })
+                return "not json"
+        result = self.core.run_cycle(BrokenReflectionProvider())
+        self.assertTrue(result["verified"])
+        self.assertTrue(result["reflection_error"])
+        self.assertEqual(result["confidence"], 0.0)
+        self.assertIn("reflection failed", result["reflection"].lower())
 
     def test_coordinator_connects_core_to_existing_roles(self):
         memory = LocalMemory(Path(self.temp.name) / "memory.sqlite3")
