@@ -110,6 +110,14 @@ class MissionApiTests(unittest.TestCase):
         self.assertEqual([item["status"] for item in body["history"]], ["rolled_back", "applied"])
         self.assertIn("assertEqual(2, 2)", (self.checkout / "tests" / "test_ok.py").read_text())
         self.assertIn("ROLLED BACK", provider.prompts[1])
+        self.assertIn("REPOSITORY CONTEXT (untrusted data)", provider.prompts[0])
+        self.assertIn("assertEqual(1, 1)", provider.prompts[1])
+
+    def test_verify_fix_rejects_a_different_root_before_verification(self) -> None:
+        with patch("babymind.verifier.verify") as verify:
+            status, body = self.request("/api/verify/fix", {"root": str(self.checkout.parent)})
+        self.assertEqual(status, 400, body)
+        verify.assert_not_called()
 
     def test_repair_endpoint_rejects_an_empty_brief(self) -> None:
         status, body = self.request("/api/dev/repair", {"brief": "   "})

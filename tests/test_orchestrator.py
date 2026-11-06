@@ -264,6 +264,8 @@ class SelfEditLoopTests(unittest.TestCase):
         self.assertEqual([item["status"] for item in report["trail"]], ["rolled_back", "applied"])
         self.assertEqual(provider.self_edit_calls, 2)
         self.assertIn("ROLLED BACK", provider.prompts[1])
+        self.assertIn("REPOSITORY CONTEXT (untrusted data)", provider.prompts[0])
+        self.assertIn("assertEqual(1, 1)", provider.prompts[1])
         self.assertIn("assertEqual(2, 2)", (self.root / "tests" / "test_ok.py").read_text())
 
     def test_a_patch_with_raw_newlines_is_repaired_on_the_first_attempt(self) -> None:

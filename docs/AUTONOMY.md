@@ -193,3 +193,31 @@ Run them yourself:
 
 See `docs/TEST_REPORT.md` for the recorded run and `docs/KNOWN_LIMITATIONS.md`
 for what is still missing.
+
+## Source context for self-edit and repair
+
+Mission self-edits, `/api/dev/repair`, and `/api/verify/fix` now select a
+small amount of source context from the configured BabyMind development root
+for each attempt. A deterministic lexical search ranks task and failure terms
+and explicit paths; a retry searches again using the failure output after the
+previous transaction has rolled back. The selection is bounded to 1,200 files,
+400 directories, 3 MiB of source reads, six entries and 6,000 serialized
+characters. Large files may have a short, line-numbered excerpt or only a path;
+`complete: true` means the entire file is present. This is not a whole-repository
+index: lexical matching, scan limits and the model's context window can miss
+important dependencies. No new file or shell tools have been enabled.
+
+Repository text and test output are untrusted data. The model is instructed not
+to replace existing files without their full contents, but this is a prompt,
+not an enforced guarantee: review every diff and maintain independent backups.
+The selection excludes symlinks, hidden and protected directories, and common
+secret filenames, but **is not a secret scanner**; source files can still contain
+credentials. Selected content is sent to the configured model provider. Only
+use a provider you trust with that source. Verification and rollback retain their
+existing limits and do not establish semantic correctness. `/api/verify/fix`
+now refuses a verification root other than the configured development root,
+because repairs always target that root.
+
+The repository-context tests were run on Debian 12 x86-64 with Python 3.11 in
+the development sandbox (outside the supported Python range); Ubuntu 26.10 and
+real-model behavior were not available for this change and remain unverified.
