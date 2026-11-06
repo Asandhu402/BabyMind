@@ -19,6 +19,7 @@ jobs:
       # current stable release. NOTE: GitHub does not yet publish an
       # ubuntu-26.10 hosted runner label; these jobs require a matching
       # self-hosted runner (or a future GitHub label) until one is available.
+      # See docs/UBUNTU_26_10_TESTING.md.
       matrix:
         include:
           - ubuntu: '26.10'

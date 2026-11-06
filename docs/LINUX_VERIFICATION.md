@@ -734,3 +734,6 @@ the LTS runners ubuntu-22.04/24.04/26.04, their arm variants and
 or a future GitHub label before they can run; until then the workflow is
 declared but not executed. Treat 26.10 support as unverified in the same way
 the clean Ubuntu Desktop session remains unverified.
+[Testing on Ubuntu 26.10](UBUNTU_26_10_TESTING.md) documents how to register a
+self-hosted runner with the `ubuntu-26.10` label and the acceptance criteria
+it must satisfy before 26.10 can be called verified.

@@ -52,7 +52,10 @@ explanatory message instead of a confusing dependency error.
 fixture and packaged-app checks on Ubuntu 26.10 for Python 3.13, 3.14 and 3.15,
 and a source-only suite on Ubuntu 26.10 with Python 3.15 (build/test jobs; the
 `bootstrap-plan` job needs a too-old distribution and runs on Ubuntu 24.04,
-which ships Python 3.12).
+which ships Python 3.12). GitHub does not publish a hosted `ubuntu-26.10`
+runner label yet, so the 26.10 jobs require a self-hosted runner; see
+[testing on Ubuntu 26.10](UBUNTU_26_10_TESTING.md) for registration and the
+acceptance criteria.
 `.github/workflows/release.yml` builds release artefacts with Python 3.15 on
 Ubuntu 26.10.
 
