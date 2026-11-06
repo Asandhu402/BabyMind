@@ -320,9 +320,39 @@ class SelfDevTests(unittest.TestCase):
 
     def test_empty_pre_edit_suite_blocks_write(self) -> None:
         (self.root / "tests" / "test_ok.py").write_text("# no tests\n")
-        with self.assertRaisesRegex(selfdev.SelfDevError, "pre-edit test suite"):
+        with self.assertRaisesRegex(selfdev.SelfDevError, "pre-edit test suite") as caught:
             selfdev.apply_edits([{"path": "src/babymind/mod.py", "content": "VALUE = 2\n"}])
+        # The refusal must name its own cause: a hosted run cannot be re-run to
+        # find out which of the three gate conditions fired.
+        message = str(caught.exception)
+        for field in ("ran=", "skipped=", "problems=", "identified=", "timed_out=", "truncated="):
+            self.assertIn(field, message)
         self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+
+    def test_suite_diagnosis_reports_the_counters_the_gate_uses(self) -> None:
+        diagnosis = selfdev._suite_diagnosis({
+            "summary": {"ran": 12, "skipped": 3, "problems": 2},
+            "exit_code": 1,
+            "timed_out": False,
+            "truncated": True,
+            "stderr": "FAIL: one.test\nERROR: two.test\n" + "noise" * 40,
+        })
+        self.assertIn("ran=12", diagnosis)
+        self.assertIn("skipped=3", diagnosis)
+        self.assertIn("problems=2", diagnosis)
+        self.assertIn("identified=2", diagnosis)
+        self.assertIn("exit=1", diagnosis)
+        self.assertIn("timed_out=False", diagnosis)
+        self.assertIn("truncated=True", diagnosis)
+        # 15 + 16 + 200 bytes of stderr; the point is that the real length is
+        # reported, not a recomputed stand-in for it.
+        self.assertIn("output_chars=231", diagnosis)
+
+    def test_suite_diagnosis_survives_a_result_without_counters(self) -> None:
+        diagnosis = selfdev._suite_diagnosis({})
+        self.assertIn("ran=0", diagnosis)
+        self.assertIn("identified=0", diagnosis)
+        self.assertIn("output_chars=0", diagnosis)
 
     def test_preexisting_failure_does_not_block_a_good_change(self) -> None:
         (self.root / "tests" / "test_known_failure.py").write_text(

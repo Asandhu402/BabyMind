@@ -191,6 +191,22 @@ def _test_problem_ids(result: dict) -> set[str]:
     return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", result.get("stderr") or "", re.MULTILINE))
 
 
+def _suite_diagnosis(result: dict) -> str:
+    """One line of evidence explaining why a suite result was rejected.
+
+    "_suite_completed" has three independent reasons to say no, and a hosted run
+    gives no way to re-run the suite and find out which one fired. Report the
+    counters that decide it, so a failure names its own cause.
+    """
+    summary = result.get("summary") or {}
+    return (
+        f"ran={summary.get('ran', 0)} skipped={summary.get('skipped', 0)} "
+        f"problems={summary.get('problems', 0)} identified={len(_test_problem_ids(result))} "
+        f"exit={result.get('exit_code')} timed_out={result.get('timed_out')} "
+        f"truncated={result.get('truncated')} output_chars={len(result.get('stderr') or '')}"
+    )
+
+
 def _suite_completed(result: dict) -> bool:
     """Reject empty, interrupted and unaccounted-for test runs.
 
@@ -561,7 +577,10 @@ def apply_edits(
     if verify:
         before = broker.run_unit_tests(root, timeout=test_timeout, sandbox_mode=sandbox_mode())
         if not _suite_completed(before):
-            raise SelfDevError("The pre-edit test suite did not complete with runnable tests; no edit was applied.")
+            raise SelfDevError(
+                "The pre-edit test suite did not complete with runnable tests; no edit was applied. "
+                f"[{_suite_diagnosis(before)}]"
+            )
         before_summary = before["summary"]
         before_problems = _test_problem_ids(before)
         baseline = _record_baseline(root, before_summary)
@@ -644,7 +663,7 @@ def apply_edits(
             # A pre-existing broken test in this environment must not block every
             # change forever; only a *new* problem counts as a regression.
             if not _suite_completed(tests_result):
-                failure = "test suite did not complete with runnable tests"
+                failure = f"test suite did not complete with runnable tests [{_suite_diagnosis(tests_result)}]"
             elif (summary["ran"] < before_summary["ran"]
                   or summary["ran"] - summary.get("skipped", 0)
                   < before_summary["ran"] - before_summary.get("skipped", 0)):
