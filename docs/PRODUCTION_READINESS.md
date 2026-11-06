@@ -74,10 +74,11 @@ artifact and an owner-approved result.
   writes outside the approved root.
 - Commands run in a separately verified Linux isolation boundary with
   resource limits (CPU/FSIZE/NOFILE/RLIMIT_AS/RLIMIT_DATA/NPROC, with
-  `LIMIT_FAILED` reporting, plus best-effort cgroup v2 `memory.max` when
-  delegated), network policy, process cleanup, and a disposable tmpfs root
-  **[implemented, verified]**. Guaranteed physical-memory cgroup caps and
-  per-kernel escape-probe matrices remain **[partial]**.
+  `LIMIT_FAILED` reporting), network policy, process cleanup, and a disposable
+  tmpfs root **[implemented, verified]**. RLIMIT_AS/RLIMIT_DATA are not a
+  physical-RSS limit; cgroup memory enforcement is not implemented and remains
+  a **release blocker [partial]** until a host-side delegated cgroup controller
+  is created before chroot and verified by an integration test.
 - Self-development edits can be pre-verified in a disposable `git worktree`
   (`BABYMIND_SELF_EDIT_WORKTREE=true`) before the primary checkout is touched
   **[implemented, verified]**; making worktrees the *default* edit path remains
