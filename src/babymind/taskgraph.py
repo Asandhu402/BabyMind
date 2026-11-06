@@ -297,10 +297,13 @@ class TaskGraphStore:
     def load(self, graph_id: str) -> dict | None:
         import json
         path = self._path(graph_id)
-        if not path.is_file():
+        safe = "".join(c for c in graph_id if c.isalnum() or c in {"-", "_"})[:64]
+        legacy_path = self.dir / f"{safe or 'graph'}.json"
+        source = path if path.is_file() else legacy_path
+        if not source.is_file():
             return None
         try:
-            stored = path.read_text(encoding="utf-8")
+            stored = source.read_text(encoding="utf-8")
         except OSError:
             return None
         if stored.startswith("bmenc:v1:"):
@@ -322,6 +325,8 @@ class TaskGraphStore:
                 stream.flush()
                 os.fsync(stream.fileno())
             tmp.replace(path)
+            if source != path:
+                source.unlink(missing_ok=True)
         return record
 
     def completed_results(self, graph_id: str,
