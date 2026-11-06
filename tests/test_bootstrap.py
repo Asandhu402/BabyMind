@@ -134,9 +134,11 @@ class CommandTests(BootstrapFixture):
         section = readme.split("## Install on Linux with one command", 1)[1]
         command = section.split("```bash\n", 1)[1].split("\n```", 1)[0]
         self.assertEqual(command.count("\n"), 0, "the one-command installer must stay a single line")
-        for fragment in ("curl", "wget", "apt-get", "dnf", "pacman", "zypper", "bootstrap-linux.sh"):
+        for fragment in ("curl", "wget", "apt-get", "bootstrap-linux.sh"):
             self.assertIn(fragment, command)
         self.assertNotIn("git clone", command, "the bootstrap downloads its own source")
+        for unsupported in ("dnf", "pacman", "zypper"):
+            self.assertNotIn(unsupported, command)
 
     def test_script_is_executable_and_syntactically_valid(self):
         self.assertTrue(os.access(SCRIPT, os.X_OK))
