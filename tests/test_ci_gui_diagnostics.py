@@ -35,7 +35,7 @@ class GuiDiagnosticTests(unittest.TestCase):
     def test_ci_installs_the_installers_explicit_desktop_libraries(self):
         repo = Path(__file__).resolve().parents[1]
         installer = (repo / "install-linux.sh").read_text()
-        packages = installer.split("sudo apt-get install -y ", 1)[1].split("\n\n", 1)[0]
+        packages = installer.split("apt-get install -y ", 1)[1].split("\n\n", 1)[0]
         expected = set(re.findall(r"\blib[a-z0-9-]+\b", packages))
         self.assertIn("libxcb-shape0", expected)
         workflow = (repo / ".github/workflows/tests.yml").read_text()

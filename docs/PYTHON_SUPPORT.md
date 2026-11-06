@@ -30,12 +30,18 @@ explanatory message instead of a confusing dependency error.
   therefore needs glibc 2.39 or newer (Ubuntu 24.04+). Qt 6.12 itself needs
   glibc 2.34 or newer, so Ubuntu 22.04 users cannot run it even with a newer
   Python.
-* **Ubuntu 24.04:** ships Python 3.12. `install-linux.sh` looks for
-  `/usr/bin/python3.15`, `python3.14`, `python3.13` before falling back to
-  `python3`, and tells you to install `python3.13` (plus its `-venv`/`-dev`
-  packages) when none is new enough.
-* **Ubuntu 26.04 and newer:** ships Python 3.14, so the one-command installer
-  works without extra packages.
+* **Distributions that ship an old Python** (Ubuntu 24.04 ships 3.12, Debian 13
+  ships 3.13): `bootstrap-linux.sh` searches for an installed `python3.15`,
+  `python3.14` or `python3.13` (each one must also provide a shared libpython
+  and `venv`), then tries that distribution's package, then builds the newest
+  CPython release from python.org source into `~/.cache/babymind/python`.
+  `install-linux.sh` alone only uses what is already installed and stops with a
+  message naming the package to install.
+* **Distributions that ship 3.13-3.15** (Ubuntu 26.04 ships 3.14, Fedora and
+  Arch ship current Python) need no extra Python step; the bootstrap reuses the
+  installed interpreter.
+* **Alpine/musl is rejected:** Qt 6.12 needs glibc, so the bootstrap stops on
+  musl systems instead of half-installing.
 * **Packaged app:** the portable build bundles its own interpreter, so end users
   of the release archive do not need Python installed at all.
 
@@ -52,7 +58,8 @@ Ubuntu 24.04.
 1. Check `requires-python` support for every dependency (`python -m pip index
    versions` or the project metadata on PyPI).
 2. Raise `requires-python`, `MINIMUM_PYTHON` in `src/babymind/__init__.py`, the
-   CI matrix, `install-linux.sh`/`install-and-run-linux.sh` guards and this
-   document together.
+   CI matrix, `bootstrap-linux.sh` (`MIN_MINOR`/`MAX_MINOR`),
+   `install-linux.sh`/`install-and-run-linux.sh` guards and this document
+   together.
 3. Rebuild the Linux package on the oldest Ubuntu release you intend to support
    so the artefact's glibc floor stays as low as possible.
