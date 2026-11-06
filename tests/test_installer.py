@@ -249,6 +249,9 @@ exec '{sys.executable}' "$@"
                'APP_LOG': str(app_log),
                # Only the fixture's interpreter exists: the host's must not leak in.
                'BABYMIND_BOOTSTRAP_SYSTEM_PYTHON_DIR': str(self.root / 'no-system-python'),
+               # This test covers the chain, not discovery: use the fixture's
+               # interpreter so a host Python cannot change the outcome.
+               'BABYMIND_BOOTSTRAP_PYTHON': str(self.bin / 'python3'),
                'PATH': f"{self.bin}:{self.env['PATH']}"}
         result = subprocess.run(['bash', '-c', command], env=env, text=True,
                                 capture_output=True, timeout=180)

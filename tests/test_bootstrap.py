@@ -70,7 +70,7 @@ class BootstrapFixture(unittest.TestCase):
             "HOME": str(self.home),
             "XDG_CACHE_HOME": str(self.root / "cache"),
             "TMPDIR": str(self.tmpdir),
-            "PATH": f"{self.bin}:/usr/bin:/bin",
+            "PATH": f"{self.bin}:{self._runtime_tools()}",
             "FAKE_LOG": str(self.log),
             "FAKE_PY_LIBDIR": str(self.lib),
             "BABYMIND_BOOTSTRAP_SOURCE": str(self.source),
@@ -90,16 +90,24 @@ class BootstrapFixture(unittest.TestCase):
         path.chmod(0o755)
         return path
 
-    def _minimal_path_without_downloaders(self) -> Path:
-        """A PATH with the tools the bootstrap needs and no curl or wget."""
-        minbin = self.root / "minbin"
-        minbin.mkdir(exist_ok=True)
-        for tool in ("bash", "sh", "awk", "grep", "sed", "sort", "tail", "tr", "mktemp", "rm",
-                     "mkdir", "cat", "cp", "chmod", "env", "tar", "gzip", "dirname", "ln", "touch"):
+    RUNTIME_TOOLS = ("bash", "sh", "awk", "grep", "sed", "sort", "tail", "tr", "head",
+                     "cut", "mktemp", "rm", "mkdir", "cat", "cp", "mv", "chmod", "env",
+                     "tar", "gzip", "dirname", "basename", "ln", "touch", "sleep",
+                     "setsid", "true", "id")
+
+    def _runtime_tools(self) -> Path:
+        """PATH for the test: the utilities the bootstrap needs, no interpreters.
+
+        Pointing PATH at a curated directory (rather than /usr/bin) keeps the
+        test independent of the Python versions installed on the test host.
+        """
+        runtime = self.root / "runtime"
+        runtime.mkdir(exist_ok=True)
+        for tool in self.RUNTIME_TOOLS:
             found = shutil.which(tool, path="/usr/bin:/bin")
-            if found and not (minbin / tool).exists():
-                (minbin / tool).symlink_to(found)
-        return minbin
+            if found and not (runtime / tool).exists():
+                (runtime / tool).symlink_to(found)
+        return runtime
 
     def _python_stub(self, name: str, version: str, *, shared: bool = True) -> Path:
         if shared:
@@ -176,7 +184,7 @@ if [[ $* == *install* && $* == *curl* ]]; then
 fi
 exit 0
 ''')
-        result = self.run_bootstrap("--prepare-only", PATH=f"{self.bin}:{self._minimal_path_without_downloaders()}")
+        result = self.run_bootstrap("--prepare-only")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         log = self.log_text()
         self.assertIn("install -y", log)
