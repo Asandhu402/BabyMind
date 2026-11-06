@@ -504,7 +504,7 @@ def _worktree_preverify(root: Path, reviewed: list[dict], test_timeout: int) -> 
     from . import worktree
     if not worktree.worktree_enabled() or not worktree.is_git_repo(root):
         return
-    tree = worktree.create_worktree(root)
+    tree = worktree.create_worktree(root, include_working_tree=True)
     try:
         for item in reviewed:
             target = resolve_path(tree, item["path"])
