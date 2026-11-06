@@ -92,8 +92,7 @@ def _fulfilment_check(coordinator, root: Path, brief: str) -> dict:
     file CONTENTS (not just paths). Honest limitation: this uses the same
     shared local model, so it is a preliminary review, not a genuinely
     independent inspection — recorded as such."""
-    import json
-    from .orchestrator import _extract_json
+    from .orchestrator import parse_model_json
     chunks = []
     total = 0
     for path in sorted(root.rglob("*")):
@@ -113,7 +112,9 @@ def _fulfilment_check(coordinator, root: Path, brief: str) -> dict:
               "\"...\", \"gaps\": \"...\"}. Judge against the brief and the actual file "
               "contents; do not trust claims.")
     user = f"BRIEF:\n{brief}\n\nFILE CONTENTS (bounded):\n" + "\n".join(chunks)
-    verdict = json.loads(_extract_json(coordinator.provider.complete(system, user)))
+    verdict = parse_model_json(coordinator.provider.complete(system, user))
+    if not isinstance(verdict, dict):
+        raise ValueError("the model did not return a JSON object")
     return {"fulfilled": bool(verdict.get("fulfilled")),
             "independence": "preliminary — same shared local model, not an independent inspection",
             "evidence": str(verdict.get("evidence", ""))[:1000],
@@ -146,8 +147,9 @@ def debug(report: dict, *, coordinator) -> dict:
         "separately."
     )
     user = f"Verification failed at {report['root']}.\n\nFAILURE EXCERPT:\n{excerpt}"
-    from .orchestrator import _extract_json
-    import json
-    proposal = json.loads(_extract_json(coordinator.provider.complete(system, user)))
+    from .orchestrator import parse_model_json
+    proposal = parse_model_json(coordinator.provider.complete(system, user))
+    if not isinstance(proposal, dict):
+        raise ValueError("the model did not return a JSON object")
     return {"status": "failed", "proposal": proposal,
             "note": "Proposal only — apply through the reviewed self-development path."}

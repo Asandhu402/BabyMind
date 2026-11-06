@@ -203,7 +203,11 @@ Based on the repository's current `AUTONOMY.md`,
   execution in the portable package remains disabled (fail closed).
 - The production model has only limited real-world acceptance evidence; role
   outputs have included unsupported claims, and a real-source self-edit test
-  has failed on malformed JSON.
+  has failed on malformed JSON. That failure traced to two BabyMind defects -
+  a JSON extractor that rejected the raw newlines small models emit inside
+  string values, and a repair loop that gave up on the first unparseable reply
+  instead of retrying - both now fixed and covered by regression tests, but a
+  passing hosted real-model self-edit is still outstanding.
 - Clean desktop acceptance, signed releases, auto-update, and independent
   security assessment are not complete. The fulfilment review in
   `verifier.py` is preliminary (same shared model), not independent

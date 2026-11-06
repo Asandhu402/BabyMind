@@ -817,8 +817,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self.send_json(result, 201 if result["status"] == "applied" else 200)
             elif path == "/api/dev/repair":
-                from .orchestrator import _extract_json
-                from .selfdev import apply_with_repair
+                from .orchestrator import parse_model_json
+                from .selfdev import PROPOSER_ERROR_PREFIX, apply_with_repair
 
                 brief = str(payload.get("brief", "")).strip()
                 if not brief:
@@ -835,10 +835,22 @@ class Handler(BaseHTTPRequestHandler):
 
                 def propose(attempt: int, failure: str):
                     user = f"BRIEF:\n{brief}"
-                    if failure:
+                    if failure.startswith(PROPOSER_ERROR_PREFIX):
+                        user += (
+                            "\n\nYOUR PREVIOUS REPLY COULD NOT BE USED: "
+                            + failure[len(PROPOSER_ERROR_PREFIX):]
+                            + "\nReply with ONLY the JSON object - no prose, no code fence, and "
+                            "nothing after the closing brace. Inside every string value escape "
+                            "double quotes as backslash-quote and newlines as backslash-n, and "
+                            "finish the whole object. If no safe change is possible return "
+                            '{"reason": "...", "edits": []}.'
+                        )
+                    elif failure:
                         user += ("\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. The verification output was:\n"
                                  + failure + "\nReturn a corrected patch that fixes exactly this failure.")
-                    proposal = json.loads(_extract_json(provider.complete(system, user)))
+                    proposal = parse_model_json(provider.complete(system, user))
+                    if not isinstance(proposal, dict):
+                        raise ValueError("the model did not return a JSON object")
                     edits = proposal.get("edits") or []
                     if not isinstance(edits, list):
                         raise ValueError("the model did not return a list of edits")
@@ -900,8 +912,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(verifier.debug(report, coordinator=COORDINATOR))
             elif path == "/api/verify/fix":
                 from . import verifier
-                from .selfdev import dev_root, apply_with_repair
-                from .orchestrator import _extract_json
+                from .selfdev import dev_root, apply_with_repair, PROPOSER_ERROR_PREFIX
+                from .orchestrator import parse_model_json
                 root = str(payload.get("root", "")).strip() or str(dev_root())
                 report = verifier.verify(root, timeout=min(int(payload.get("timeout", 300) or 300), 600))
                 if report["passed"]:
@@ -913,13 +925,24 @@ class Handler(BaseHTTPRequestHandler):
                 attempts = max(1, min(int(payload.get("attempts", 2) or 2), 3))
 
                 def propose(attempt, failure):
-                    user = "BRIEF:\n" + brief + (
-                        "\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. Verification output:\n" + failure
-                        if failure else "")
-                    proposal = json.loads(_extract_json(COORDINATOR.provider.complete(
+                    user = "BRIEF:\n" + brief
+                    if failure.startswith(PROPOSER_ERROR_PREFIX):
+                        user += (
+                            "\n\nYOUR PREVIOUS REPLY COULD NOT BE USED: "
+                            + failure[len(PROPOSER_ERROR_PREFIX):]
+                            + "\nReply with ONLY the JSON object - no prose, no code fence, and "
+                            "nothing after the closing brace. Inside every string value escape "
+                            "double quotes as backslash-quote and newlines as backslash-n, and "
+                            "finish the whole object."
+                        )
+                    elif failure:
+                        user += "\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. Verification output:\n" + failure
+                    proposal = parse_model_json(COORDINATOR.provider.complete(
                         "Return ONLY JSON: {\"reason\": \"...\", \"edits\": [{\"path\": ..., \"content\": ...}]}. "
                         "Paths are relative to the project root; never touch .git, state, keys, or databases.",
-                        user)))
+                        user))
+                    if not isinstance(proposal, dict):
+                        raise ValueError("the model did not return a JSON object")
                     return proposal.get("edits") or []
 
                 outcome = apply_with_repair(propose, attempts=attempts, reason=brief[:200],

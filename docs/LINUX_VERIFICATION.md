@@ -606,3 +606,62 @@ What this does and does not establish:
 - Whether this job is a *required* status check for merging is a repository
   setting on `main`; it is not controlled by this workflow file and was not
   changed here.
+
+## Self-edit JSON parsing and the wasted repair attempt (2026-11-06)
+
+Run [41939836348](https://github.com/Asandhu402/BabyMind/actions/runs/41939836348)
+failed its real-source self-edit because "the model produced malformed,
+unterminated JSON" and the mission recorded `no_change`. Two separate defects
+produced that outcome, and both were in BabyMind rather than in the model.
+
+**1. `orchestrator._extract_json` sliced from the first `{` to the last `}` and
+handed the result straight to `json.loads`.** That is brittle in three ways: a
+`}` inside a string value or in the model's trailing prose moves the slice, a
+reply cut off mid-object reports only "no JSON object in the response", and -
+the case that actually bit - a `"content"` value containing literal newlines is
+rejected outright. Reproduced against the pre-fix source with the exact shape a
+4B model emits for a multi-line file:
+
+```
+json.loads(_extract_json(raw))
+  -> JSONDecodeError: Invalid control character at: line 1 column 91 (char 90)
+```
+
+**2. `selfdev.apply_with_repair` broke out of its loop on the first proposer
+exception**, so `MAX_SELF_EDIT_ATTEMPTS = 2` never applied to a malformed
+reply. The retry prompt was only ever built from *verification* output, so a
+proposer that could not be parsed was never told what was wrong with it. The
+same probe, proposer raising once then returning a good patch, `attempts=3`:
+
+```
+before: propose() called on attempts: [1]    | outcome: unrepaired
+after:  propose() called on attempts: [1, 2] | outcome: applied
+```
+
+What changed:
+
+- `parse_model_json` replaces `json.loads(_extract_json(...))` at all five call
+  sites (mission self-edit, `/api/dev/repair`, `/api/verify/fix`, and both
+  verifier paths). It scans for a balanced object with string and escape
+  awareness, so prose and braces inside values cannot move the slice; it
+  retries later `{` positions; and it escapes raw newlines, tabs and other
+  control characters inside string literals, which is meaning-preserving
+  because valid JSON never contains one. A **truncated** object is still
+  reported and never completed, so a half-written file cannot be applied.
+- `apply_with_repair` now consumes one attempt for a proposer error, hands the
+  error back prefixed with `PROPOSER_ERROR_PREFIX`, and continues.
+- Both self-edit proposers (mission and HTTP) tell the model its previous reply
+  could not be used, quote the parse error, and ask for escaped quotes and
+  newlines. Previously they re-sent the identical prompt.
+
+14 new regression tests cover the raw-newline reply, prose around the object,
+a stray brace, a code fence, valid JSON surviving the repair unchanged,
+truncation being reported rather than completed, a truncated outer object not
+being satisfied by a complete inner one, and both repair-loop paths. Source
+suite: **470 tests, OK, 2 skipped** on the sandbox interpreter.
+
+This fixes the parser and the retry budget. It does **not** by itself prove the
+real model will produce an acceptable patch: the harness's real-source
+self-edit still has to pass on a hosted run with the pinned model, and the
+repair only handles raw control characters - a reply with genuinely unescaped
+inner quotes still needs the second attempt to succeed.

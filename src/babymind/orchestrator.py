@@ -262,15 +262,116 @@ class MissionStore:
         return stats
 
 
-def _extract_json(raw: str) -> str:
+def _strip_code_fence(raw: str) -> str:
+    """Drop a Markdown code fence so a scan can find the JSON object.
+
+    The scan ignores any prose the model adds before or after the object, so
+    only an opening fence line ("```json") has to be removed.
+    """
     text = str(raw or "").strip()
     if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text
-        text = text.rsplit("```", 1)[0]
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end <= start:
-        raise ValueError("no JSON object in the response")
-    return text[start:end + 1]
+        return text.split("\n", 1)[1] if "\n" in text else text.lstrip("`")
+    return text
+
+
+def _scan_json_object(text: str, start: int) -> str | None:
+    """Return the balanced object starting at ``start``, or None if unterminated."""
+    depth, in_string, escaped = 0, False, False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+    return None
+
+
+def _escape_raw_control_characters(text: str) -> str:
+    """Escape newlines, tabs and other control characters inside string literals.
+
+    Small models very often emit a multi-line ``"content"`` value with literal
+    newlines, which ``json.loads`` rejects with "Invalid control character".
+    Escaping them preserves meaning: valid JSON never holds a raw control
+    character in a string, so already-valid input comes back unchanged.
+    """
+    out: list[str] = []
+    in_string, escaped = False, False
+    for char in text:
+        if not in_string:
+            if char == '"':
+                in_string = True
+            out.append(char)
+            continue
+        if escaped:
+            escaped = False
+            out.append(char)
+        elif char == "\\":
+            escaped = True
+            out.append(char)
+        elif char == '"':
+            in_string = False
+            out.append(char)
+        elif char == "\n":
+            out.append("\\n")
+        elif char == "\r":
+            out.append("\\r")
+        elif char == "\t":
+            out.append("\\t")
+        elif ord(char) < 0x20:
+            out.append(f"\\u{ord(char):04x}")
+        else:
+            out.append(char)
+    return "".join(out)
+
+
+def parse_model_json(raw: str):
+    """Parse a model's JSON reply, repairing the mistakes small models make.
+
+    Tries the outermost object first, then later ``{`` positions so a brace in
+    the model's prose cannot hide the real object. A truncated reply is never
+    guessed at: an incomplete object is reported, not completed, so a caller
+    cannot apply half a file.
+    """
+    text = _strip_code_fence(raw)
+    first_error: json.JSONDecodeError | None = None
+    searched = 0
+    while True:
+        start = text.find("{", searched)
+        if start == -1:
+            break
+        searched = start + 1
+        candidate = _scan_json_object(text, start)
+        if candidate is None:
+            if first_error is None:
+                raise ValueError(
+                    "the model returned an unterminated JSON object; the reply "
+                    f"appears to have been cut off after {len(text) - start} characters"
+                )
+            break
+        for variant in (candidate, _escape_raw_control_characters(candidate)):
+            try:
+                return json.loads(variant)
+            except json.JSONDecodeError as error:
+                first_error = first_error or error
+    if first_error is None:
+        raise ValueError("the model returned no JSON object")
+    raise ValueError(
+        f"the model returned invalid JSON ({first_error.msg} at line {first_error.lineno} "
+        f"column {first_error.colno}); it was still invalid after raw newlines and "
+        "control characters inside strings were escaped"
+    )
 
 
 def _clip(text: str, limit: int) -> str:
@@ -524,11 +625,23 @@ class Orchestrator:
 
         def propose(attempt: int, failure: str):
             user = base
-            if failure:
+            if failure.startswith(selfdev.PROPOSER_ERROR_PREFIX):
+                user += (
+                    "\n\nYOUR PREVIOUS REPLY COULD NOT BE USED: "
+                    + failure[len(selfdev.PROPOSER_ERROR_PREFIX):]
+                    + "\nReply with ONLY the JSON object - no prose, no code fence, and "
+                    "nothing after the closing brace. Inside every string value escape "
+                    "double quotes as backslash-quote and newlines as backslash-n, and "
+                    "finish the whole object. If no safe change is possible, return "
+                    '{"reason": "...", "edits": []}.'
+                )
+            elif failure:
                 user += ("\n\nYOUR PREVIOUS PATCH WAS ROLLED BACK. The verification output was:\n"
                          + failure + "\nProduce a corrected patch that fixes exactly this failure.")
             raw = self.provider.complete(system, user)
-            proposal = json.loads(_extract_json(raw))
+            proposal = parse_model_json(raw)
+            if not isinstance(proposal, dict):
+                raise ValueError("the model did not return a JSON object")
             edits = proposal.get("edits") or []
             if not isinstance(edits, list):
                 raise ValueError("edits must be a list")

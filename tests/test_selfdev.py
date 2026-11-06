@@ -395,6 +395,39 @@ class SelfDevTests(unittest.TestCase):
         self.assertIn("assertEqual", seen[1][1])
         self.assertIn("assertEqual(4, 4)", (self.root / "tests" / "test_ok.py").read_text())
 
+    def test_repair_loop_retries_after_an_unparseable_proposal(self) -> None:
+        # A proposer that raised used to end the loop at once, so the attempts
+        # the caller paid for were never used and the error was never reported
+        # back to the model.
+        seen: list[tuple[int, str]] = []
+
+        def propose(attempt: int, failure: str):
+            seen.append((attempt, failure))
+            if attempt == 1:
+                raise ValueError("the model returned an unterminated JSON object")
+            return [{"path": "src/babymind/mod.py", "content": "VALUE = 2\n"}]
+
+        outcome = selfdev.apply_with_repair(propose, attempts=2, reason="parse retry")
+        self.assertEqual(outcome["status"], "applied", outcome)
+        self.assertEqual([item["status"] for item in outcome["history"]],
+                         ["proposer_error", "applied"])
+        self.assertEqual(seen[0][1], "")
+        self.assertTrue(seen[1][1].startswith(selfdev.PROPOSER_ERROR_PREFIX), seen[1][1])
+        self.assertIn("unterminated JSON object", seen[1][1])
+
+    def test_repair_loop_still_gives_up_when_every_proposal_is_unparseable(self) -> None:
+        calls = []
+
+        def propose(attempt: int, failure: str):
+            calls.append(attempt)
+            raise ValueError("the model returned an unterminated JSON object")
+
+        outcome = selfdev.apply_with_repair(propose, attempts=3, reason="always bad")
+        self.assertEqual(outcome["status"], "unrepaired")
+        self.assertEqual(calls, [1, 2, 3])
+        self.assertEqual([item["status"] for item in outcome["history"]], ["proposer_error"] * 3)
+        self.assertEqual((self.root / "src" / "babymind" / "mod.py").read_text(), "VALUE = 1\n")
+
     def test_repair_loop_gives_up_and_restores_the_tree(self) -> None:
         calls = []
 

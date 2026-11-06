@@ -34,6 +34,11 @@ MAX_FILE_BYTES = 256 * 1024
 MAX_TOTAL_BYTES = 2 * 1024 * 1024
 MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024
 
+# Marks retry context that came from a proposer that could not be understood,
+# as opposed to a patch that was applied and then failed verification. A
+# proposer can only fix the first kind if it is told which one it hit.
+PROPOSER_ERROR_PREFIX = "PROPOSER_ERROR: "
+
 ALLOWED_SUFFIXES = {
     ".py", ".md", ".txt", ".json", ".toml", ".cfg", ".ini", ".yaml", ".yml",
     ".js", ".css", ".html", ".ps1", ".bat", ".sh", ".cmake", ".cpp", ".h", ".c",
@@ -864,6 +869,11 @@ def apply_with_repair(
     Every attempt still goes through checkpoint -> write -> compile -> test ->
     keep or automatic rollback. Nothing is applied because a retry was promised;
     it is applied because verification passed.
+
+    A proposer that raises - for example a reply that was not parseable JSON -
+    gets the same remaining attempts as a patch that failed verification, with
+    the error handed back to it. Giving up on the first bad reply wasted the
+    repair budget the caller asked for.
     """
     root = dev_root()
     require("repo.write", agent_id)
@@ -876,11 +886,15 @@ def apply_with_repair(
         try:
             edits = propose(attempt, context)
         except Exception as error:
+            detail = str(error)[:400]
             history.append({"attempt": attempt, "status": "proposer_error",
-                            "detail": str(error)[:400]})
+                            "detail": detail})
             _append_audit(root, {"action": "repair_proposer_error", "attempt": attempt,
-                                 "error": str(error)[:400]})
-            break
+                                 "error": detail})
+            if attempt >= attempts:
+                break
+            context = PROPOSER_ERROR_PREFIX + detail
+            continue
         if not edits:
             history.append({"attempt": attempt, "status": "no_change",
                             "detail": "the proposer returned no edits"})
