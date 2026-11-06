@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor, Future, wait, FIRST_COMPLETED
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .secure_store import SecureTextStore
+
 MAX_TASKS = 50
 MAX_DEPENDS = 60  # a phase-to-phase graph can depend on a whole previous phase
 
@@ -241,8 +243,12 @@ class TaskGraphStore:
     without re-running completed tasks."""
 
     def __init__(self, root) -> None:
-        self.dir = Path(root) / "state" / "taskgraph"
+        home = Path(root)
+        self.dir = home / "state" / "taskgraph"
         self.dir.mkdir(parents=True, exist_ok=True)
+        # Share the encrypted mission store key so graph briefs and model
+        # outputs are protected at rest just like MissionStore records.
+        self.secure = SecureTextStore(home / "missions.key")
         self._lock = threading.RLock()
 
     @staticmethod
@@ -269,8 +275,9 @@ class TaskGraphStore:
         path = self._path(graph_id)
         tmp = path.with_suffix(f".{threading.get_ident()}.tmp")
         with self._lock:
+            encrypted = self.secure.encrypt(json.dumps(payload, indent=2))
             with tmp.open("w", encoding="utf-8") as stream:
-                json.dump(payload, stream, indent=2)
+                stream.write(encrypted)
                 stream.flush()
                 os.fsync(stream.fileno())
             tmp.replace(path)
@@ -292,8 +299,23 @@ class TaskGraphStore:
         if not path.is_file():
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            stored = path.read_text(encoding="utf-8")
+            if stored.startswith("bmenc:v1:"):
+                return json.loads(self.secure.decrypt(stored))
+            # Migrate legacy plaintext graph files immediately. They remain
+            # readable, but every subsequent on-disk representation is
+            # authenticated ciphertext under the installation key.
+            record = json.loads(stored)
+            encrypted = self.secure.encrypt(json.dumps(record, indent=2))
+            tmp = path.with_suffix(f".{threading.get_ident()}.migrate")
+            with self._lock:
+                with tmp.open("w", encoding="utf-8") as stream:
+                    stream.write(encrypted)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                tmp.replace(path)
+            return record
+        except (OSError, ValueError, RuntimeError):
             return None
 
     def completed_results(self, graph_id: str,
