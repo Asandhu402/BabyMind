@@ -92,6 +92,17 @@ class CognitiveCoreTests(unittest.TestCase):
             row = db.execute("SELECT kind,content FROM notes").fetchone()
         self.assertEqual(row[0], "record_question")
         self.assertTrue(row[1].startswith("bmenc:v1:"))
+        followup = FakeProvider({
+            "understanding": "A prior research question is available.",
+            "plan": "Preserve the question and wait.",
+            "action": {"type": "wait"},
+            "expected": "No external state changes.",
+            "reflection": "The question remains available.",
+            "learning": "Carry forward open research questions.",
+            "confidence": 0.8,
+        })
+        self.core.run_cycle(followup)
+        self.assertIn("What observable evidence could distinguish a VM from bare metal?", followup.user_prompts[0])
 
     def test_unsupported_actions_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Unsupported cognitive action"):
