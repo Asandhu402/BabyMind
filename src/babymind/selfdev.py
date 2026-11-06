@@ -186,12 +186,19 @@ def load_test_baseline() -> dict | None:
 
 
 def _test_problem_ids(result: dict) -> set[str]:
-    """Extract unittest failure/error headings from either captured output stream.
+    """Return the failing tests, for baseline comparison.
 
-    The suite summary is parsed from stdout + stderr. Keep this evidence parser
-    consistent: unittest output can be redirected by a runner or test harness,
-    and looking only at stderr makes a completed failing suite appear incomplete.
+    The runner records these as data, which is the authoritative source: the
+    console tail is capped and kept from the end, so on a large failing suite
+    the earliest headings are missing and the recovered set undercounts the
+    real one. Scraping is only a fallback for results produced before that
+    recording existed, and it reads both streams because the suite summary is
+    parsed from stdout + stderr and unittest's report can be redirected by a
+    runner or test harness.
     """
+    recorded = result.get("problem_ids")
+    if isinstance(recorded, list):
+        return set(recorded)
     import re
     output = "\n".join((result.get("stderr") or "", result.get("stdout") or ""))
     return set(re.findall(r"^(?:FAIL|ERROR): (.+)$", output, re.MULTILINE))

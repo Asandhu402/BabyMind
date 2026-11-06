@@ -94,5 +94,60 @@ class RunnerTests(unittest.TestCase):
         self.assertTrue(report["environment_scrubbed"])
 
 
+class UnitTestRecordingTests(unittest.TestCase):
+    """The failing set must survive the console output cap.
+
+    The tail is capped and kept from the end, so a suite with many failures
+    loses its earliest FAIL:/ERROR: headings. That made a hosted packaged
+    staging run undecidable: 50 problems reported, 46 ids recoverable.
+    """
+
+    def setUp(self) -> None:
+        self.temp = TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        (self.root / "src").mkdir()
+        (self.root / "tests").mkdir()
+        (self.root / "tests" / "test_mix.py").write_text(
+            "import unittest\n\n\nclass Mix(unittest.TestCase):\n"
+            "    def test_good(self): pass\n"
+            "    def test_bad(self): self.fail('boom')\n"
+            "    def test_err(self): raise RuntimeError('kaboom')\n"
+            "    @unittest.skip('nope')\n    def test_skip(self): pass\n")
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_problem_ids_are_recorded_and_match_the_console_headings(self) -> None:
+        import re
+
+        result = runner.run_unit_tests(self.root, timeout=120)
+        self.assertEqual(result["summary"]["problems"], 2, result["summary"])
+        self.assertIn("problem_ids", result)
+        scraped = set(re.findall(r"^(?:FAIL|ERROR): (.+)$", result.get("stderr") or "", re.MULTILINE))
+        # Same strings, so ids stay comparable across runs that do and do not
+        # have a recorded report.
+        self.assertEqual(set(result["problem_ids"]), scraped)
+        self.assertEqual(len(result["problem_ids"]), 2)
+
+    def test_generated_driver_and_report_do_not_survive_the_run(self) -> None:
+        runner.run_unit_tests(self.root, timeout=120)
+        leftovers = sorted(path.name for path in self.root.glob(".babymind-unittest-*"))
+        self.assertEqual(leftovers, [])
+
+    def test_recording_survives_a_run_that_exceeds_the_output_cap(self) -> None:
+        # One failing test whose traceback is far larger than MAX_OUTPUT_CHARS.
+        (self.root / "tests" / "test_loud.py").write_text(
+            "import unittest\n\n\nclass Loud(unittest.TestCase):\n"
+            "    def test_loud(self):\n"
+            f"        self.fail('x' * {runner.MAX_OUTPUT_CHARS + 20000})\n")
+        result = runner.run_unit_tests(self.root, timeout=180)
+        self.assertTrue(result["truncated"], "expected the console tail to be capped")
+        self.assertGreater(len(result.get("stderr") or ""), 0)
+        self.assertEqual(result["summary"]["problems"], 3, result["summary"])
+        # The heading is gone from the tail, but the data is not.
+        self.assertEqual(len(result["problem_ids"]), 3, result["problem_ids"])
+        self.assertIn("test_loud (test_loud.Loud.test_loud)", result["problem_ids"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -371,6 +371,36 @@ class SelfDevTests(unittest.TestCase):
         self.assertIn("identified=0", diagnosis)
         self.assertIn("output_chars=0", diagnosis)
 
+    def test_truncated_tail_does_not_make_a_completed_suite_look_empty(self) -> None:
+        """The hosted failure: 50 problems reported, 46 headings left in the tail.
+
+        The output cap keeps the end, so the earliest FAIL:/ERROR: lines are cut
+        off and the recovered set undercounts the summary. The gate then reads
+        "missing failure evidence" and refuses every edit forever.
+        """
+        result = {
+            "summary": {"ran": 473, "skipped": 38, "failures": 30, "errors": 20, "problems": 50},
+            "exit_code": 1,
+            "timed_out": False,
+            "truncated": True,
+            "stderr": "\n".join(f"FAIL: kept.test{i}" for i in range(46)),
+        }
+        # Without the recorded ids the suite is rejected, exactly as it was.
+        self.assertEqual(len(selfdev._test_problem_ids(result)), 46)
+        self.assertFalse(selfdev._suite_completed(result))
+
+        recorded = [f"lost.test{i}" for i in range(4)] + [f"kept.test{i}" for i in range(46)]
+        self.assertTrue(selfdev._suite_completed(dict(result, problem_ids=recorded)))
+
+    def test_recorded_ids_are_preferred_over_scraped_headings(self) -> None:
+        result = {"stderr": "FAIL: from.text\n", "problem_ids": ["from.record"]}
+        self.assertEqual(selfdev._test_problem_ids(result), {"from.record"})
+
+    def test_scraping_is_still_used_when_nothing_was_recorded(self) -> None:
+        result = {"stderr": "FAIL: from.text\nERROR: also.text\n"}
+        self.assertEqual(selfdev._test_problem_ids(result), {"from.text", "also.text"})
+        self.assertEqual(selfdev._test_problem_ids(dict(result, problem_ids=[])), set())
+
     def test_preexisting_failure_does_not_block_a_good_change(self) -> None:
         (self.root / "tests" / "test_known_failure.py").write_text(
             "import unittest\n\n\nclass Known(unittest.TestCase):\n"

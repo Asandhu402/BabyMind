@@ -8,6 +8,7 @@ not restrict network access. ``isolation_report()`` says exactly that.
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import signal
@@ -22,6 +23,59 @@ MAX_OUTPUT_CHARS = 40_000
 DEFAULT_TIMEOUT = 120
 MAX_TIMEOUT = 900
 MIN_TIMEOUT = 1
+
+# Discovery is driven by a generated helper rather than "-m unittest" so that the
+# set of failing tests is captured as data. The console tail is capped above and
+# kept from the end, so on a suite with many failures the earliest FAIL:/ERROR:
+# headings are lost -- which made "did this suite actually run?" undecidable.
+_DRIVER_NAME = ".babymind-unittest-driver.py"
+_REPORT_NAME = ".babymind-unittest-report.json"
+
+_UNITTEST_DRIVER = '''"""Run unittest discovery and record failing test ids as data.
+
+Written into the checkout by runner.run_unit_tests and removed afterwards. The
+console output is unchanged; the report exists so callers never have to
+reconstruct the failing set from a truncated tail.
+"""
+import json
+import os
+import sys
+import unittest
+
+
+class _RecordingResult(unittest.TextTestResult):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.problem_ids = []
+
+    def _record(self, test):
+        # getDescription() is exactly what unittest prints after "FAIL:"/"ERROR:",
+        # so recorded ids stay comparable with ids scraped from older output.
+        self.problem_ids.append(self.getDescription(test))
+
+    def addFailure(self, test, err):
+        super().addFailure(test, err)
+        self._record(test)
+
+    def addError(self, test, err):
+        super().addError(test, err)
+        self._record(test)
+
+
+def main() -> int:
+    top = sys.argv[1] if len(sys.argv) > 1 else "tests"
+    suite = unittest.defaultTestLoader.discover(start_dir="tests", top_level_dir=top)
+    runner = unittest.TextTestRunner(stream=sys.stderr, verbosity=1, resultclass=_RecordingResult)
+    result = runner.run(suite)
+    target = os.environ.get("BABYMIND_TEST_REPORT") or ""
+    if target:
+        with open(target, "w", encoding="utf-8") as handle:
+            json.dump(sorted(result.problem_ids), handle)
+    return 0 if result.wasSuccessful() else 1
+
+
+raise SystemExit(main())
+'''
 
 # Callers may extend this list explicitly; see runner_status() for the truth.
 DEFAULT_ALLOWLIST = {"python", "python3", "node", "npm", "npx", "git", "cmake", "ctest", "pytest"}
@@ -301,15 +355,36 @@ def run_unit_tests(root: str | Path, *, timeout: int = 300, sandbox: bool | str 
     # unittest requires the discovery start directory to be importable when the
     # top-level directory is its parent; otherwise it must be made the top level.
     top = "." if (root / "tests" / "__init__.py").is_file() else "tests"
-    result = run_command(
-        [venv_python(), "-m", "unittest", "discover", "-s", "tests", "-t", top],
-        cwd=root,
-        allowed_root=root,
-        timeout=timeout,
-        env={"PYTHONPATH": str(root / "src"), "PYTHONDONTWRITEBYTECODE": "1"},
-        sandbox=sandbox,
-    )
+    driver = root / _DRIVER_NAME
+    report = root / _REPORT_NAME
+    try:
+        driver.write_text(_UNITTEST_DRIVER, encoding="utf-8")
+        result = run_command(
+            [venv_python(), _DRIVER_NAME, top],
+            cwd=root,
+            allowed_root=root,
+            timeout=timeout,
+            env={
+                "PYTHONPATH": str(root / "src"),
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "BABYMIND_TEST_REPORT": _REPORT_NAME,
+            },
+            sandbox=sandbox,
+        )
+    finally:
+        recorded = None
+        try:
+            if report.is_file():
+                loaded = json.loads(report.read_text(encoding="utf-8"))
+                if isinstance(loaded, list):
+                    recorded = [str(item) for item in loaded]
+        except (OSError, ValueError):
+            recorded = None  # fall back to scraping the console output
+        for stray in (driver, report):
+            stray.unlink(missing_ok=True)
     result["summary"] = _summarise_unittest(result)
+    if recorded is not None:
+        result["problem_ids"] = recorded
     return result
 
 
