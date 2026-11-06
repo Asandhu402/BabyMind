@@ -182,9 +182,10 @@ Based on the repository's current `AUTONOMY.md`,
 - The 50 roles are role-guided prompts over one shared small local model, not
   independently capable agents. Sequential mode remains the default; a
   phase-parallel task-graph mode (`mode="graph"`, `/api/taskgraph/run`) exists
-  **[implemented, verified]**, now with typed task inputs, HTTP cancellation,
-  and durable resumable graph state (`TaskGraphStore`) **[implemented,
-  verified]**; typed output schemas remain **[partial]**.
+  **[implemented]**, with HTTP cancellation and task-by-task durable checkpoints
+  plus fingerprint-validated resume **[implemented; CI verification pending]**.
+  Mission recovery is available through `POST /api/missions/{id}/resume` for
+  graph-mode missions. Typed output schemas remain **[partial]**.
 - The runner is not itself an OS boundary; all privileged execution goes
   through the broker into the Linux namespace sandbox
   **[implemented, verified]**, with adversarial escape probes
