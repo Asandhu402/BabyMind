@@ -85,6 +85,31 @@ if __name__ == "__main__":
 
 
 class TaskGraphCancellationTests(unittest.TestCase):
+    def test_cancel_with_queued_futures_records_every_task(self):
+        started, release = threading.Event(), threading.Event()
+        def worker(task, context):
+            started.set()
+            release.wait(3)
+            return task.task_id
+        runner = TaskGraphRunner(worker, max_workers=1)
+        result_box = {}
+        def run():
+            try:
+                result_box['result'] = runner.run([Task(str(i), 'BM-01', 'work') for i in range(8)])
+            except Exception as error:
+                result_box['error'] = error
+        thread = threading.Thread(target=run)
+        thread.start()
+        self.assertTrue(started.wait(2))
+        runner.cancel()
+        release.set()
+        thread.join(5)
+        self.assertFalse(thread.is_alive())
+        self.assertNotIn('error', result_box)
+        self.assertTrue(result_box['result']['cancelled'])
+        self.assertEqual(len(result_box['result']['tasks']), 8)
+        self.assertGreater(result_box['result']['skipped'], 0)
+
     def test_registered_graph_can_be_cancelled_by_id(self):
         from babymind import taskgraph
         started = threading.Event()

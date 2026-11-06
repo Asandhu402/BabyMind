@@ -565,6 +565,104 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body), [])
 
+    def test_team_mode_routes_dependent_roles_and_saves_only_with_opt_in(self) -> None:
+        from babymind.memory import LocalMemory
+        server.COORDINATOR.memory = LocalMemory(Path(self.temp.name) / 'memory.sqlite3')
+        plan = json.dumps({'tasks': [
+            {'agent_id': 'BM-03', 'task': 'Analyze', 'depends_on': []},
+            {'agent_id': 'BM-34', 'task': 'Review', 'depends_on': ['BM-03']}]})
+        with patch.object(server.COORDINATOR.provider, 'complete', return_value=plan), \
+             patch.object(server.COORDINATOR, 'ask', side_effect=[SimpleNamespace(response='Draft'),
+                 SimpleNamespace(response='Review'), SimpleNamespace(response='Final')]) as ask:
+            status, _, body = self.request('/api/chat', {'message': 'Improve this design', 'teamwork': True,
+                                                        'remember': True})
+        self.assertEqual(status, 200, body)
+        data = json.loads(body)
+        self.assertEqual(data['team']['status'], 'completed')
+        self.assertEqual(data['agents_involved'], ['BM-03', 'BM-34', 'BM-01'])
+        self.assertEqual([call.args[0] for call in ask.call_args_list], ['BM-03', 'BM-34', 'BM-01'])
+        self.assertIn('Draft', ask.call_args_list[1].args[1])
+        self.assertEqual(server.COORDINATOR.memory.recent(1)[0]['task'], 'Improve this design')
+        history = json.loads(self.request('/api/conversations/' + data['conversation_id'])[2])
+        self.assertEqual(history[1]['content'], data['response'])
+        self.assertIn('Team contributions', history[1]['content'])
+
+    def test_team_http_real_coordinator_with_local_memory_and_scripted_provider(self) -> None:
+        from babymind.memory import LocalMemory
+        server.COORDINATOR.memory = LocalMemory(Path(self.temp.name) / 'memory.sqlite3')
+        server.COORDINATOR.memory.set_profile('Prefer concise answers')
+        class Provider:
+            def __init__(self): self.calls = []
+            def complete(self, system, prompt):
+                self.calls.append((system, prompt))
+                if len(self.calls) == 1:
+                    return json.dumps({'tasks': [
+                        {'agent_id':'BM-03','task':'Design', 'depends_on':[]},
+                        {'agent_id':'BM-34','task':'Review', 'depends_on':['BM-03']}]})
+                return f'Response {len(self.calls)}'
+        provider = Provider()
+        with patch.object(server.COORDINATOR, 'provider', provider), \
+             patch('babymind.research.search_web') as search, patch('babymind.research.fetch_page') as fetch:
+            status, _, body = self.request('/api/chat', {'message':'Design an inventory app', 'teamwork':True,
+                                                        'use_memory':True})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(len(provider.calls), 4)
+        self.assertNotIn('Prefer concise answers', provider.calls[0][0])
+        self.assertTrue(all('Prefer concise answers' in call[0] for call in provider.calls[1:]))
+        self.assertIn('Response 2', provider.calls[2][1])
+        self.assertEqual(json.loads(body)['team']['status'], 'completed')
+        self.assertEqual(server.COORDINATOR.memory.recent(), [])
+        search.assert_not_called()
+        fetch.assert_not_called()
+
+    def test_team_http_with_openai_compatible_local_provider_protocol(self) -> None:
+        from http.server import BaseHTTPRequestHandler
+        from babymind.providers import LlamaCppHTTPClient
+        class ModelHandler(BaseHTTPRequestHandler):
+            requests = []
+            def do_POST(self):
+                size = int(self.headers['Content-Length'])
+                body = json.loads(self.rfile.read(size))
+                self.requests.append((self.path, body))
+                if len(self.requests) == 1:
+                    content = json.dumps({'tasks': [
+                        {'agent_id':'BM-03','task':'Design','depends_on':[]},
+                        {'agent_id':'BM-34','task':'Review','depends_on':['BM-03']}]})
+                else:
+                    content = f'Local fixture result {len(self.requests)}'
+                payload = json.dumps({'choices':[{'message':{'content':content}}]}).encode()
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            def log_message(self, *_args): pass
+        model = ThreadingHTTPServer(('127.0.0.1', 0), ModelHandler)
+        thread = threading.Thread(target=model.serve_forever, daemon=True)
+        thread.start()
+        try:
+            provider = LlamaCppHTTPClient(base_url=f'http://127.0.0.1:{model.server_port}/v1', model='fixture')
+            with patch.object(server.COORDINATOR, 'provider', provider):
+                status, _, body = self.request('/api/chat', {'message':'Design an app', 'teamwork':True})
+            self.assertEqual(status, 200, body)
+            self.assertEqual(json.loads(body)['team']['status'], 'completed')
+            self.assertEqual(len(ModelHandler.requests), 4)
+            self.assertTrue(all(path == '/v1/chat/completions' for path, _ in ModelHandler.requests))
+            self.assertIn('Local fixture result 2', ModelHandler.requests[2][1]['messages'][1]['content'])
+        finally:
+            model.shutdown()
+            model.server_close()
+            thread.join(timeout=2)
+
+    def test_team_mode_rejects_conflicts_and_invalid_plan_without_saving(self) -> None:
+        with patch.object(server.COORDINATOR.provider, 'complete', return_value='bad') as complete:
+            for conflict in ('collaborate', 'deep_research', 'document_research'):
+                self.assertEqual(self.request('/api/chat', {'message': 'question', 'teamwork': True, conflict: True})[0], 400)
+            complete.assert_not_called()
+            self.assertEqual(self.request('/api/chat', {'message': 'question', 'teamwork': True})[0], 400)
+            self.assertEqual(complete.call_count, 2)
+        with server.db() as connection:
+            self.assertEqual(connection.execute('SELECT COUNT(*) FROM conversations').fetchone()[0], 0)
+
     def test_collaboration_uses_specialist_reviewer_and_coordinator(self) -> None:
         fake_result = SimpleNamespace(response="Draft answer")
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result) as ask:

@@ -130,6 +130,9 @@ async function sendMessage(message) {
   const text=message.trim();if(!text||state.busy)return;
   const attachment=state.attachment;
   const documentResearch=$("#documentResearchToggle").checked;
+  const teamwork=$("#teamworkToggle").checked;
+  if(teamwork && attachment){toast("Team mode supports text questions only; remove the attachment first.");return;}
+  if(teamwork && text.length>2000){toast("Team requests must be 2,000 characters or fewer.");return;}
   if($("#deepResearchToggle").checked && attachment){toast("Deep research sends the question to a public search provider; remove the attachment first.");return;}
   if(documentResearch && !attachment){toast("Attach a text document to research it.");return;}
   let submitted=attachment && !documentResearch ? text+"\n\nAttached file ("+attachment.name+"):\n"+attachment.content : text;
@@ -159,7 +162,7 @@ async function sendMessage(message) {
       message:submitted,agent_id:$("#agentSelect").value,conversation_id:state.conversationId || "",
       collaborate:$("#collaborateToggle").checked,use_memory:$("#memoryToggle").checked,
       remember:$("#rememberToggle").checked,deep_research:$("#deepResearchToggle").checked,
-      document_research:documentResearch,...(documentResearch ? {research_document:attachment} : {})
+      document_research:documentResearch,teamwork,...(documentResearch ? {research_document:attachment} : {})
     });
     let result;
     try {
@@ -383,20 +386,26 @@ async function init() {
   $("#chatForm").addEventListener("submit",event=>{event.preventDefault();sendMessage($("#messageInput").value);});
   const pageReadToggle=$("#webPageReadToggle");
   const syncPageReadToggle=()=>{pageReadToggle.disabled=!$("#webResearchToggle").checked;if(pageReadToggle.disabled)pageReadToggle.checked=false;};
-  $("#webResearchToggle").addEventListener("change",()=>{if($("#webResearchToggle").checked){$("#deepResearchToggle").checked=false;$("#documentResearchToggle").checked=false;}syncPageReadToggle();});
+  $("#webResearchToggle").addEventListener("change",()=>{if($("#webResearchToggle").checked){$("#deepResearchToggle").checked=false;$("#documentResearchToggle").checked=false;$("#teamworkToggle").checked=false;}syncPageReadToggle();});
   $("#deepResearchToggle").addEventListener("change",()=>{
     if($("#deepResearchToggle").checked){
-      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#collaborateToggle").checked=false;$("#documentResearchToggle").checked=false;
+      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#collaborateToggle").checked=false;$("#documentResearchToggle").checked=false;$("#teamworkToggle").checked=false;
       toast("Deep research sends your question and model-generated queries to a public search provider.");
     }
   });
   $("#documentResearchToggle").addEventListener("change",()=>{
     if($("#documentResearchToggle").checked){
-      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#deepResearchToggle").checked=false;$("#collaborateToggle").checked=false;
+      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#deepResearchToggle").checked=false;$("#collaborateToggle").checked=false;$("#teamworkToggle").checked=false;
       toast("Document research sends selected excerpts to your configured model, not web search.");
     }
   });
-  $("#collaborateToggle").addEventListener("change",()=>{if($("#collaborateToggle").checked){$("#deepResearchToggle").checked=false;$("#documentResearchToggle").checked=false;}});
+  $("#teamworkToggle").addEventListener("change",()=>{
+    if($("#teamworkToggle").checked){
+      $("#webResearchToggle").checked=false;syncPageReadToggle();$("#deepResearchToggle").checked=false;$("#documentResearchToggle").checked=false;$("#collaborateToggle").checked=false;
+      toast("Team mode uses one model and no tools; it may make several model calls.");
+    }
+  });
+  $("#collaborateToggle").addEventListener("change",()=>{if($("#collaborateToggle").checked){$("#deepResearchToggle").checked=false;$("#documentResearchToggle").checked=false;$("#teamworkToggle").checked=false;}});
   syncPageReadToggle();
   $("#messageInput").addEventListener("input",resizeInput);
   $("#messageInput").addEventListener("keydown",event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();$("#chatForm").requestSubmit();}});

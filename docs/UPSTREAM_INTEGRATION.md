@@ -51,3 +51,34 @@ were copied or bundled:
 
 This is a focused integration of ideas into existing BabyMind modules, not a
 feature-equivalence claim. See [research engine limitations](RESEARCH_ENGINE.md).
+
+## Team and memory/sandbox architecture review (2026-11-06)
+
+These are source reviews, not imported projects. No upstream code was copied,
+no dependencies were added, and the changes do not provide equivalent runtimes.
+
+- [LangGraph state graph and Pregel loop](https://github.com/langchain-ai/langgraph/blob/e5e37b5d70dbfd93c7006bd90a658c6179a95946/libs/langgraph/langgraph/graph/state.py)
+  (MIT) model nodes, state channels, graph execution and checkpoint backends.
+  BabyMind reuses its own much simpler DAG runner for bounded delegation; this
+  team chat is not durable or resumable and does not use LangGraph.
+- [Easy Agent agent tool](https://github.com/ConardLi/easy-agent/blob/2f8e7da20c5afee56c3b9e5f986941ca38718bbb/src/tools/agentTool.ts)
+  (MIT) validates agent types and delegates to child loops with per-tool
+  permissions and optional isolation. This review assumes the ConardLi project;
+  the name is ambiguous. BabyMind's team passes have no child loops or tools.
+- The name sandboxd is ambiguous: the [tastyeffectco app-builder manifest](https://github.com/tastyeffectco/sandboxd/blob/d02c63c1aa1d7008c76859940892089f797d0fdb/docs/sandbox-manifest.md)
+  (MIT) describes managed app processes and previews; [inclusionAI sandbox file service](https://github.com/inclusionAI/sandboxd/blob/d23687d62ef0afd643b4028aedbcbc0e8bd346dc/internal/server/sandbox_files.go)
+  (Apache-2.0) is part of a separate runtime daemon. Neither daemon is installed
+  or treated as a security boundary here.
+- [Mem0 memory implementation](https://github.com/mem0ai/mem0/blob/f1791daa86d469249c9b002f62644d58a1eb96a0/mem0/memory/main.py)
+  (Apache-2.0) combines extraction, vector-store adapters, search and updates.
+  BabyMind retains explicit, encrypted local memory and lexical retrieval; it
+  does not import Mem0, vector embeddings or automatic fact extraction.
+- [Hermes Agent subagent lifecycle](https://github.com/NousResearch/hermes-agent/blob/6b21d0564de0492e2ebd0d8f63fca86c03b5c892/agent/subagent_lifecycle.py)
+  and [memory manager](https://github.com/NousResearch/hermes-agent/blob/6b21d0564de0492e2ebd0d8f63fca86c03b5c892/agent/memory_manager.py)
+  (MIT) expose typed lifecycle states and memory-provider orchestration. The
+  BabyMind slice reports role outcomes and preserves opt-in memory, but does
+  not implement Hermes subagents, background lifecycle, skills or learning.
+
+For prior source reviews of OpenHands, bolt.diy and GPT Researcher see the
+preceding section. More complete compatibility, license and security review is
+required before adopting any of these projects as a dependency.

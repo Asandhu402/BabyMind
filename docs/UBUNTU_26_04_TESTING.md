@@ -1,9 +1,11 @@
 # Testing on Ubuntu 26.04 LTS
 
-BabyMind is **Debian-based Linux for x86-64 only**, and its
-testing platform is **Ubuntu 26.04 LTS** (x86-64, glibc 2.43, ships Python
-3.14). This page is the single place that explains how that testing is wired
-and what is required before support can be called verified.
+BabyMind is **Debian-based Linux for x86-64 only**. The requested acceptance
+testing target is **Ubuntu 26.10**, but that environment is not currently
+available and no 26.10 test has been run. Current hosted CI uses **Ubuntu
+26.04 LTS** (x86-64, glibc 2.43, ships Python 3.14) as a supplemental baseline,
+not as a substitute for the requested acceptance test. This page describes that
+existing hosted CI configuration.
 
 > **History.** On 2026-11-06 BabyMind was briefly configured for the interim
 > Ubuntu 26.10 (released 2026-10-15, short support window). GitHub does not
