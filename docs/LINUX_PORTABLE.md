@@ -20,7 +20,7 @@ It installs the default model in `~/.babymind`; keep sufficient disk space for
 distribution packages, build tools, the model, and previous versions.
 Installing requires network access to your distribution's mirrors, python.org,
 GitHub, PyPI and Hugging Face (python.org is skipped when a suitable Python is
-already installed). Python packages are not hash-locked. Bootstrap preparation and the APT installation path are exercised in CI configured for Ubuntu 26.10 (a self-hosted runner is required until GitHub publishes a hosted `ubuntu-26.10` label; see [testing on Ubuntu 26.10](UBUNTU_26_10_TESTING.md)). Debian and Ubuntu derivatives are the only supported distribution family.
+already installed). Python packages are not hash-locked. Bootstrap preparation and the APT installation path are exercised in CI on the GitHub-hosted Ubuntu 26.04 LTS runner (see [testing on Ubuntu 26.04](UBUNTU_26_04_TESTING.md)); no CI run has been recorded yet. Debian and Ubuntu derivatives are the only supported distribution family.
 
 Alternatively, extract the **complete** release archive and double-click `BabyMind`, or run
 `./BabyMind` from a terminal. Keep the `_internal` and `llama.cpp` directories
@@ -34,7 +34,7 @@ in the application folder. Deleting the application does not delete your data.
 To build from source, install Python 3.13+ (tested on 3.13, 3.14 and 3.15),
 venv/pip, a C++ compiler, CMake, curl and tar, then run `./build-linux.sh`. The build downloads Python packages
 and checksum-verifies the pinned llama.cpp source. It builds a generic x86-64
-CPU runtime and packages Qt 6.12 and Python with PyInstaller. The release is built and tested on Ubuntu 26.10,
+CPU runtime and packages Qt 6.12 and Python with PyInstaller. The release is built and tested on Ubuntu 26.04 LTS,
 which sets the artifact's glibc floor at 2.43 (Ubuntu 26.04+); building on an older host would lower that floor
 at the cost of an older toolchain. The archive and build dependencies are not vendored.
 The first model download has not been verified in restricted/offline networks. See docs/LINUX_VERIFICATION.md in the source tree for the actual test status.
