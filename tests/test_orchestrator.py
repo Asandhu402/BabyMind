@@ -26,9 +26,11 @@ class FakeProvider:
     def __init__(self, fail_at: int | None = None) -> None:
         self.calls = 0
         self.fail_at = fail_at
+        self.system_prompts = []
 
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         self.calls += 1
+        self.system_prompts.append(system_prompt)
         if self.fail_at is not None and self.calls == self.fail_at:
             raise RuntimeError("simulated provider failure")
         return "Contribution: concrete step with a file and a check."
@@ -57,6 +59,8 @@ class OrchestratorTests(unittest.TestCase):
         recorded = {run["agent_id"] for run in mission["runs"]}
         self.assertEqual(recorded, {agent.agent_id for agent in AGENTS})
         self.assertEqual(provider.calls, 50)
+        self.assertEqual(len(provider.system_prompts), 50)
+        self.assertTrue(all("COGNITIVE CORE" in prompt for prompt in provider.system_prompts))
         self.assertIn("returned non-empty text", mission["summary"])
         self.assertIn("unverified model text", mission["summary"])
         self.assertIn("does not prove the work was done", mission["summary"])
