@@ -128,6 +128,9 @@ class TaskGraphPersistenceTests(unittest.TestCase):
             )
             self.assertEqual(first["completed"], 4)
             self.assertEqual(set(store.completed_results("mission-1", tasks)), {"a", "b", "c", "d"})
+            encrypted_checkpoint = store._path("mission-1").read_text(encoding="utf-8")
+            self.assertTrue(encrypted_checkpoint.startswith("bmenc:v1:"))
+            self.assertNotIn("result-a", encrypted_checkpoint)
             original_calls = list(calls)
 
             resumed = TaskGraphRunner(worker, max_workers=2).run(
@@ -151,3 +154,17 @@ class TaskGraphPersistenceTests(unittest.TestCase):
             ).run(changed, graph_id="mission-2", store=store, resume=True)
             self.assertEqual(result["completed"], 1)
             self.assertEqual(calls, ["a"])
+
+
+    def test_legacy_plaintext_checkpoint_is_migrated_to_encrypted_storage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = TaskGraphStore(directory)
+            legacy = store.dir / "old-graph.json"
+            legacy.write_text(
+                '{"id":"old-graph","tasks":[],"result":{"tasks":[]}}',
+                encoding="utf-8",
+            )
+            loaded = store.load("old-graph")
+            self.assertEqual(loaded["id"], "old-graph")
+            self.assertFalse(legacy.exists())
+            self.assertTrue(store._path("old-graph").read_text(encoding="utf-8").startswith("bmenc:v1:"))
