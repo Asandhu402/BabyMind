@@ -13,20 +13,20 @@ jobs:
   linux:
     strategy:
       fail-fast: false
-      # BabyMind is Debian-based x86-64 only and is tested on Ubuntu 26.10, so
-      # the portable artifact needs glibc 2.43 (Ubuntu 26.04+). Every supported
+      # BabyMind is Debian-based x86-64 only and is tested on Ubuntu 26.04 LTS,
+      # so the portable artifact needs glibc 2.43 (Ubuntu 26.04+). Every supported
       # interpreter is exercised: 3.13 is the supported floor and 3.15 is the
-      # current stable release. NOTE: GitHub does not yet publish an
-      # ubuntu-26.10 hosted runner label; these jobs require a matching
-      # self-hosted runner (or a future GitHub label) until one is available.
-      # See docs/UBUNTU_26_10_TESTING.md.
+      # current stable release. GitHub publishes a hosted ubuntu-26.04 label, so
+      # these jobs run without self-hosted hardware. History: they were configured
+      # for the interim Ubuntu 26.10 (no hosted label, never executed) and moved
+      # to 26.04 LTS on 2026-11-06. See docs/UBUNTU_26_04_TESTING.md.
       matrix:
         include:
-          - ubuntu: '26.10'
+          - ubuntu: '26.04'
             python: '3.13'
-          - ubuntu: '26.10'
+          - ubuntu: '26.04'
             python: '3.14'
-          - ubuntu: '26.10'
+          - ubuntu: '26.04'
             python: '3.15'
     runs-on: ubuntu-${{ matrix.ubuntu }}
     timeout-minutes: 45
@@ -115,10 +115,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   source-latest:
-    # Cheap source-only check on Ubuntu 26.10, the Debian-based x86-64 release
-    # BabyMind is tested on (glibc 2.43), so the portable build is not the only
-    # data point for Python 3.15.
-    runs-on: ubuntu-26.10
+    # Cheap source-only check on Ubuntu 26.04 LTS, the Debian-based x86-64
+    # release BabyMind is tested on (glibc 2.43), so the portable build is not
+    # the only data point for Python 3.15.
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -153,7 +153,7 @@ jobs:
   bootstrap:
     # The one-command entry point, on a runner with no project Python set up:
     # bootstrap-linux.sh must prepare the machine by itself.
-    runs-on: ubuntu-26.10
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -167,7 +167,7 @@ jobs:
   bootstrap-plan:
     # A distribution whose Python is too old must plan the python.org source
     # build instead of stopping. Ubuntu 24.04 ships Python 3.12, below the
-    # 3.13 floor (this job cannot run on 26.10, whose Python is supported).
+    # 3.13 floor (this job cannot run on 26.04, whose Python is supported).
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -179,7 +179,7 @@ jobs:
           grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
   ui-diagnostics:
     # Exercises the web client's Diagnostics view headlessly with jsdom on the
-    # hosted 24.04 image (a real 26.10 desktop is not needed for DOM logic).
+    # hosted 24.04 image (a real desktop VM is not needed for DOM logic).
     # Loads the real index.html and app.js, and asserts the view renders the
     # interaction log, copies per-entry/report/log-path to the clipboard,
     # issues DELETE for Clear log, and posts uncaught client errors back to
@@ -210,8 +210,8 @@ jobs:
       # newest commit still runs the job, so nothing goes untested.
       group: real-model-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
-    # The installer requires Python 3.13+, which Ubuntu 26.10 provides (3.14).
-    runs-on: ubuntu-26.10
+    # The installer requires Python 3.13+, which Ubuntu 26.04 provides (3.14).
+    runs-on: ubuntu-26.04
     # Recorded runs needed 60-71 minutes for the 50-role mission alone, on top
     # of the download, the build and the extended GUI question set.
     timeout-minutes: 180
@@ -224,6 +224,25 @@ jobs:
           df -h "$RUNNER_TEMP"
           sudo apt-get update
           sudo apt-get install -y xvfb xauth python3-websocket
+      - name: Restore the pinned model from the dependency cache
+        uses: actions/cache@v4
+        with:
+          # ~2.71 GB pinned GGUF, keyed by the checksum in babymind/first_run.py
+          # (MODEL_SHA256). A cache miss re-downloads exactly as before; a cached
+          # file that fails SHA-256 is dropped in the next step so the installer
+          # re-downloads it instead of testing a corrupt model.
+          path: ${{ runner.temp }}/babymind-test-home/.babymind/models
+          key: babymind-gguf-79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741
+      - name: Drop a corrupt cached model before the installer runs
+        run: |
+          model="${RUNNER_TEMP}/babymind-test-home/.babymind/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf"
+          if [ -f "$model" ]; then
+            actual="$(sha256sum "$model" | awk '{print $1}')"
+            if [ "$actual" != "79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741" ]; then
+              echo "cached model failed SHA-256; removing it (the installer re-downloads it)"
+              rm -f "$model"
+            fi
+          fi
       - name: Run the actual installer in a disposable home
         id: installer
         run: |

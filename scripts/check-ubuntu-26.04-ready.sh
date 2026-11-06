@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Read-only readiness check: is THIS machine able to test BabyMind on Ubuntu
-# 26.10? Prints one line per requirement and a summary. Changes nothing.
+# 26.04 LTS? Prints one line per requirement and a summary. Changes nothing.
 #
-# Usage: bash scripts/check-ubuntu-26.10-ready.sh
+# Usage: bash scripts/check-ubuntu-26.04-ready.sh
 # Exit status: 0 if no FAIL, 1 otherwise (WARN never fails the run).
 set -uo pipefail
 
@@ -14,16 +14,16 @@ warn() { printf '  \033[33mWARN\033[0m %s\n' "$*"; warns=$((warns + 1)); }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$*"; fails=$((fails + 1)); }
 info() { printf '       %s\n' "$*"; }
 
-echo "BabyMind Ubuntu 26.10 test readiness"
+echo "BabyMind Ubuntu 26.04 readiness"
 
 # --- OS, architecture ---------------------------------------------------------
 if [[ -r /etc/os-release ]]; then
   # shellcheck source=/dev/null
   . /etc/os-release
-  if [[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 26.10 ]]; then
-    pass "Ubuntu 26.10 (${PRETTY_NAME:-unknown})"
+  if [[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 26.04 ]]; then
+    pass "Ubuntu 26.04 LTS (${PRETTY_NAME:-unknown})"
   else
-    fail "expected Ubuntu 26.10, found ${PRETTY_NAME:-unknown} (ID=${ID:-?} VERSION_ID=${VERSION_ID:-?})"
+    fail "expected Ubuntu 26.04, found ${PRETTY_NAME:-unknown} (ID=${ID:-?} VERSION_ID=${VERSION_ID:-?})"
   fi
 else
   fail '/etc/os-release is missing; cannot identify the distribution'
@@ -32,14 +32,14 @@ fi
 arch=$(uname -m)
 [[ $arch == x86_64 ]] && pass "x86-64 ($arch)" || fail "expected x86-64, found $arch"
 
-# --- glibc (26.10 ships 2.43) ------------------------------------------------
+# --- glibc (26.04 ships 2.43) ------------------------------------------------
 glibc=$(ldd --version 2>/dev/null | awk 'NR == 1 {print $NF}')
 if [[ ${glibc:-} =~ ^[0-9]+\.[0-9]+ ]]; then
   major=${glibc%%.*}; minor=${glibc#*.}
   if (( major > 2 || (major == 2 && minor >= 43) )); then
     pass "glibc $glibc (portable artifact needs >= 2.43)"
   else
-    fail "glibc $glibc is below 2.43 (Ubuntu 26.04/26.10 floor for the portable archive)"
+    fail "glibc $glibc is below 2.43 (Ubuntu 26.04 floor for the portable archive)"
   fi
 else
   warn "could not read the glibc version"
@@ -69,7 +69,7 @@ for candidate in python3.15 python3.14 python3.13 python3; do
     *) info "$candidate reports $ver (not supported)" ;;
   esac
 done
-(( py_ok )) || fail 'no supported Python 3.13-3.15 (Ubuntu 26.10 ships 3.14.7)'
+(( py_ok )) || fail 'no supported Python 3.13-3.15 (Ubuntu 26.04 ships 3.14)'
 
 # --- Network (short timeouts; failures here block CI and installs) -----------
 check_url() {
@@ -114,9 +114,9 @@ command -v xvfb-run >/dev/null 2>&1 && pass 'xvfb-run present' || warn 'xvfb-run
 
 echo
 if (( fails )); then
-  printf 'NOT READY: %d failure(s), %d warning(s). See docs/UBUNTU_26_10_TESTING.md.\n' "$fails" "$warns"
+  printf 'NOT READY: %d failure(s), %d warning(s). See docs/UBUNTU_26_04_TESTING.md.\n' "$fails" "$warns"
   exit 1
 else
-  printf 'READY (with %d warning(s)). See docs/UBUNTU_26_10_TESTING.md for the acceptance run.\n' "$warns"
+  printf 'READY (with %d warning(s)). See docs/UBUNTU_26_04_TESTING.md for the acceptance run.\n' "$warns"
   exit 0
 fi

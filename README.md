@@ -8,14 +8,14 @@
 
 BabyMind is a local-first AI workspace for **Debian-based Linux on x86-64**
 with a desktop window and a bundled CPU llama.cpp runtime. BabyMind is tested
-on **Ubuntu 26.10**. Its 50 specialist roles are prompts over one model, not
+on **Ubuntu 26.04 LTS**. Its 50 specialist roles are prompts over one model, not
 independent people or independently trained agents.
 
 ## Python support
 
 BabyMind requires **Python 3.13 or newer** and is tested on 3.13, 3.14 and 3.15
 (the current stable release). Python 3.10 reached end of life on 2026-10-01, so
-it is no longer supported. Ubuntu 26.10 ships Python 3.14.7; Ubuntu 24.04 ships
+it is no longer supported. Ubuntu 26.04 ships Python 3.14; Ubuntu 24.04 ships
 3.12, so its users install `python3.13` first. See
 [Python support](docs/PYTHON_SUPPORT.md) for the upgrade policy and the pinned
 dependency set.
@@ -30,6 +30,20 @@ does not provide one - installs BabyMind and starts it:
 ```bash
 bash -c 'if command -v curl >/dev/null 2>&1; then curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; elif command -v wget >/dev/null 2>&1; then wget -qO- https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; else sudo apt-get update && sudo apt-get install -y curl ca-certificates && curl -fsSL https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh; fi' | BABYMIND_LAUNCH_AFTER_INSTALL=1 bash
 ```
+
+**Safer: inspect the script first (recommended).** `raw.githubusercontent.com`
+serves the same file kept in this repository, but it is not signed. Prefer to
+download, review and then run it:
+
+```bash
+curl -fsSL -o bootstrap-linux.sh https://raw.githubusercontent.com/Asandhu402/BabyMind/main/bootstrap-linux.sh
+less bootstrap-linux.sh
+BABYMIND_LAUNCH_AFTER_INSTALL=1 bash bootstrap-linux.sh
+```
+
+There is no published checksum for the bootstrap script itself until tagged
+releases exist; for higher assurance, clone the repository at a tagged release
+and run `./bootstrap-linux.sh` from the checkout.
 
 The command downloads and runs `bootstrap-linux.sh`, which:
 
@@ -64,21 +78,21 @@ Run either of them from a checkout to install that checkout instead of
 downloading the newest source. `install-and-run-linux.sh` does the same work and
 then starts BabyMind.
 
-The apt path is exercised in CI, which is configured to run on Ubuntu 26.10
+The apt path is exercised in CI, which runs on GitHub-hosted **Ubuntu 26.04 LTS**
 (bootstrap preparation, Qt build, packaged app, installer shell tests). Debian and
 Ubuntu derivatives are the only supported distribution family; the first-run
-GUI with the production model remains unverified on a clean desktop. GitHub does
-not publish a hosted `ubuntu-26.10` runner label yet, so those jobs need a
-self-hosted Ubuntu 26.10 runner — see
-[testing on Ubuntu 26.10](docs/UBUNTU_26_10_TESTING.md),
+GUI with the production model remains unverified on a clean desktop. See
+[testing on Ubuntu 26.04](docs/UBUNTU_26_04_TESTING.md),
 [verification](docs/LINUX_VERIFICATION.md) and
-[known limitations](docs/KNOWN_LIMITATIONS.md).
+[known limitations](docs/KNOWN_LIMITATIONS.md). Note that no CI run has been
+recorded yet: the workflow was configured for hosted 26.04 on 2026-11-06, and
+whether it passes will be known only after it executes.
 
 ## Continuous testing
 
 The model is BabyMind's brain, so the real-model acceptance job runs on **every
 push and every pull request** - it is not a manual, opt-in dispatch. On a fresh
-Ubuntu 26.10 runner it runs the actual `install-linux.sh` (package installation, the
+GitHub-hosted Ubuntu 26.04 LTS runner it runs the actual `install-linux.sh` (package installation, the
 2.71 GB model download and its SHA-256 check, the local build), starts the
 installed desktop under Xvfb and drives it through the **full** extended
 question set with the real model, then runs the real model through source-mode
@@ -107,7 +121,7 @@ model cannot answer the tested questions or produce a valid edit.
 ## Portable desktop
 
 The target is a graphical Debian-based x86-64 desktop with glibc 2.43 or newer (Ubuntu 26.04+,
-because the release itself is built and tested on Ubuntu 26.10; Qt 6.12 requires only glibc 2.34 or newer, but
+because the release itself is built and tested on Ubuntu 26.04 LTS; Qt 6.12 requires only glibc 2.34 or newer, but
 the portable build's floor is set by its build host)
 and standard Qt WebEngine system libraries. Extract the complete
 Linux portable archive and run `./BabyMind` (or open the executable in your file
@@ -169,8 +183,9 @@ Current capability status (honest, matches the code):
   the log (one click to paste into a chat for help) and at the top, plus
   **Copy log path** and **Download .md**. The log is local and unencrypted;
   review it before sharing.
-- Downloads, third-party dependencies and the model have their own licenses;
-  assess them before redistribution. This repository currently has no top-level
-  license file. No license to redistribute the project is implied.
+- BabyMind itself is licensed under the MIT License (see [LICENSE](LICENSE)
+  and [NOTICE](NOTICE)). The pinned model, the llama.cpp runtime, the bundled
+  Qt/WebEngine libraries and any third-party dependencies keep their own
+  licenses; assess them before redistribution.
 
 See [security policy](SECURITY.md) and [known limitations](docs/KNOWN_LIMITATIONS.md). Research answers follow the [source-quality and citation policy](docs/RESEARCH_SOURCE_POLICY.md).

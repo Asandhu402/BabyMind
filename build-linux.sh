@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build an x86-64 CPU-only portable directory on Debian-based Linux.
-# Built and tested on Ubuntu 26.10; the artifact needs glibc 2.43 or newer.
+# Built and tested on Ubuntu 26.04 LTS; the artifact needs glibc 2.43 or newer.
 set -euo pipefail
 cd "$(dirname "$0")"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'Build requires Debian-based Linux x86-64.' >&2; exit 1; }

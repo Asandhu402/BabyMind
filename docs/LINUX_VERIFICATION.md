@@ -2,13 +2,14 @@
 
 > **Historical record.** The runs below were made while BabyMind still supported
 > Python 3.10/3.11 and Qt 6.8, and the installer accepted Ubuntu 22.04. The
-> current baseline is Python 3.13+ with PySide6 6.12, tested on Ubuntu 26.10
-> (glibc 2.43); see
+> current baseline is Python 3.13+ with PySide6 6.12, tested on Ubuntu
+> 26.04 LTS (glibc 2.43); see
 > [Python support](PYTHON_SUPPORT.md) for the supported matrix and the CI jobs
 > that cover it. Entries below keep the distribution they actually ran on;
-> none of them claims a run on Ubuntu 26.10. On 2026-11-06 CI, the release
-> workflow and the portable build moved to Ubuntu 26.10 — see the dated
-> section at the end of this file.
+> none of them claims a run on Ubuntu 26.10 or 26.04. On 2026-11-06 CI, the
+> release workflow and the portable build moved to Ubuntu 26.10 in the morning
+> and to Ubuntu 26.04 LTS later the same day — see the two dated sections at
+> the end of this file.
 
 This work is **not release acceptance**. The 64-bit Linux portable path is a
 work in progress, not yet demonstrated plug-and-play end to end.
@@ -36,8 +37,8 @@ work in progress, not yet demonstrated plug-and-play end to end.
 - This environment cannot reach Hugging Face or GitHub release-asset hosts. No
   real model download, independent validation of its pinned checksum, or
   end-to-end inference was tested. Model-license terms could not be independently
-  checked here. The repository has no top-level project license; redistribution is not
-  cleared. No release, tag, PR, or publication was performed.
+  checked here. The repository is MIT licensed (see LICENSE and NOTICE);
+  redistribution of third-party components remains subject to their own licenses. No release, tag, PR, or publication was performed.
 - The 50 role-guided passes requested for major development were not executed:
   no working local model was available in this environment. No specialist
   contributions or verification records are claimed for this change.
@@ -534,7 +535,8 @@ What has been run:
   ubuntu-22.04. (Same-day update, 2026-11-06: BabyMind moved to Ubuntu 26.10
   for testing, so `bootstrap` now runs on ubuntu-26.10 and `bootstrap-plan` on
   ubuntu-24.04, the newest available LTS runner whose Python is still below
-  the 3.13 floor.)
+  the 3.13 floor.) (A further same-day update moved the baseline to the hosted
+  ubuntu-26.04 LTS runner — see the section at the end of this file.)
 - **Dry run on Debian 12** (this sandbox, glibc 2.36, apt-get): plan reported
   the distribution packages it would try for 3.13-3.15 and the CPython 3.15.0
   source build into `~/.cache/babymind/python/3.15.0`.
@@ -734,6 +736,49 @@ the LTS runners ubuntu-22.04/24.04/26.04, their arm variants and
 or a future GitHub label before they can run; until then the workflow is
 declared but not executed. Treat 26.10 support as unverified in the same way
 the clean Ubuntu Desktop session remains unverified.
-[Testing on Ubuntu 26.10](UBUNTU_26_10_TESTING.md) documents how to register a
-self-hosted runner with the `ubuntu-26.10` label and the acceptance criteria
-it must satisfy before 26.10 can be called verified.
+[Testing on Ubuntu 26.04 LTS](UBUNTU_26_04_TESTING.md) (renamed from
+`UBUNTU_26_10_TESTING.md` the same day) documents the acceptance criteria a
+platform must satisfy before support can be called verified — criteria that
+were never met for 26.10, and have not been met for 26.04 either yet.
+
+
+## Testing platform moved to Ubuntu 26.04 LTS (2026-11-06, afternoon)
+
+BabyMind is Debian-based Linux for x86-64 only. Later on 2026-11-06 the
+testing platform moved from Ubuntu 26.10 to the **Ubuntu 26.04 LTS** baseline:
+
+- Why: GitHub does not publish a hosted `ubuntu-26.10` label and no
+  self-hosted runner was ever registered, so no 26.10 CI job could run; 26.10
+  is also a short-lived interim release. GitHub *does* publish a hosted
+  `ubuntu-26.04` label, so the workflows now execute without self-hosted
+  hardware — 26.04 being LTS also gives the project a stable baseline.
+- `.github/workflows/tests.yml`: the `linux` matrix (Python 3.13, 3.14, 3.15)
+  and the `source-latest`, `bootstrap` and `real-model-installer` jobs now run
+  on `ubuntu-26.04`. The release workflow (`release.yml`) builds on
+  `ubuntu-26.04` as well.
+- The portable artifact is built on Ubuntu 26.04, so its floor stays at glibc
+  2.43 (Ubuntu 26.04 itself ships 2.43). Debian 13 ships glibc 2.41 and cannot
+  run the portable archive; source builds with Python 3.13+ remain supported
+  there.
+- `bootstrap-plan` still runs on `ubuntu-24.04` (Python 3.12 below the 3.13
+  floor). It must never move to a release whose Python is supported.
+- CI model cache: the `real-model-installer` job restores the pinned ~2.71 GB
+  GGUF from the GitHub dependency cache (key: the pinned SHA-256) before the
+  installer runs, and drops a cached file that fails SHA-256. A cache miss
+  re-downloads exactly as before. The cache path and key cannot be validated
+  until the job executes.
+- `docs/UBUNTU_26_10_TESTING.md` was renamed
+  [UBUNTU_26_04_TESTING.md](UBUNTU_26_04_TESTING.md) and rewritten; the
+  readiness script was renamed `scripts/check-ubuntu-26.04-ready.sh` to match.
+- README.md, docs/PYTHON_SUPPORT.md, docs/LINUX_PORTABLE.md,
+  docs/KNOWN_LIMITATIONS.md, docs/PRODUCTION_READINESS.md and the installer
+  test fixture were updated to match. Historical entries above keep the
+  distribution they actually ran on; none of them claims a run on 26.04.
+
+What this does **not** establish: nothing has run on Ubuntu 26.04 yet either.
+At the time of this change no Ubuntu 26.04 CI job has completed, and no 26.04
+installer, packaged-app, GUI or real-model result has been recorded — the
+migration only configures the workflow for hosted 26.04 runners. Whether the
+jobs pass will be known only after they execute. Xvfb is not an Ubuntu Desktop
+session. Treat 26.04 support as unverified in the same way 26.10 was, and the
+clean Ubuntu Desktop session remains unverified separately.

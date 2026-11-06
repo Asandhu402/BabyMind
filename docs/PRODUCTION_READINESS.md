@@ -55,7 +55,7 @@ artifact and an owner-approved result.
 ### G0 — Supported installation and lifecycle
 
 - Fresh Debian and Ubuntu-family x86-64 desktop install, upgrade, launch,
-  restart, uninstall, and reinstall tests, tested on Ubuntu 26.10 and including
+  restart, uninstall, and reinstall tests, tested on Ubuntu 26.04 LTS and including
   the glibc floor the portable archive is built against.
 - Reproducible, signed release artifacts and a published software bill of
   materials; pinned and verified model/runtime/dependency downloads.
