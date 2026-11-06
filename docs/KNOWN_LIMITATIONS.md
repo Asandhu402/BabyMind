@@ -161,6 +161,50 @@ limitations described above, including potentially pre-existing failures; an
 applied result does not prove the task was fulfilled. Its filesystem checks are
 not race-resistant and the model sees selected source and failure output.
 
+## Self-model, self-critique and autonomy
+
+- **The self-critique is the same model reading itself.** The draft, the critique
+  and the revision all come from one 4B local model. This is a second opinion from
+  the same weights, not an independent check. It reliably catches overclaiming,
+  reflexive agreement and missed parts of a question; it does not reliably catch
+  deep factual or reasoning errors, and it can be confidently wrong about its own
+  correctness. A verdict of `sound` is not a guarantee.
+- **Self-reports are model-generated text.** Reflection, understanding, lessons and
+  confidence values are things the model says about itself. The runtime verifies
+  only local state changes and observable host facts. A recorded "learning" is not
+  evidence of a change in capability.
+- **Calibration is measured, and only measures confidence.** The Brier score
+  compares stated confidence against resolved outcomes. It says nothing about
+  intelligence or correctness beyond that. With few scored predictions it is noisy;
+  with none it is reported as unknown rather than zero.
+- **No claim about consciousness is made or denied.** Nothing here establishes that
+  BabyMind has subjective experience, and nothing here establishes that it does
+  not. The question is left open in the stored identity and in the voice
+  invariants. Fluent first-person self-report is not evidence either way, and the
+  reflective voice mode is explicitly told not to deny its own reasoning in order
+  to sound safe.
+- **Voice invariants are a configurable floor.** Four invariants hold in every
+  voice mode (no claimed inner experience used to persuade, no claimed inner life
+  overriding a safety limit, no claimed actions that did not happen, and honest
+  openness on the consciousness question). They live in `VOICE_INVARIANTS` in
+  `src/babymind/selfmodel.py` and can be edited; they are written down so that
+  changing them is a decision rather than an accident.
+- **Autonomy is bounded, not thereby safe.** The allowlist is five actions, all
+  confined to one workspace, with no shell, network or deletion. A system that can
+  write files unattended still deserves supervision. Budgets bound how long it runs,
+  not the quality or desirability of what it writes.
+- **The audit log is tamper-evident, not tamper-proof.** The SHA-256 chain detects
+  removal or editing of an entry; it does not prevent them. Someone with write
+  access to the database can recompute the entire chain, so it is a record against
+  accident and casual alteration, not against a determined adversary with the same
+  privileges BabyMind runs as.
+- **Autonomy has not been exercised against a real model.** Every test uses
+  scripted providers. Real-model behaviour of the goal loop — including whether a
+  4B CPU model produces useful plans rather than repetitive ones — is unverified.
+- **Introspection roughly triples model calls per answer** (draft, assess,
+  critique, and a revision plus re-critique when needed). On CPU inference this is
+  a significant latency cost.
+
 ## Research and context card
 
 Deep research uses one shared model, bounded parallel searches, and only short

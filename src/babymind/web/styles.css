@@ -115,3 +115,73 @@ body.light .integration-input{background:#fafaff;color:#252438}
 .diagnostic-kind.page{color:#c3b3ff;border-color:rgba(165,138,255,.3);background:rgba(165,138,255,.07)}
 .diagnostics-bottom{max-width:1050px;width:100%;margin:18px auto 0;display:flex;justify-content:center}
 .diagnostics-bottom-copy{width:100%;max-width:460px;padding:13px;font-size:13px;border-radius:10px}
+
+/* ---- Self & autonomy view (metacognition) ---- */
+.self-grid{max-width:980px;width:100%;margin:0 auto 22px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.self-card{border:1px solid var(--line);background:rgba(255,255,255,.025);border-radius:11px;padding:18px}
+.self-card-head{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+.self-icon{width:31px;height:31px;flex:0 0 31px;border-radius:9px;display:grid;place-items:center;background:rgba(165,138,255,.12);color:#bba9ff;font-size:16px}
+.self-card h3{font:600 13px Manrope,sans-serif;margin:0}
+.self-card p{color:#9295a5;font-size:11px;line-height:1.65;margin:0 0 10px}
+.self-muted{color:#81859a;font-size:10px}
+.self-stance{margin-top:9px;padding-top:9px;border-top:1px solid var(--line);color:#9a9db0;font-size:10px;line-height:1.6}
+.self-card label{display:block;margin:12px 0 5px;color:#8f93a5;font-size:10px;font-weight:600}
+.self-card select,.self-card input{width:100%;background:#171923;border:1px solid var(--line-strong);color:var(--text);border-radius:7px;padding:8px 9px;font-size:11px;outline:none}
+.self-card select:focus,.self-card input:focus{border-color:rgba(165,138,255,.55)}
+.self-details{margin-top:12px}
+.self-details summary{cursor:pointer;color:#b7a5f4;font:10px "DM Mono",monospace;letter-spacing:.4px}
+.self-details ul{margin:9px 0 0;padding-left:17px;color:#8a8e9f;font-size:10px;line-height:1.65}
+.self-details li{margin-bottom:5px}
+.self-stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.self-stat{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:rgba(255,255,255,.02)}
+.self-stat span{display:block;color:#7c8092;font-size:9px;text-transform:uppercase;letter-spacing:.6px}
+.self-stat strong{display:block;font:600 13px Manrope,sans-serif;margin-top:3px}
+.self-stat-grid.is-running{border:1px solid rgba(120,216,174,.35);border-radius:9px;padding:3px}
+.self-stat-grid.is-halted{border:1px solid rgba(255,133,142,.4);border-radius:9px;padding:3px}
+.self-note{margin-top:9px;color:#7d8195;font-size:9px;line-height:1.6}
+.self-list{display:grid;gap:8px;max-height:260px;overflow:auto}
+.self-item{border:1px solid var(--line);border-radius:9px;padding:11px;background:rgba(255,255,255,.02)}
+.self-item p{margin:6px 0 0;color:#cbced8;font-size:11px;line-height:1.6}
+.self-item small{color:#767a8b;font:9px "DM Mono",monospace}
+.self-item-top{display:flex;gap:6px;align-items:center}
+.self-kind{border:1px solid rgba(165,138,255,.3);color:#bba9ff;border-radius:5px;padding:1px 6px;font:9px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.5px}
+.self-retire{margin-left:auto;border:0;background:transparent;color:#7c8092;font-size:15px;line-height:1;padding:0 3px}
+.self-retire:hover{color:#ff9aa2}
+.self-ask{color:#8d91a3 !important;font-style:italic}
+.self-said{color:#e2e3ea !important}
+.confidence-bar{height:4px;border-radius:3px;background:#2a2e3b;margin:8px 0 5px;overflow:hidden}
+.confidence-bar i{display:block;height:100%;background:linear-gradient(90deg,#7d62db,#a58aff)}
+.self-empty{border:1px dashed var(--line-strong);border-radius:9px;padding:16px;color:#7f8395;font-size:10px;line-height:1.7;text-align:center}
+.self-form{display:grid;grid-template-columns:1fr auto auto;gap:7px;margin-top:11px}
+.self-form input{grid-column:1 / -1}
+.self-autonomy{margin-top:38px;padding-top:34px;border-top:1px solid var(--line)}
+.self-autonomy-intro{margin-bottom:26px}
+.autonomy-actions{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px}
+.task-secondary{border:1px solid var(--line-strong);background:rgba(255,255,255,.04);color:#c6c8d2;padding:8px 11px;border-radius:7px;font-size:10px}
+.task-secondary:hover{background:rgba(255,255,255,.08)}
+.self-audit{max-width:980px;margin:0 auto}
+.self-audit-state{margin-left:auto;font:9px "DM Mono",monospace;color:var(--green)}
+.self-audit-state.is-bad{color:var(--danger)}
+.self-audit-list{max-height:300px;gap:3px}
+.audit-row{display:grid;grid-template-columns:44px 96px 1fr auto;gap:9px;align-items:center;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:rgba(255,255,255,.02);font-size:10px}
+.audit-seq{color:#6f7385;font:9px "DM Mono",monospace}
+.audit-kind{color:#b7a5f4;font:9px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.4px}
+.audit-detail{color:#aeb1bd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audit-hash{color:#666a7b;font:9px "DM Mono",monospace}
+
+/* ---- Per-message self-check disclosure in chat ---- */
+.self-check{margin-top:11px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.02)}
+.self-check summary{cursor:pointer;padding:8px 11px;color:#b7a5f4;font-size:10px;display:flex;align-items:center;gap:7px}
+.self-check-dot{width:6px;height:6px;border-radius:50%;background:var(--violet);flex:0 0 6px}
+.self-check-body{padding:0 11px 10px;display:grid;gap:7px}
+.self-check-row{display:grid;grid-template-columns:96px 1fr;gap:9px;font-size:10px;line-height:1.6}
+.self-check-row strong{color:#8b8fa1;font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:.5px}
+.self-check-row span{color:#b9bcc7}
+.self-check-foot{color:#6d7183;font-size:9px;line-height:1.6;border-top:1px solid var(--line);padding-top:7px}
+
+@media (max-width:900px){
+  .self-grid{grid-template-columns:1fr}
+  .self-stat-grid{grid-template-columns:1fr 1fr}
+  .audit-row{grid-template-columns:38px 1fr;row-gap:3px}
+  .audit-detail,.audit-hash{grid-column:1 / -1;white-space:normal}
+}

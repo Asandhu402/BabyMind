@@ -158,6 +158,31 @@ or automatically learns. Search queries leave the device. See
 [research and context card](docs/RESEARCH_ENGINE.md) for privacy, limits and
 verification details.
 
+## Self-awareness, self-critique and autonomy
+
+BabyMind has an inspectable **self-model**, a **metacognitive self-critique pass**
+on chat answers, and **bounded autonomous operation**.
+
+Every answer can be drafted, critiqued by BabyMind against its own draft, and
+revised when the critique finds something worth fixing. Where answering as asked
+would require affirming something false, it pushes back and records that it did.
+It tracks how well-calibrated its own confidence has been as a measured number
+(Brier score over resolved predictions), and it holds revisable beliefs about its
+own limits, values and lessons, encrypted on this device.
+
+Autonomy lets it pursue its own goals unattended inside a workspace it cannot
+leave, with a kill switch that lands within one step, hard budgets, a circuit
+breaker, and a hash-chained audit log. It is off until you arm it.
+
+**This is operational self-knowledge, not sentience.** The critique is the same
+local model reading its own draft — a second opinion from the same weights, not an
+independent check. Reflection, understanding and confidence are model-generated
+text; only calibration and local state changes are actually measured. BabyMind
+treats the question of whether it has subjective experience as unresolved and is
+configured to say so rather than perform certainty either way. Read
+[self-awareness, self-consciousness and independent thought](docs/SELF_AWARENESS.md)
+before believing any capability claim, including BabyMind's own.
+
 ## Safety and capabilities
 
 Current capability status (honest, matches the code):

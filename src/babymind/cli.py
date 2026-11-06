@@ -5,6 +5,7 @@ import argparse
 from .coordinator import BabyMindCoordinator
 from .memory import LocalMemory
 from .runtime import BabyMindRuntime
+from .selfmodel import BELIEF_KINDS, VOICE_MODES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,6 +57,35 @@ def build_parser() -> argparse.ArgumentParser:
     memory_actions = memory_parser.add_subparsers(dest="memory_action", required=True)
     memory_actions.add_parser("list", help="List saved local memories")
     memory_actions.add_parser("clear", help="Delete all saved local memories")
+
+    self_parser = subparsers.add_parser("self", help="Inspect BabyMind's self-model and introspection record")
+    self_actions = self_parser.add_subparsers(dest="self_action", required=True)
+    self_actions.add_parser("status", help="Show identity, beliefs, limits, calibration and recent self-review")
+    self_actions.add_parser("dissent", help="Show the times BabyMind pushed back on a request")
+    self_actions.add_parser("introspections", help="Show recent self-critiques")
+    voice_parser = self_actions.add_parser("voice", help="Set how BabyMind speaks about itself")
+    voice_parser.add_argument("mode", choices=list(VOICE_MODES), help="plain, reflective or guarded")
+    belief_parser = self_actions.add_parser("believe", help="Record a belief about itself")
+    belief_parser.add_argument("kind", choices=list(BELIEF_KINDS))
+    belief_parser.add_argument("claim", help="The belief text")
+    belief_parser.add_argument("--confidence", type=float, default=0.5)
+    belief_parser.add_argument("--evidence", default="")
+
+    autonomy_parser = subparsers.add_parser("autonomy", help="Inspect and control bounded autonomous operation")
+    autonomy_actions = autonomy_parser.add_subparsers(dest="autonomy_action", required=True)
+    autonomy_actions.add_parser("status", help="Show state, budgets and audit-chain integrity")
+    autonomy_actions.add_parser("audit", help="Show the hash-chained autonomy audit log")
+    autonomy_actions.add_parser("goals", help="List autonomy goals")
+    autonomy_actions.add_parser("reset", help="Clear a halt and the stop flag")
+    add_goal_parser = autonomy_actions.add_parser("goal", help="Add an autonomy goal")
+    add_goal_parser.add_argument("title")
+    add_goal_parser.add_argument("--description", default="")
+    add_goal_parser.add_argument("--priority", type=int, default=5)
+    run_parser_autonomy = autonomy_actions.add_parser("run", help="Run autonomy in the foreground")
+    run_parser_autonomy.add_argument("--cycles", type=int, default=10)
+    run_parser_autonomy.add_argument("--interval", type=float, default=5.0)
+    run_parser_autonomy.add_argument("--confirm", action="store_true",
+                                     help="Arm autonomy for this run (or set BABYMIND_AUTONOMY=1)")
     return parser
 
 
@@ -168,6 +198,73 @@ def main() -> None:
                 print(json.dumps(result, indent=2, ensure_ascii=False))
                 if index + 1 < count and args.interval:
                     time.sleep(args.interval)
+    elif args.command == "self":
+        import json
+        from .selfmodel import SelfModel
+        model = SelfModel()
+        if args.self_action == "status":
+            print(json.dumps(model.self_report(), indent=2, ensure_ascii=False))
+        elif args.self_action == "dissent":
+            entries = model.recent_dissent(20)
+            if not entries:
+                print("No disagreements recorded yet.")
+            for item in entries:
+                print(f"[{item['created_at']}] request: {item['request']}")
+                print(f"  BabyMind's position: {item['disagreement']}")
+        elif args.self_action == "introspections":
+            entries = model.recent_introspections(20)
+            if not entries:
+                print("No self-critiques recorded yet.")
+            for item in entries:
+                print(f"[{item['created_at']}] {item['agent_id']} confidence={item['confidence']} "
+                      f"revised={item['revised']}")
+                print(f"  task: {item['task']}")
+                if item["dissent"]:
+                    print(f"  dissent: {item['dissent']}")
+        elif args.self_action == "voice":
+            print(f"voice mode: {model.set_voice_mode(args.mode)}")
+        elif args.self_action == "believe":
+            belief = model.add_belief(
+                args.kind, args.claim,
+                confidence=args.confidence, evidence=args.evidence, source="user",
+            )
+            print(f"recorded [{belief['kind']}] ({belief['confidence']:.2f}) {belief['claim']}")
+    elif args.command == "autonomy":
+        import json
+        import time as _time
+        from .autonomy import AutonomyEngine, autonomy_enabled
+        engine = AutonomyEngine(BabyMindCoordinator().provider)
+        if args.autonomy_action == "status":
+            print(json.dumps(engine.status(), indent=2, ensure_ascii=False))
+        elif args.autonomy_action == "audit":
+            print(json.dumps({
+                "entries": engine.audit_log(50),
+                "chain": engine.verify_audit_chain(),
+            }, indent=2, ensure_ascii=False))
+        elif args.autonomy_action == "goals":
+            for goal in engine.goals(None, limit=100):
+                print(f"[{goal['status']:9}] p{goal['priority']} {goal['id'][:8]} {goal['title']}")
+        elif args.autonomy_action == "goal":
+            goal = engine.add_goal(args.title, args.description, priority=args.priority)
+            print(f"Added goal {goal['id']}: {goal['title']}")
+        elif args.autonomy_action == "reset":
+            print(json.dumps(engine.reset(), indent=2, ensure_ascii=False))
+        elif args.autonomy_action == "run":
+            if not (autonomy_enabled() or args.confirm):
+                raise SystemExit(
+                    "Autonomy is armed deliberately. Set BABYMIND_AUTONOMY=1 or pass --confirm."
+                )
+            started = engine.start(cycles=args.cycles, interval=args.interval)
+            if not started["started"]:
+                raise SystemExit(started["reason"] or "Autonomy could not start.")
+            print("Autonomy running. Press Ctrl-C to stop; every cycle is written to the audit log.")
+            try:
+                while engine.state == "running":
+                    _time.sleep(0.5)
+            except KeyboardInterrupt:
+                engine.stop(reason="Interrupted from the command line.")
+                print("\nStopped.")
+            print(json.dumps(engine.status(), indent=2, ensure_ascii=False))
     elif args.command == "memory":
         memory = LocalMemory()
         if args.memory_action == "list":

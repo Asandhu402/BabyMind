@@ -178,12 +178,12 @@ jobs:
           grep -q "would build CPython" "$RUNNER_TEMP/plan.txt"
           grep -q "Using apt-get" "$RUNNER_TEMP/plan.txt"
   ui-diagnostics:
-    # Exercises the web client's Diagnostics view headlessly with jsdom on the
-    # hosted 24.04 image (a real desktop VM is not needed for DOM logic).
-    # Loads the real index.html and app.js, and asserts the view renders the
-    # interaction log, copies per-entry/report/log-path to the clipboard,
-    # issues DELETE for Clear log, and posts uncaught client errors back to
-    # the server. This is not a real-browser pass - see docs/KNOWN_LIMITATIONS.md.
+    # Exercises the web client's Diagnostics, research chat and Self/autonomy
+    # views headlessly with jsdom on the hosted 24.04 image (a real desktop VM
+    # is not needed for DOM logic). Loads the real index.html and app.js, and
+    # asserts the views render, copy to the clipboard, issue the right requests,
+    # and post uncaught client errors back to the server. This is not a
+    # real-browser pass - see docs/KNOWN_LIMITATIONS.md.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -193,10 +193,11 @@ jobs:
           node-version: '22'
       - name: Install headless DOM
         run: npm ci
-      - name: Run Diagnostics and research chat UI checks
+      - name: Run Diagnostics, research chat and Self/autonomy UI checks
         run: |
           node tests/test_diagnostics_ui.js
           node tests/test_research_ui.js
+          node tests/test_self_ui.js
 
   real-model-installer:
     # Permanent, not opt-in: the pinned model is the application's brain, so

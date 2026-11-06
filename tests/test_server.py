@@ -408,7 +408,7 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertIn(b"busy", body.lower())
 
     def test_chat_persists_only_successful_conversation(self) -> None:
-        fake_result = SimpleNamespace(response="Hello from BabyMind")
+        fake_result = SimpleNamespace(response="Hello from BabyMind", introspection=None)
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result):
             status, _, body = self.request("/api/chat", {
                 "message": "Hello", "agent_id": "BM-01"
@@ -513,13 +513,13 @@ class BabyMindWebTests(unittest.TestCase):
 
     def test_plain_chat_does_not_start_research(self) -> None:
         with patch('babymind.research_engine.investigate') as research, \
-             patch.object(server.COORDINATOR, 'ask', return_value=SimpleNamespace(response='normal')):
+             patch.object(server.COORDINATOR, 'ask', return_value=SimpleNamespace(response='normal', introspection=None)):
             status, _, body = self.request('/api/chat', {'message': 'hello'})
         self.assertEqual(status, 200, body)
         research.assert_not_called()
 
     def test_chat_treats_null_conversation_id_as_new_conversation(self) -> None:
-        fake_result = SimpleNamespace(response="Fresh conversation response")
+        fake_result = SimpleNamespace(response="Fresh conversation response", introspection=None)
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result):
             status, _, body = self.request("/api/chat", {
                 "message": "Start a fresh chat", "agent_id": "BM-01",
@@ -535,7 +535,7 @@ class BabyMindWebTests(unittest.TestCase):
         )
 
     def test_conversation_text_is_encrypted_in_sqlite(self) -> None:
-        fake_result = SimpleNamespace(response="Confidential answer")
+        fake_result = SimpleNamespace(response="Confidential answer", introspection=None)
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result):
             status, _, body = self.request("/api/chat", {
                 "message": "Confidential question", "agent_id": "BM-01"
@@ -550,7 +550,7 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertNotIn("Confidential answer", [row["content"] for row in stored])
 
     def test_conversation_can_be_deleted_with_its_messages(self) -> None:
-        fake_result = SimpleNamespace(response="Temporary answer")
+        fake_result = SimpleNamespace(response="Temporary answer", introspection=None)
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result):
             status, _, body = self.request("/api/chat", {
                 "message": "Delete me", "agent_id": "BM-01"
@@ -572,8 +572,8 @@ class BabyMindWebTests(unittest.TestCase):
             {'agent_id': 'BM-03', 'task': 'Analyze', 'depends_on': []},
             {'agent_id': 'BM-34', 'task': 'Review', 'depends_on': ['BM-03']}]})
         with patch.object(server.COORDINATOR.provider, 'complete', return_value=plan), \
-             patch.object(server.COORDINATOR, 'ask', side_effect=[SimpleNamespace(response='Draft'),
-                 SimpleNamespace(response='Review'), SimpleNamespace(response='Final')]) as ask:
+             patch.object(server.COORDINATOR, 'ask', side_effect=[SimpleNamespace(response='Draft', introspection=None),
+                 SimpleNamespace(response='Review', introspection=None), SimpleNamespace(response='Final', introspection=None)]) as ask:
             status, _, body = self.request('/api/chat', {'message': 'Improve this design', 'teamwork': True,
                                                         'remember': True})
         self.assertEqual(status, 200, body)
@@ -664,7 +664,7 @@ class BabyMindWebTests(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT COUNT(*) FROM conversations').fetchone()[0], 0)
 
     def test_collaboration_uses_specialist_reviewer_and_coordinator(self) -> None:
-        fake_result = SimpleNamespace(response="Draft answer")
+        fake_result = SimpleNamespace(response="Draft answer", introspection=None)
         with patch.object(server.COORDINATOR, "ask", return_value=fake_result) as ask:
             status, _, body = self.request("/api/chat", {
                 "message": "Review my plan", "agent_id": "BM-02", "collaborate": True
