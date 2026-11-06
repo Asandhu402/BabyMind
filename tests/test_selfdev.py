@@ -348,6 +348,23 @@ class SelfDevTests(unittest.TestCase):
         # reported, not a recomputed stand-in for it.
         self.assertIn("output_chars=231", diagnosis)
 
+    def test_test_problem_ids_reads_both_output_streams(self) -> None:
+        result = {
+            "stderr": "FAIL: stderr_failure (tests.test_one)\\n",
+            "stdout": "ERROR: stdout_error (tests.test_two)\\n",
+        }
+        self.assertEqual(
+            selfdev._test_problem_ids(result),
+            {"stderr_failure (tests.test_one)", "stdout_error (tests.test_two)"},
+        )
+        # The gate must accept complete failure evidence regardless of which
+        # stream the host runner used for unittest's report.
+        result.update(
+            summary={"ran": 10, "skipped": 0, "problems": 2},
+            ok=False, exit_code=1, timed_out=False,
+        )
+        self.assertTrue(selfdev._suite_completed(result))
+
     def test_suite_diagnosis_survives_a_result_without_counters(self) -> None:
         diagnosis = selfdev._suite_diagnosis({})
         self.assertIn("ran=0", diagnosis)
