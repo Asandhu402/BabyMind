@@ -23,10 +23,12 @@ missing, not what is planned.
   unavailable. In source mode, `auto` now **fails closed** (treated as
   `require`) unless `BABYMIND_ALLOW_UNSANDBOXED_AUTO=true` is set explicitly;
   never set that for untrusted code.
-- Memory is capped by RLIMIT_AS/RLIMIT_DATA (virtual address space/heap) and,
-  when cgroup v2 delegation is available, an additional best-effort
-  `memory.max` cgroup cap (reported as `CGROUP_MEM_SET`/`CGROUP_MEM_UNAVAILABLE`
-  on stderr). Physical-RAM cgroup limits are not guaranteed on every kernel.
+- RLIMIT_AS/RLIMIT_DATA cap virtual address space and data segments; they
+  do not cap total physical RSS. No cgroup `memory.max` enforcement is
+  currently implemented. The sandbox reports
+  `CGROUP_MEM_UNAVAILABLE not-delegated-before-chroot` honestly; production
+  release remains blocked until a host-side delegated cgroup controller is
+  implemented and tested.
 - **Nested sandboxes are detected but still single-layer.** Running BabyMind
   inside a container/VM is reported by `sandbox.status()` and
   `/api/broker/status` (`nested_sandbox_detected`), but user namespaces inside
