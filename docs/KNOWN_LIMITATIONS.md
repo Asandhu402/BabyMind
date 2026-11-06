@@ -115,11 +115,13 @@ missing, not what is planned.
   competence or advice quality.
 - Conversations, missions, and memory are encrypted at rest with a local key file on Linux. It is readable by the same user and does not protect against a compromised account.
 - Knowledge-graph and voice integrations remain optional and unverified here.
-- The interaction diagnostics log (`~/.babymind/interactions.jsonl`) is metadata-only
+- The interaction diagnostics log (`~/.babymind/interactions.jsonl`) records every local
+  API call plus every failed page/asset request. It is metadata-only
   (route, status, timing, error text) and unencrypted; error messages may embed local
   paths. It is capped at 500 entries/256 KB, can be cleared from the Diagnostics window,
   and its markdown report is generated on demand — but anything you paste elsewhere is
-  no longer under BabyMind's control.
+  no longer under BabyMind's control. Successful static-file serves are deliberately
+  not logged (they would flood the 500-entry log); failures anywhere are.
 
 ## Interface
 

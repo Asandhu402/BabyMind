@@ -151,12 +151,15 @@ Current capability status (honest, matches the code):
   are encrypted, but on Linux the key is a local file readable by your user;
   protect the account and back up databases **and** keys. Encryption is not a
   defence against malware running as the same user.
-- The Diagnostics window records a metadata-only log of every local API
-  interaction (method, route, status, timing, error text; no request/response
-  bodies, attachments or memories) plus uncaught client errors to
-  `~/.babymind/interactions.jsonl`, and can render a paste-able markdown
-  report. The log is local, unencrypted and capped (500 entries); review it
-  before sharing it anywhere.
+- The Diagnostics window records a metadata-only log of everything the app
+  does — every local API call (method, route, status, timing, error text; no
+  request/response bodies, attachments or memories), every failed page/asset
+  request, and every uncaught client error — to
+  `~/.babymind/interactions.jsonl` (capped at 500 entries). The window shows a
+  selectable report preview, per-entry **Copy** buttons, a one-click **Copy
+  report**, **Copy log path** and **Download .md**, so everything it shows can
+  be pasted anywhere for debugging. The log is local and unencrypted; review
+  it before sharing.
 - Downloads, third-party dependencies and the model have their own licenses;
   assess them before redistribution. This repository currently has no top-level
   license file. No license to redistribute the project is implied.

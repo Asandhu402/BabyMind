@@ -1,5 +1,5 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { agents: [], conversations: [], tasks: [], conversationId: null, busy: false, filter: "all", view: "chat", attachment: null };
+const state = { agents: [], conversations: [], tasks: [], conversationId: null, busy: false, filter: "all", view: "chat", attachment: null, diagnostics: [], diagnosticsLogPath: "" };
 const domainLabels = {core:"Core",research:"Research",knowledge:"Knowledge",memory:"Memory",safety:"Safety",development:"Development",language:"Language",content:"Content",education:"Education",analysis:"Analysis",productivity:"Productivity",lifestyle:"Lifestyle",career:"Career",finance:"Finance",creative:"Creative",automation:"Automation",quality:"Quality",design:"Design"};
 const symbols = {core:"✳",research:"⌕",knowledge:"▤",memory:"⌁",safety:"◈",development:"⌘",language:"文",content:"✎",education:"⌂",analysis:"∑",productivity:"◷",lifestyle:"◇",career:"↗",finance:"＄",creative:"✧",automation:"⟳",quality:"✓",design:"◇"};
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
@@ -161,29 +161,25 @@ async function sendMessage(message) {
   } finally {state.busy=false;$("#sendButton").disabled=false;$("#messageInput").focus();}
 }
 
+// Serialize one entry exactly like the markdown report does, so a single row
+// can be pasted into chat on its own.
+function formatDiagnosticEntry(entry){
+  const duration=entry.duration_ms!=null?` · ${Math.round(entry.duration_ms)} ms`:"";
+  const outcome=entry.ok?"ok":`ERROR ${entry.status}`;
+  let text=`${entry.time} \`${entry.method} ${entry.path}\` → ${outcome}${duration}`;
+  if(entry.error) text+=`\n  - error: ${entry.error}`;
+  if(entry.detail) text+=`\n  - detail: ${entry.detail}`;
+  return text;
+}
 function renderDiagnosticEntry(entry){
   const time=new Date(entry.time).toLocaleString();
   const duration=entry.duration_ms!=null?` · ${Math.round(entry.duration_ms)} ms`:"";
-  const badge=entry.kind==="client_error"?'<span class="diagnostic-kind client">CLIENT</span>':entry.ok?'<span class="diagnostic-kind ok">OK</span>':'<span class="diagnostic-kind fail">ERROR</span>';
-  const statusText=entry.kind==="client_error"?"":` · HTTP ${entry.status}`;
+  const badge=entry.kind==="client_error"?'<span class="diagnostic-kind client">CLIENT</span>':entry.kind==="asset"?'<span class="diagnostic-kind asset">ASSET</span>':entry.kind==="page"?'<span class="diagnostic-kind page">PAGE</span>':entry.ok?'<span class="diagnostic-kind ok">OK</span>':'<span class="diagnostic-kind fail">ERROR</span>';
+  const statusText=(entry.kind==="client_error")?"":` · HTTP ${entry.status}`;
   const errorBlock=entry.error?`<div class="diagnostic-error-text">${escapeHTML(entry.error)}</div>`:"";
   const detailBlock=entry.detail?`<div class="diagnostic-error-text detail">${escapeHTML(entry.detail)}</div>`:"";
-  return `<article class="diagnostic-row ${entry.ok?"ok":"error"}"><div class="diagnostic-row-top">${badge}<code>${escapeHTML(entry.method)} ${escapeHTML(entry.path)}</code><span class="diagnostic-meta">${escapeHTML(time)}${escapeHTML(statusText)}${escapeHTML(duration)}</span></div>${errorBlock}${detailBlock}</article>`;
+  return `<article class="diagnostic-row ${entry.ok?"ok":"error"}"><div class="diagnostic-row-top">${badge}<code>${escapeHTML(entry.method)} ${escapeHTML(entry.path)}</code><span class="diagnostic-meta">${escapeHTML(time)}${escapeHTML(statusText)}${escapeHTML(duration)}</span><button class="diagnostic-copy" type="button" data-entry-id="${escapeHTML(entry.id)}" title="Copy this entry">Copy</button></div>${errorBlock}${detailBlock}</article>`;
 }
-async function loadDiagnostics(){
-  const summary=$("#diagnosticsSummary"),list=$("#diagnosticList");
-  try{
-    const data=await api("/api/diagnostics/interactions?limit=200");
-    const entries=data.interactions||[];
-    const errors=entries.filter(item=>!item.ok);
-    summary.textContent=`${entries.length} interactions recorded · ${errors.length} with errors · newest first · local file interactions.jsonl`;
-    list.innerHTML=entries.slice().reverse().map(renderDiagnosticEntry).join("")||'<div class="empty-state">No interactions recorded yet. Use BabyMind, then click Refresh.</div>';
-  }catch(error){
-    summary.textContent="Diagnostics unavailable";
-    list.innerHTML=`<div class="empty-state">${escapeHTML(error.message)}</div>`;
-  }
-}
-async function fetchDiagnosticsReport(){const data=await api("/api/diagnostics/report");return data.report;}
 async function copyText(text){
   try{await navigator.clipboard.writeText(text);return true;}
   catch(_){
@@ -191,6 +187,27 @@ async function copyText(text){
     document.body.appendChild(area);area.select();
     let ok=false;try{ok=document.execCommand("copy");}catch(_){}
     area.remove();return ok;
+  }
+}
+function diagnosticsReportText(){return $("#diagnosticsReport").value;}
+async function loadDiagnostics(){
+  const summary=$("#diagnosticsSummary"),list=$("#diagnosticList"),reportBox=$("#diagnosticsReport");
+  try{
+    const [data,reportData]=await Promise.all([
+      api("/api/diagnostics/interactions?limit=200"),
+      api("/api/diagnostics/report"),
+    ]);
+    const entries=data.interactions||[];
+    const errors=entries.filter(item=>!item.ok);
+    state.diagnostics=entries;
+    state.diagnosticsLogPath=data.log_path||"";
+    summary.textContent=`${entries.length} interactions recorded · ${errors.length} with errors · newest first · log: ${state.diagnosticsLogPath||"interactions.jsonl"}`;
+    list.innerHTML=entries.slice().reverse().map(renderDiagnosticEntry).join("")||'<div class="empty-state">No interactions recorded yet. Use BabyMind, then click Refresh.</div>';
+    reportBox.value=reportData.report||"";
+  }catch(error){
+    summary.textContent="Diagnostics unavailable";
+    reportBox.value="";
+    list.innerHTML=`<div class="empty-state">${escapeHTML(error.message)}</div>`;
   }
 }
 const taskLabels={queued:"Queued",active:"Active · manual",paused:"Paused",completed:"Completed",cancelled:"Cancelled",terminated:"Terminated"};
@@ -432,9 +449,17 @@ async function init() {
   });
   $("#clearMemory").addEventListener("click",async()=>{if(!confirm("Delete every saved BabyMind memory on this device? This cannot be undone."))return;try{const result=await api("/api/memory/clear",{method:"POST",body:"{}"});toast(`Cleared ${result.deleted} memories`);loadMemory();}catch(error){toast(error.message);}});
   $("#refreshDiagnostics").addEventListener("click",loadDiagnostics);
-  $("#copyReport").addEventListener("click",async()=>{try{const report=await fetchDiagnosticsReport();const copied=await copyText(report);toast(copied?"Diagnostics report copied — paste it anywhere for help":"Clipboard blocked by the browser; use Download .md instead");}catch(error){toast(error.message);}});
-  $("#downloadReport").addEventListener("click",async()=>{try{const report=await fetchDiagnosticsReport();const blob=new Blob([report],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="babymind-diagnostics.md";link.click();URL.revokeObjectURL(url);}catch(error){toast(error.message);}});
+  $("#copyReport").addEventListener("click",async()=>{const report=diagnosticsReportText();if(!report){toast("Report is still loading — click Refresh");return;}const copied=await copyText(report);toast(copied?"Diagnostics report copied — paste it anywhere for help":"Clipboard blocked by the browser; select the preview text and copy it manually, or use Download .md");});
+  $("#copyLogPath").addEventListener("click",async()=>{const path=state.diagnosticsLogPath;if(!path){toast("Log path not loaded yet — click Refresh");return;}const copied=await copyText(path);toast(copied?"Log file path copied":"Clipboard blocked by the browser");});
+  $("#downloadReport").addEventListener("click",async()=>{try{const report=diagnosticsReportText()||(await api("/api/diagnostics/report")).report;const blob=new Blob([report],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="babymind-diagnostics.md";link.click();URL.revokeObjectURL(url);}catch(error){toast(error.message);}});
   $("#clearDiagnostics").addEventListener("click",async()=>{if(!confirm("Delete all recorded interactions from the local diagnostics log?"))return;try{const result=await api("/api/diagnostics/interactions",{method:"DELETE"});toast(`Cleared ${result.deleted} recorded interactions`);loadDiagnostics();}catch(error){toast(error.message);}});
+  $("#diagnosticList").addEventListener("click",async event=>{
+    const button=event.target.closest(".diagnostic-copy");if(!button)return;
+    const entry=(state.diagnostics||[]).find(item=>item.id===button.dataset.entryId);
+    if(!entry){toast("Entry not found — click Refresh");return;}
+    const copied=await copyText(formatDiagnosticEntry(entry));
+    toast(copied?"Interaction copied":"Clipboard blocked by the browser");
+  });
   $("#openSidebar").addEventListener("click",()=>$("#sidebar").classList.add("open"));
   $("#closeSidebar").addEventListener("click",()=>$("#sidebar").classList.remove("open"));
   const savedTheme=localStorage.getItem("babymind_theme")||"dark";
