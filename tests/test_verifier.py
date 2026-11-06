@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from babymind import broker, verifier
+from babymind import broker, sandbox, verifier
 
 
 class StaticProvider:
@@ -112,6 +112,8 @@ class VerifierBehaviorAllAppsTests(unittest.TestCase):
             self.assertEqual(report["behavior"]["checked"], 2)
 
     def test_fulfilment_is_labelled_preliminary(self):
+        if not sandbox.available():
+            self.skipTest("verifier execution requires an available OS sandbox")
         with TemporaryDirectory() as tmp:
             make_checkout(Path(tmp))
             verdict = '{"fulfilled": true, "evidence": "x", "gaps": ""}'
