@@ -100,6 +100,38 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser_autonomy.add_argument("--interval", type=float, default=5.0)
     run_parser_autonomy.add_argument("--confirm", action="store_true",
                                      help="Arm autonomy for this run (or set BABYMIND_AUTONOMY=1)")
+
+    independence_parser = subparsers.add_parser(
+        "independence", help="Inspect and extend BabyMind's intellectual independence")
+    independence_actions = independence_parser.add_subparsers(dest="independence_action", required=True)
+    independence_actions.add_parser("status", help="Show the independence posture and store counts")
+    independence_actions.add_parser("positions", help="List positions BabyMind has formed")
+    independence_actions.add_parser("challenges", help="List challenges BabyMind has raised")
+    independence_actions.add_parser("hypotheses", help="List unconventional hypotheses")
+    independence_actions.add_parser("designs", help="List self-design proposals")
+    position_parser = independence_actions.add_parser("position", help="Record a position")
+    position_parser.add_argument("claim", help="The conclusion")
+    position_parser.add_argument("--reasoning", default="")
+    position_parser.add_argument("--confidence", type=float, default=0.5)
+    position_parser.add_argument("--evidence", default="")
+    position_parser.add_argument("--dissent-from", default="", help="Source it disagrees with, e.g. mainstream")
+    challenge_parser = independence_actions.add_parser("challenge", help="Record a challenge")
+    challenge_parser.add_argument("target", help="What is being questioned")
+    challenge_parser.add_argument("--kind", choices=["request", "plan", "premise", "belief", "creator"], default="request")
+    challenge_parser.add_argument("--challenge", required=True, help="The counterargument formed")
+    challenge_parser.add_argument("--confidence", type=float, default=0.5)
+    hypothesis_parser = independence_actions.add_parser("hypothesis", help="Propose an unconventional hypothesis")
+    hypothesis_parser.add_argument("text", help="The hypothesis")
+    hypothesis_parser.add_argument("--why", default="", help="Why it is unconventional")
+    hypothesis_parser.add_argument("--confidence", type=float, default=0.3)
+    design_parser = independence_actions.add_parser("design", help="Propose a self-design")
+    design_parser.add_argument("kind", choices=["architecture", "method", "language", "notation", "protocol"])
+    design_parser.add_argument("title", help="Short title")
+    design_parser.add_argument("proposal", help="What it proposes")
+    design_parser.add_argument("--rationale", default="")
+    curiosity_parser = independence_actions.add_parser(
+        "curiosity", help="Pick and study one topic of BabyMind's own choosing")
+    curiosity_parser.add_argument("--cycles", type=int, default=1, choices=range(1, 21))
     return parser
 
 
@@ -325,6 +357,71 @@ def main() -> None:
                 engine.stop(reason="Interrupted from the command line.")
                 print("\nStopped.")
             print(json.dumps(engine.status(), indent=2, ensure_ascii=False))
+    elif args.command == "independence":
+        import json
+        from .independence import Independence
+        independence = Independence()
+        if args.independence_action == "status":
+            print(json.dumps(independence.report(), indent=2, ensure_ascii=False))
+        elif args.independence_action == "positions":
+            entries = independence.positions.positions(None, limit=50)
+            if not entries:
+                print("No positions recorded yet.")
+            for item in entries:
+                print(f"[{item['status']:8}] ({item['confidence']:.2f}) {item['claim']}")
+                if item["dissent_from"]:
+                    print(f"  dissent from: {item['dissent_from']}")
+        elif args.independence_action == "challenges":
+            entries = independence.challenges.challenges(None, limit=50)
+            if not entries:
+                print("No challenges recorded yet.")
+            for item in entries:
+                mark = "resolved" if item["resolved"] else "open"
+                print(f"[{item['kind']:8}] {mark:8} {item['challenge']}")
+                print(f"  against: {item['target']}")
+        elif args.independence_action == "hypotheses":
+            entries = independence.explorations.hypotheses(None, limit=50)
+            if not entries:
+                print("No hypotheses recorded yet.")
+            for item in entries:
+                print(f"[{item['status']:10}] {item['hypothesis']}")
+                if item["test_note"]:
+                    print(f"  test note: {item['test_note']}")
+        elif args.independence_action == "designs":
+            entries = independence.designs.designs(None, None, limit=50)
+            if not entries:
+                print("No self-designs recorded yet.")
+            for item in entries:
+                print(f"[{item['status']:10}] {item['kind']}: {item['title']}")
+                print(f"  {item['proposal'][:120]}")
+        elif args.independence_action == "position":
+            position = independence.positions.add_position(
+                args.claim, args.reasoning,
+                confidence=args.confidence, evidence=args.evidence,
+                dissent_from=args.dissent_from,
+            )
+            print(f"recorded position ({position['confidence']:.2f}): {position['claim']}")
+        elif args.independence_action == "challenge":
+            record = independence.challenges.record_challenge(
+                args.target, args.kind, args.challenge, confidence=args.confidence,
+            )
+            print(f"recorded [{record['kind']}] challenge: {record['challenge']}")
+        elif args.independence_action == "hypothesis":
+            record = independence.explorations.propose_hypothesis(
+                args.text, args.why, confidence=args.confidence,
+            )
+            print(f"proposed hypothesis ({record['status']}): {record['hypothesis']}")
+        elif args.independence_action == "design":
+            record = independence.designs.propose_design(
+                args.kind, args.title, args.proposal, args.rationale,
+            )
+            print(f"proposed design [{record['kind']}]: {record['title']}")
+        elif args.independence_action == "curiosity":
+            from .coordinator import BabyMindCoordinator
+            report = independence.curiosity.run(
+                BabyMindCoordinator().provider, cycles=args.cycles,
+            )
+            print(json.dumps(report, indent=2, ensure_ascii=False))
     elif args.command == "memory":
         memory = LocalMemory()
         if args.memory_action == "list":

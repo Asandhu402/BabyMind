@@ -9,6 +9,7 @@ from .cognitive_core import CognitiveCore
 from .providers import ChatProvider, create_provider
 from .model_router import ModelRouter
 from .selfmodel import SelfModel
+from .independence import Independence
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +65,7 @@ class BabyMindCoordinator:
         self.memory = memory or LocalMemory()
         self.cognitive = CognitiveCore(self.memory.database_path.with_name("cognitive.sqlite3"))
         self.selfmodel = SelfModel(self.memory.database_path.with_name("selfmodel.sqlite3"))
+        self.independence = Independence(self.memory.database_path.with_name("independence.sqlite3"))
         self._agents = {agent.agent_id: agent for agent in agents}
 
     def _base_system_prompt(self, agent: AgentSpec) -> str:
@@ -112,6 +114,7 @@ class BabyMindCoordinator:
         system_prompt = self._base_system_prompt(agent)
         system_prompt += "\n\n" + self.cognitive.context_for_agent(agent)
         system_prompt += "\n\n" + self.selfmodel.context_for_prompt()
+        system_prompt += "\n\n" + self.independence.context_for_prompt()
         profile = self.memory.get_profile() if use_memory else ""
         if profile:
             system_prompt += (
@@ -154,6 +157,13 @@ class BabyMindCoordinator:
             )
             if result.dissent:
                 self.selfmodel.record_dissent(clean_task, result.dissent)
+                # The same disagreement is also a challenge to the request, so the
+                # independence log records what it questioned, not just that it
+                # pushed back.
+                self.independence.challenges.record_challenge(
+                    clean_task, "request", result.dissent,
+                    confidence=result.confidence,
+                )
             introspection_payload = result.to_dict()
         else:
             response = self._complete(agent, system_prompt, clean_task)
