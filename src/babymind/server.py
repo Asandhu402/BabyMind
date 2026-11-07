@@ -1702,6 +1702,8 @@ class Handler(BaseHTTPRequestHandler):
         conversation_id = str(payload.get("conversation_id") or "").strip()
         if not task:
             raise ValueError("Please enter a message.")
+        if payload.get("teamwork") is True or payload.get("collaborate") is True:
+            raise ValueError("Multi-agent teamwork and collaboration have been removed. BabyMind operates as one unified identity.")
         if len(task) > 20000:
             raise ValueError("Messages must be 20,000 characters or fewer.")
         agent = next((item for item in AGENTS if item.agent_id == agent_id), None)
