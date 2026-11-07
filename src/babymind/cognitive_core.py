@@ -83,12 +83,20 @@ class CognitiveCore:
                 if db.execute("SELECT 1 FROM identity WHERE id=1").fetchone() is None:
                     identity = {"name": "BabyMind", "kind": "local AI software system",
                         "purpose": "Help users through its configured model, tools, memory, and approved goals.",
-                        "identity_version": 1,
+                        "identity_version": 2,
                         "identity_policy": "Describe implementation and observed state; never assert consciousness as fact.",
                         "created_at": _now()}
                     stamp = _now()
                     db.execute("INSERT INTO identity VALUES (1,?,?,?)",
                         (self.secure.encrypt(json.dumps(identity, ensure_ascii=False)), stamp, stamp))
+                existing = db.execute("SELECT content FROM identity WHERE id=1").fetchone()
+                if existing is not None:
+                    saved_identity = json.loads(self.secure.decrypt(existing["content"]))
+                    if "50 specialist roles" in saved_identity.get("purpose", ""):
+                        saved_identity["purpose"] = "One unified AI identity that helps users through its model, tools, memory, and approved goals."
+                        saved_identity["identity_version"] = 2
+                        db.execute("UPDATE identity SET content=?,updated_at=? WHERE id=1",
+                            (self.secure.encrypt(json.dumps(saved_identity, ensure_ascii=False)), _now()))
                 db.commit()
             finally:
                 db.close()
