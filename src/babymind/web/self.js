@@ -33,7 +33,7 @@
         "Consider your current identity, capabilities, limitations and the context you have actually retained.",
         "Independently propose up to 3 useful, realistic goals you would choose to pursue next.",
         "Do not claim feelings or consciousness as facts. Avoid goals requiring external access, purchases, private data, or changes to your own code.",
-        "Return ONLY valid JSON, no markdown: {\\"goals\\":[{\\"title\\":\\"short goal\\",\\"reason\\":\\"why this matters\\",\\"priority\\":1}]}",
+        'Return ONLY valid JSON, no markdown: {"goals":[{"title":"short goal","reason":"why this matters","priority":1}]}',
         "If no meaningful goal exists, return {\"goals\":[]}. Keep goals small and achievable."
       ].join("\n");
       const result=await api("/api/chat",{method:"POST",body:JSON.stringify({
@@ -58,7 +58,7 @@
   async function approveGoal(index) {
     const goal=proposedGoals[index];if(!goal)return;
     try {
-      await api("/api/autonomy/goal",{method:"POST",body:JSON.stringify({title:goal.title,priority:Number(goal.priority)||2})});
+      await api("/api/autonomy/goal",{method:"POST",body:JSON.stringify({title:goal.title,description:goal.reason||"",priority:Number(goal.priority)||2,created_by:"babymind"})});
       proposedGoals.splice(index,1);renderIdeas();await loadAutonomy();toast("Goal approved and saved.");
     } catch(error){toast(error.message);}
   }
