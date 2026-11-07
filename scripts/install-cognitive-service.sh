@@ -27,7 +27,7 @@ After=default.target
 
 [Service]
 Type=simple
-ExecStart=$BABYMIND_BIN cognitive service --interval 60 --agent BM-02
+ExecStart=$BABYMIND_BIN cognitive service --interval 60 --agent BM-01
 Restart=on-failure
 RestartSec=15
 EnvironmentFile=-%h/.config/babymind/models.env
