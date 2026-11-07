@@ -31,15 +31,15 @@ class CognitiveCoreTests(unittest.TestCase):
         self.assertEqual(first["name"], "BabyMind")
         self.assertIn("never assert consciousness", first["identity_policy"])
 
-    def test_environment_reports_architecture_and_fifty_roles(self):
+    def test_environment_reports_architecture_and_single_identity(self):
         snapshot = environment_snapshot()
-        self.assertEqual(snapshot["agent_count"], 50)
-        self.assertEqual(len(snapshot["agent_ids"]), 50)
+        self.assertEqual(snapshot["agent_count"], 1)
+        self.assertEqual(snapshot["agent_ids"], ["BM-01"])
         self.assertIn("architecture", snapshot)
         self.assertIn("virtualization_hint_meaning", snapshot)
         self.assertFalse(snapshot["capabilities"]["model_endpoint_verified"])
 
-    def test_all_fifty_roles_receive_cognitive_core_context(self):
+    def test_babymind_receives_cognitive_core_context(self):
         for agent in AGENTS:
             context = self.core.context_for_agent(agent)
             self.assertIn("COGNITIVE CORE", context)
@@ -56,13 +56,13 @@ class CognitiveCoreTests(unittest.TestCase):
             "learning": "Verify writes by reading the database.",
             "confidence": 0.8,
         })
-        result = self.core.run_cycle(provider, "BM-02")
+        result = self.core.run_cycle(provider, "BM-01")
         self.assertTrue(result["verified"])
         self.assertEqual(result["active_goals"][0]["title"], "Test memory")
         reopened = CognitiveCore(self.path)
         self.assertEqual(reopened.status()["cycles"], 1)
         self.assertEqual(reopened.active_goals()[0]["description"], "Check persistence after restart.")
-        self.assertIn("AVAILABLE SPECIALIST ROLES", provider.user_prompts[0])
+        self.assertIn("BABYMIND IDENTITY", provider.user_prompts[0])
         self.assertIn("actual_outcome", provider.user_prompts[1])
         self.assertIn("Created local goal", provider.user_prompts[1])
         followup = FakeProvider({
@@ -74,7 +74,7 @@ class CognitiveCoreTests(unittest.TestCase):
             "learning": "Carry forward verified lessons.",
             "confidence": 0.9,
         })
-        self.core.run_cycle(followup, "BM-03")
+        self.core.run_cycle(followup, "BM-01")
         self.assertIn("Verify writes by reading the database", followup.user_prompts[0])
 
     def test_question_is_recorded_as_encrypted_local_research_note(self):
@@ -139,7 +139,7 @@ class CognitiveCoreTests(unittest.TestCase):
         self.assertEqual(result["confidence"], 0.0)
         self.assertIn("reflection failed", result["reflection"].lower())
 
-    def test_coordinator_connects_core_to_existing_roles(self):
+    def test_coordinator_connects_core_to_babymind(self):
         memory = LocalMemory(Path(self.temp.name) / "memory.sqlite3")
         provider = FakeProvider({})
         coordinator = BabyMindCoordinator(provider=provider, memory=memory)
