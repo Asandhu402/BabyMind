@@ -49,6 +49,8 @@ const check=(name,ok)=>{checks.push([name,!!ok]);console.log((ok?"PASS ":"FAIL "
   doc.querySelector("#messageInput").value="Hello";
   doc.querySelector("#chatForm").dispatchEvent(new w.Event("submit",{bubbles:true,cancelable:true}));await wait();
   check("chat sends a normal message",calls.some(c=>c.url==="/api/chat"&&JSON.parse(c.body).message==="Hello"));
+  const chatPayload=JSON.parse(calls.find(c=>c.url==="/api/chat"&&JSON.parse(c.body).message==="Hello").body);
+  check("normal chat skips optional second-pass introspection",chatPayload.introspect===false);
   check("chat displays the model response",doc.querySelector("#messages").textContent.includes("Hello from BabyMind."));
   const failed=checks.filter(([,ok])=>!ok);
   console.log("\n"+(checks.length-failed.length)+"/"+checks.length+" checks passed");
