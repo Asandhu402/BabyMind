@@ -52,7 +52,7 @@ def _ROLE_SYSTEM_PROMPT_HEADER(agent: AgentSpec) -> str:
 
 
 class BabyMindCoordinator:
-    """Coordinate 50 specialist roles over a shared fallback or independently routed models."""
+    """Route prompts to the one BabyMind identity over a shared or routed model."""
 
     def __init__(
         self,

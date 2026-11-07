@@ -15,7 +15,7 @@ No third-party source files are vendored. No runtime dependencies were added. Ex
 
 ## Architecture
 
-Every role routed through BabyMindCoordinator.ask() and every mission role pass receives the same grounded Cognitive Core context: stable software identity, observed host facts, known capability boundaries, current autonomous goals, and recent lessons. The 50 role definitions are unchanged.
+Every role routed through BabyMindCoordinator.ask() and every mission role pass receives the same grounded Cognitive Core context: stable software identity, observed host facts, known capability boundaries, current autonomous goals, and recent lessons. The 50 role definitions have since been removed.
 
 The cycle sequence is:
 
@@ -65,7 +65,7 @@ The benchmark score measures only the deterministic behaviors it exercises. It i
 
 ## Objective checks
 
-Automated tests cover identity persistence, environment observation, all 50 role contexts, goal persistence, read-after-write verification, encrypted research notes, unsupported-action rejection, malformed model output, and coordinator integration. Confidence is stored as a model estimate and is not ground truth.
+Automated tests cover identity persistence, environment observation, role-context injection, goal persistence, read-after-write verification, encrypted research notes, unsupported-action rejection, malformed model output, and coordinator integration. Confidence is stored as a model estimate and is not ground truth.
 
 ## Platform target
 
@@ -126,7 +126,7 @@ See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 ## Independent specialist model routing
 
-The 50 role definitions remain intact. By default, all roles continue to use
+The 50 role definitions have been removed. The single identity continues to use
 the configured BabyMind provider. To route individual roles or domains to
 different OpenAI-compatible model endpoints, set
 `BABYMIND_AGENT_MODEL_MAP` to a JSON object. A route key may be a role ID
@@ -146,7 +146,7 @@ Endpoints must use HTTPS or loopback HTTP. API keys are never placed in the
 JSON map; use `api_key_env` to name an environment variable containing the
 secret. Unmapped roles use the configured shared provider. Each configured
 route is lazily initialized and cached. This makes independent model selection
-possible without pretending that 50 roles are 50 separate models. It does not
+possible without pretending that multiple roles were separate models. It does not
 download models or guarantee that multiple local models fit in available RAM.
 Inspect routing with `babymind cognitive routing`; secrets are not displayed.
 
@@ -154,7 +154,7 @@ Inspect routing with `babymind cognitive routing`; secrets are not displayed.
 ## Routing across missions and the background service
 
 Per-role routing is used by direct specialist conversations, cognitive cycles,
-and all 50 role passes in both CLI and web missions. Self-edit proposal
+and the role passes that existed before missions were removed. Self-edit proposal
 generation is routed through the coding specialist (BM-03). The existing
 shared provider remains the fallback for roles without a specific route.
 

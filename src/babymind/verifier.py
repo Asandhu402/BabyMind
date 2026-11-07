@@ -92,7 +92,7 @@ def _fulfilment_check(coordinator, root: Path, brief: str) -> dict:
     file CONTENTS (not just paths). Honest limitation: this uses the same
     shared local model, so it is a preliminary review, not a genuinely
     independent inspection — recorded as such."""
-    from .orchestrator import parse_model_json
+    from .model_json import parse_model_json
     chunks = []
     total = 0
     for path in sorted(root.rglob("*")):
@@ -147,7 +147,7 @@ def debug(report: dict, *, coordinator) -> dict:
         "separately."
     )
     user = f"Verification failed at {report['root']}.\n\nFAILURE EXCERPT:\n{excerpt}"
-    from .orchestrator import parse_model_json
+    from .model_json import parse_model_json
     proposal = parse_model_json(coordinator.provider.complete(system, user))
     if not isinstance(proposal, dict):
         raise ValueError("the model did not return a JSON object")

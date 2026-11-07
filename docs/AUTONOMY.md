@@ -1,10 +1,19 @@
 # Autonomous development architecture
 
 **Status: implemented in part; Linux is the supported platform.**
-BabyMind now has a mission orchestrator over 50 development roles, a
-self-development engine with checkpoints and automatic rollback, a default-on
-permanent learning supervisor around the verified cycle, a bounded command
-runner, GitHub/licence research, and offline hardware sizing.
+BabyMind has one unified identity (BM-01), a self-development engine with
+checkpoints and automatic rollback, a default-on permanent learning supervisor
+around the verified cycle, a bounded command runner, GitHub/licence research,
+and offline hardware sizing.
+
+> **The 50-role system has been removed.** The role catalogue, the mission
+> orchestrator (`orchestrator.py`), mission control, and the 50-role development
+> review (`development_review.py`) are gone, together with their APIs
+> (`/api/roles`, `/api/missions`, `/api/agents/activity`,
+> `/api/development-reviews`) and the `babymind mission` command. Any data those
+> features stored can be listed and deleted with `babymind agents status` and
+> `babymind agents purge --confirm`. Section headings below that describe roles
+> and missions are retained only to record what was removed and why.
 
 Read the status matrix before believing any capability claim in a chat message.
 Nothing in this document is a promise that BabyMind is a finished autonomous
@@ -14,63 +23,51 @@ engineer.
 
 | Capability | Module | What it actually does |
 | --- | --- | --- |
-| 50-role catalogue | `agents.py` | 50 named roles in 9 phases, each with a purpose, capability set, and required evidence. `can_use()` enforces the capability map. |
-| Mission orchestration | `orchestrator.py` | Walks every phase, gives each role the brief plus a bounded digest of earlier contributions, and stores each contribution encrypted. Failed or skipped roles are recorded, never dropped. |
-| Mission storage | `orchestrator.py` (`MissionStore`) | SQLite in the data home, content encrypted with AES-256-GCM, same key handling as the rest of BabyMind. |
+| Single identity | `agents.py` | One agent, `BM-01`, with a capability map enforced by `can_use()`/`require()`. `validate_registry()` rejects a second identity. |
+| ~~50-role catalogue~~ | ~~`agents.py`~~ | **Removed.** Two agents no longer exist to coordinate. |
+| ~~Mission orchestration~~ | ~~`orchestrator.py`~~ | **Removed** with the role catalogue. `parse_model_json` moved to `model_json.py` and is still used by the verifier and server. |
+| ~~Mission storage~~ | ~~`orchestrator.py`~~ (`MissionStore`) | **Removed.** Legacy `missions`/`agent_runs` rows can be purged with `babymind agents purge`. |
 | Self-development | `selfdev.py` | Checkpoint → transactional write → compile → test → keep or auto-rollback, with a hash-chained audit log. |
 | Command runner | `runner.py` | Allowlisted executables, working-directory boundary, scrubbed environment, output caps, timeout, process-tree kill, POSIX rlimits. |
 | Public research | `research.py` | DuckDuckGo search, guarded page reading, GitHub repository search/metadata, licence classification. |
 | Hardware sizing | `hardware.py` | CPU/RAM/disk detection and a conservative model/context recommendation with llama.cpp flags. |
-| UI | `web/mission.js`, `index.html` | Mission control view: run a mission, watch all 50 roles, inspect self-development state, roll back, run tests, edit source with preview. |
+| UI | `index.html`, `web/app.js` | Self-development view: inspect state, roll back, run tests, edit source with preview. The mission-control view was removed with missions. |
 | Permanent learning | `learning_service.py`, `web/learning.js` | Default-on, durable, stoppable supervisor around the verified learning cycle, with a run ledger, gates, controls and a Self-improvement view. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md). |
 
-## The 50 roles are not 50 models
+## Removed: the 50 roles, missions and development reviews
 
-One local GGUF model, loaded once, is used for every role. A mission makes 50
-model calls, each with a different role prompt. On a 4B CPU model that is slow:
-budget accordingly, or lower `BABYMIND_MISSION_MAX_SECONDS`. Roles that cannot
-run inside the budget are recorded as `deferred` with a reason.
+BabyMind previously shipped three overlapping multi-role systems: a 50-role
+catalogue walked by a mission orchestrator, and an independent 50-role
+"development review". They were removed because they shared one local model and
+therefore could not deliver what the role names implied.
 
-You cannot get more intelligence by adding roles. Roles change *framing* —
-what the model attends to and what it is asked to produce — not capability.
-A role recorded as `contributed` merely returned non-empty model text. A mission
-marked `completed` means all calls returned text; neither status verifies that
-its output is correct, useful, or that requested work was actually performed.
+Three things were true of the old design and are worth keeping on the record:
 
-## The mission self-edit loop (opt-in per mission)
+- **50 roles were never 50 models.** One local GGUF model answered 50 prompts.
+  Roles change *framing* — what the model attends to and what it is asked to
+  produce — not capability.
+- **`contributed` meant "returned non-empty text".** A `completed` mission meant
+  every call returned text. Neither status verified that the output was correct,
+  useful, or that the requested work was performed.
+- **Slow on a 4B CPU model.** 50 sequential calls cost minutes of wall time for
+  unverified text.
 
-This section describes a **mission-triggered** self-edit. It remains opt-in. It
-is separate from the default-on permanent learning supervisor, which repeatedly
-runs the bounded verified cycle outside missions and has its own narrower path
-guard, durable schedule, gates and kill switches. See
-[permanent autonomous learning](AUTONOMOUS_LEARNING.md).
+What replaced them: one identity (`BM-01`), the verified learning cycle with the
+default-on supervisor, and the language lab — each of which measures something,
+rather than collecting role prose. See
+[verified learning cycle](LEARNING_CYCLE.md),
+[permanent autonomous learning](AUTONOMOUS_LEARNING.md) and
+[language lab](LANGUAGE_LAB.md).
 
-Starting a mission with `self_edit: true` (UI: **Also apply one verified
-self-edit**) closes the loop:
+### What is left in their place
 
-1. All 50 roles run and record their contributions.
-2. The Coding Agent requests a JSON patch against BabyMind's own source,
-   constrained by the engine's file-count and suffix limits.
-3. The patch goes through the self-development engine: checkpoint → write →
-   compile → test → keep, or automatic rollback. After a failed verification,
-   the model can receive the failure and propose one repair attempt.
-
-If a role errors, the time budget expires, or the mission is cancelled before
-self-edit begins, the self-edit is skipped and recorded; it is not attempted
-with a partial set of role responses. A complete set is still unverified model
-text, not proof of competent independent review. Cancellation after a patch
-transaction has begun does not guarantee interruption of that transaction.
-
-The loop attempts at most two patches per mission, never bypasses verification,
-and records the outcome (`applied`, `rolled_back`, `no_change`, `rejected`,
-`skipped`). A malformed or unsafe patch changes nothing. In the frozen desktop,
-the feature operates only on a managed staged source copy. It does not rebuild,
-replace, activate, or update the running application.
-
-The loop is still bounded by the model. A 4B model's patch that compiles and
-passes the suite is kept even if it is not the improvement you wanted; that is
-why the acceptance roles' reasoning is recorded next to it and the checkpoint id
-is returned with the result.
+- `babymind agents status` reports whether any legacy agent, role, mission or
+  review rows remain.
+- `babymind agents purge --confirm` deletes them. Conversation history, memory,
+  and `.bmbak` backups are never touched, and the schema is left in place so an
+  older version can still open the database.
+- `babymind develop` and the learning supervisor are the supported ways to
+  change BabyMind's own source.
 
 ## Self-development guarantees
 
@@ -189,11 +186,12 @@ mentioned in a plan.
 
 ## Verification performed
 
-Unit tests cover: registry completeness and capability enforcement, all 50 roles
-recorded per mission, error and cancellation recording, checkpoint/apply/
-rollback, automatic rollback on a deliberately failing test, path-traversal and
-protected-file rejection, audit-chain tamper detection, runner timeout/output
-caps/allowlist/env scrubbing, licence classification, and the HTTP endpoints.
+Unit tests cover: single-identity enforcement (`validate_registry` rejects a
+second identity), checkpoint/apply/rollback, automatic rollback on a
+deliberately failing test, path-traversal and protected-file rejection,
+audit-chain tamper detection, runner timeout/output caps/allowlist/env
+scrubbing, licence classification, the HTTP endpoints, and that the removed
+role, mission and review routes now return 404.
 
 Run them yourself:
 
@@ -233,8 +231,7 @@ real-model behavior were not available for this change and remain unverified.
 ## Opt-in repository-aware self-development
 
 `babymind develop "describe a change"` runs a separate bounded coding loop
-against **BabyMind's configured development checkout**, without waiting for all
-50 roles. It lets the configured provider search selected source and read
+against **BabyMind's configured development checkout**. It lets the configured provider search selected source and read
 bounded line windows, then submit exact search/replace edits for existing files
 or full contents for new files. Existing-file edits require the SHA-256 from a
 read, an exact unique match, and a matching checkpoint before any write. They

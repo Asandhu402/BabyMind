@@ -128,10 +128,9 @@ def main() -> None:
             nonlocal learning_supervisor
             from .server import (
                 DATA_HOME, Handler, ensure_autonomous_learning,
-                init_db, learning_service, recover_development_reviews,
+                init_db, learning_service,
             )
             init_db()
-            recover_development_reviews()
             learning_supervisor = learning_service()
             ensure_autonomous_learning()  # default-on permanent supervisor
             local_server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

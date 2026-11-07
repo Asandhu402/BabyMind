@@ -63,19 +63,37 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(memory_store.decrypt(task), "Private memory task")
             self.assertEqual(memory_store.decrypt(response), "Private memory response")
 
-    def test_backup_restores_and_validates_development_review_text(self):
+    def test_backup_restores_legacy_review_tables_from_older_archives(self):
+        """Backups made before the review feature was removed must still restore.
+
+        The review tables no longer exist in new databases, but an older archive
+        that contains them must keep working, so the schema is written inline
+        here rather than imported from the deleted module.
+        """
         with tempfile.TemporaryDirectory() as folder:
-            from babymind.development_review import DevelopmentReviews
             root = Path(folder)
             original, restored = root / "original", root / "restored"
             self.make_home(original)
             store = SecureTextStore(original / "app.key")
+            legacy_schema = (
+                "CREATE TABLE IF NOT EXISTS development_reviews ("
+                " id TEXT PRIMARY KEY, task TEXT NOT NULL, context TEXT NOT NULL,"
+                " status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS development_review_roles ("
+                " review_id TEXT NOT NULL, role_id INTEGER NOT NULL, name TEXT NOT NULL,"
+                " objective TEXT NOT NULL, status TEXT NOT NULL,"
+                " response TEXT NOT NULL DEFAULT '', PRIMARY KEY (review_id, role_id))",
+            )
             with sqlite3.connect(original / "app.sqlite3") as connection:
-                DevelopmentReviews.create_tables(connection)
-                connection.execute("INSERT INTO development_reviews VALUES (?, ?, ?, ?, ?, ?)",
-                                   ('r', store.encrypt('Private task'), store.encrypt('Private context'), 'reviewed', 'time', 'time'))
-                connection.execute("INSERT INTO development_review_roles VALUES (?, ?, ?, ?, ?, ?)",
-                                   ('r', 1, 'Architect', 'Objective', 'completed', store.encrypt('Private report')))
+                for statement in legacy_schema:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO development_reviews VALUES (?, ?, ?, ?, ?, ?)",
+                    ('r', store.encrypt('Private task'), store.encrypt('Private context'),
+                     'reviewed', 'time', 'time'))
+                connection.execute(
+                    "INSERT INTO development_review_roles VALUES (?, ?, ?, ?, ?, ?)",
+                    ('r', 1, 'Architect', 'Objective', 'completed', store.encrypt('Private report')))
             backup = root / "review.bmbak"
             create_backup(original, backup, "a-long-backup-password")
             restore_backup(restored, backup, "a-long-backup-password", confirmation="RESTORE BABYMIND")

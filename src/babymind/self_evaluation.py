@@ -52,7 +52,7 @@ def run_self_evaluation(core: CognitiveCore | None = None) -> dict[str, Any]:
         "role_registry_integrity",
         len(AGENTS) == 1
         and len(snapshot.get("agent_ids", [])) == 1
-        and len(set(snapshot.get("agent_ids", []))) == 50,
+        and len(set(snapshot.get("agent_ids", []))) == 1,
         f"Found {len(AGENTS)} unique BabyMind identity.",
     )
     capabilities = snapshot.get("capabilities", {})

@@ -76,38 +76,12 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([item["content"] for item in json.loads(body)], [value, value])
 
-    def test_development_review_api_records_and_cancels_a_real_worker(self) -> None:
-        import time
-        started, release = threading.Event(), threading.Event()
-        class BlockingProvider:
-            def complete(self, system, prompt):
-                started.set()
-                if not release.wait(3):
-                    raise RuntimeError("test timed out")
-                return "Specialist review, not verified work."
-        with patch.object(server.COORDINATOR, "provider", BlockingProvider()):
-            try:
-                status, _, body = self.request("/api/development-reviews", {"task": "Build inventory app", "context": "Use SQLite"})
-                self.assertEqual(status, 202, body)
-                review_id = json.loads(body)["id"]
-                self.assertTrue(started.wait(2))
-                status, _, body = self.request("/api/development-reviews/" + review_id)
-                self.assertEqual(status, 200)
-                self.assertEqual(json.loads(body)["roles"][0]["status"], "running")
-                self.assertEqual(self.request("/api/development-reviews/" + review_id + "/cancel", {})[0], 200)
-            finally:
-                release.set()
-            deadline = time.monotonic() + 3
-            while time.monotonic() < deadline:
-                status, _, body = self.request("/api/development-reviews/" + review_id)
-                review = json.loads(body)
-                if review["status"] == "cancelled":
-                    break
-                time.sleep(0.01)
-            self.assertEqual(review["status"], "cancelled")
-            self.assertEqual(review["roles"][0]["status"], "completed")
-            self.assertEqual(review["roles"][1]["status"], "pending")
-            self.assertEqual(len(review["attempts"]), 1)
+    def test_development_review_api_is_removed_with_its_role_catalogue(self) -> None:
+        """The 50-role development review was deleted, so its routes are gone."""
+        status, _, body = self.request("/api/development-reviews",
+                                       {"task": "Build inventory app", "context": "x"})
+        self.assertEqual(status, 404, body)
+        self.assertEqual(self.request("/api/development-reviews")[0], 404)
 
     def test_github_research_routes_expose_read_only_operations(self) -> None:
         from babymind import github_research
@@ -397,13 +371,20 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertTrue(row["title"].startswith("bmenc:v1:"))
         self.assertTrue(row["details"].startswith("bmenc:v1:"))
 
-    def test_agent_api_returns_exactly_fifty_roles(self) -> None:
+    def test_agent_api_returns_the_single_babymind_identity(self) -> None:
         status, _, body = self.request("/api/agents")
         self.assertEqual(status, 200)
         agents = json.loads(body)
-        self.assertEqual(len(agents), 50)
+        self.assertEqual(len(agents), 1)
         self.assertEqual(agents[0]["id"], "BM-01")
-        self.assertEqual(agents[-1]["id"], "BM-50")
+        self.assertEqual(agents[0]["name"], "BabyMind")
+
+    def test_removed_role_and_mission_routes_are_gone(self) -> None:
+        """The 50-role catalogue and mission control were deleted, not hidden."""
+        for path in ("/api/roles", "/api/agents/activity", "/api/missions"):
+            with self.subTest(path=path):
+                self.assertEqual(self.request(path)[0], 404)
+        self.assertEqual(self.request("/api/missions", {"brief": "x"})[0], 404)
 
     def test_web_assets_are_served_from_package(self) -> None:
         status, content_type, body = self.request("/")
