@@ -1287,6 +1287,16 @@ class Independence:
             self.positions, self.explorations, self.evidence_store,
             home=home_path,
         )
+        # The verified learning cycle lets BabyMind identify weaknesses in its own
+        # code, propose fixes, verify them (compile + tests), evaluate behaviorally,
+        # and keep improvements only if both verification and evaluation pass.
+        # Imported lazily to avoid a circular import (learning.py imports from this module).
+        from .learning import LearningStore, LearningCycle
+        self.learning_store = LearningStore(self.secure, self.database_path)
+        self.learning_store._initialise()
+        self.learning = LearningCycle(
+            self, self.learning_store, home=home_path,
+        )
 
     def context_for_prompt(self) -> str:
         """Compact block of BabyMind's own positions and open questions.

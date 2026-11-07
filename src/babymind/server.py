@@ -537,6 +537,8 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 limit = 25
             self.send_json(COORDINATOR.independence.evidence.evidence_store.tests(limit))
+        elif path == "/api/independence/learning":
+            self.send_json(COORDINATOR.independence.learning.status())
         elif path == "/api/autonomy/status":
             self.send_json(autonomy_engine().status() | {"permitted_by_environment": autonomy_enabled()})
         elif path == "/api/autonomy/audit":
@@ -1181,6 +1183,12 @@ class Handler(BaseHTTPRequestHandler):
                 report = COORDINATOR.independence.evidence.run(
                     COORDINATOR.routed_provider(), cycles=cycles,
                     allow_web=allow_web, allow_experiments=allow_experiments,
+                )
+                self.send_json(report)
+            elif path == "/api/independence/run-learning":
+                cycles = int(payload.get("cycles", 1) or 1)
+                report = COORDINATOR.independence.learning.run(
+                    COORDINATOR.routed_provider(), cycles=cycles,
                 )
                 self.send_json(report)
             elif path == "/api/autonomy/cycle":
