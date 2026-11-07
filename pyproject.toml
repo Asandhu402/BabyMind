@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "babymind"
 version = "0.6.0"
-description = "Local-first personal AI workspace with 50 specialist roles (experimental, not production-ready)"
+description = "Local-first personal AI workspace with one unified AI identity (experimental, not production-ready)"
 readme = "README.md"
 # Python 3.10 reached end of life on 2026-10-01. BabyMind targets the current
 # stable interpreter and is tested on 3.13, 3.14 and 3.15.
