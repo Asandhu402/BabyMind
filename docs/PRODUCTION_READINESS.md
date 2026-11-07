@@ -161,6 +161,33 @@ artifact and an owner-approved result.
 - Documented support bundle export that excludes secrets and private content
   by default.
 
+### G7 — Permanent autonomous learning
+
+- Default-on, durable, restartable, stoppable supervision of the verified
+  learning cycle, with a persisted schedule, run ledger and hash-chained audit
+  **[implemented, verified with scripted providers]**.
+- Fail-closed gates before every source edit: environment and operator enable,
+  stop file, pause/halt, intact learning audit, developable checkout,
+  self-development enabled, `BABYMIND_SANDBOX=require`, an available sandbox
+  backend and no active desktop session for the standalone service
+  **[implemented, verified]**.
+- Single-cycle and supervisor locks, crash-interrupted-cycle recovery, error
+  backoff, a consecutive-error circuit breaker, bounded interval/startup/backoff
+  limits, and explicit CLI/API/UI controls **[implemented, verified]**.
+- A protected-path policy that refuses supervisor, verification, isolation,
+  model-boundary, UI, test and protected locations before any write
+  **[implemented, verified]**. This is a policy check, not a formally verified
+  security boundary.
+- Read-after-write verification, checkpoint/compile/full-suite/rollback,
+  behavioral evaluation, lesson recording and Brier prediction resolution remain
+  attached to each cycle **[implemented, verified with scripted providers]**;
+  weakness identification and behavioral effectiveness are model-generated
+  **[partial]**.
+- Real-model weakness quality, patch quality, long-running desktop behavior,
+  packaged staged-source behavior, systemd service lifecycle and Ubuntu 26.10
+  acceptance **[partial / unverified]**. No release may claim improved
+  capability from a recorded lesson alone.
+
 ## Required release evidence
 
 Every release candidate must publish:
@@ -169,6 +196,9 @@ Every release candidate must publish:
 - Signed artifact hashes and SBOM.
 - Clean-install and upgrade test reports on supported Ubuntu versions.
 - Full unit/integration/end-to-end test reports with skipped tests explained.
+- Autonomous-learning service report: durable restart, kill switch, circuit
+  breaker, gate denials, audit-chain integrity, no-overlap locks, real-model
+  cycle outcomes and rollback evidence.
 - Real-model evaluation results, including failed cases.
 - Sandbox adversarial test report and resource-limit measurements.
 - Backup/restore and crash-recovery test reports.
@@ -199,6 +229,12 @@ Based on the repository's current `AUTONOMY.md`,
   activate an updated application; the upgrade path copies the staged source
   into the package seed with a backup **[implemented]**; generated app
   execution in the portable package remains disabled (fail closed).
+- The permanent learning supervisor is implemented and enabled by default, but
+  its real-model quality and long-running lifecycle are not production-accepted.
+  Scripted tests cover scheduling, gates, locks, controls, persistence and the
+  installer; a real 4B model has not been shown to find useful weaknesses or
+  write useful patches in this loop **[partial]**. See
+  [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 - The production model has only limited real-world acceptance evidence; role
   outputs have included unsupported claims, and a real-source self-edit test
   has failed on malformed JSON. That failure traced to two BabyMind defects -
@@ -223,6 +259,9 @@ renaming components does not close a gate.
 5. Add real-model evaluation, failure analysis, and regression thresholds.
 6. Complete packaging, signed updates, backup/restore, observability, and
    independent security review.
+7. Complete real-model, long-running desktop and systemd lifecycle acceptance
+   for the permanent learning supervisor without treating model-generated
+   lessons as evidence of capability.
 
 **Definition of done:** all release gates pass on supported clean Linux
 machines, all evidence is reproducible from a tagged commit, and no critical

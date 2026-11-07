@@ -1,6 +1,15 @@
 """PyInstaller entry point for the BabyMind Linux desktop app."""
 import sys
 
+# The installed launcher is one executable. These top-level names are CLI
+# commands; everything else is a desktop launch or a packaging check. Keeping
+# the list explicit avoids swallowing Qt flags or accidental file arguments.
+CLI_COMMANDS = frozenset({
+    "health", "doctor", "list", "integrations", "roles", "hardware", "selfdev",
+    "cognitive", "mission", "develop", "github", "run", "ask", "memory", "self",
+    "autonomy", "independence", "learning",
+})
+
 
 def check_package() -> None:
     """Headless packaging check only; does not test the GUI or inference."""
@@ -31,7 +40,23 @@ def check_package() -> None:
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--check-package"]:
+    if len(sys.argv) > 1 and sys.argv[1] == "--learning-service":
+        # Headless entry point for the installed systemd user service. This
+        # never opens a Qt window; it runs the supervised learning loop in the
+        # foreground and exits cleanly on SIGTERM/SIGINT.
+        import argparse
+        parser = argparse.ArgumentParser(prog="BabyMind --learning-service")
+        parser.add_argument("--interval", type=float, default=None)
+        parser.add_argument("--max-cycles", type=int, default=None)
+        opts = parser.parse_args(sys.argv[2:])
+        from babymind.learning_service import run_standalone
+        run_standalone(interval=opts.interval, max_cycles=opts.max_cycles)
+    elif len(sys.argv) > 1 and (sys.argv[1] in CLI_COMMANDS or sys.argv[1] in ("-h", "--help")):
+        # Expose the same CLI controls from the frozen launcher so an installed
+        # user can inspect or stop autonomous learning without a source tree.
+        from babymind.cli import main
+        main()
+    elif sys.argv[1:] == ["--check-package"]:
         check_package()
     elif sys.argv[1:] == ["--check-dev-staging"]:
         from babymind.packaged_dev import verify_packaged_staging

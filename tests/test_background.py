@@ -46,6 +46,16 @@ class BackgroundServiceTests(unittest.TestCase):
         self.assertIn("systemd", path.read_text(encoding="utf-8"))
         self.assertIn("x86_64", path.read_text(encoding="utf-8"))
 
+    def test_learning_service_install_script_is_headless_and_fail_closed(self):
+        path = Path(__file__).resolve().parents[1] / "scripts" / "install-learning-service.sh"
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("--learning-service", text)
+        self.assertIn("Restart=always", text)
+        self.assertIn("KillSignal=SIGTERM", text)
+        self.assertIn("BABYMIND_SANDBOX=require", text)
+        self.assertIn("EnvironmentFile=-%h/.config/babymind/models.env", text)
+        self.assertIn("enable --now babymind-learning.service", text)
+
 
 if __name__ == "__main__":
     unittest.main()

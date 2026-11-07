@@ -55,7 +55,7 @@ Additional commands:
 - `babymind cognitive goal GOAL_ID --max-steps 5` — work toward one existing local goal for at most 10 steps; each step uses the Cognitive Core allowlist and read-after-write verification.
 - `babymind cognitive benchmark` — run the operational capability benchmark and report scores by dimension.
 
-The autonomy controller stores a compact encrypted baseline of observable host facts and compares later observations for changes in OS, distribution, kernel, architecture, Python interpreter, and BabyMind home paths. A change is reported as drift, not automatically treated as a fault. Failures are written to local notes when storage is available, so later cycles can inspect them.
+The autonomy controller stores a compact encrypted baseline of observable host facts and compares later observations for changes in OS, distribution, kernel, architecture, Python interpreter, and BabyMind home paths. A change is reported as drift, not automatically treated as a fault. Failures are written to local notes when storage is available, so later cycles can inspect them. The separate default-on learning supervisor does not use drift as a fault signal; it runs verified source-improvement cycles under its own gates. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 The action policy is fail-closed. The autonomous cognitive layer can only create or complete local goals, record research questions, write local notes, or wait. Shell execution, arbitrary code, network access, source edits, deletion, credentials, purchases, messages, and system changes are not enabled by this controller. Listing an operation as approval-required does not itself implement that operation; it must be handled by a separately supervised tool.
 
@@ -77,7 +77,7 @@ BabyMind remains Debian-based Linux and x86-64 only. Ubuntu 26.10 is the request
 - Understanding, reflection, learning, and confidence are model-generated text; the runtime verifies only local state changes and observable host facts.
 - Model endpoint availability is not probed by the environment snapshot.
 - The virtualization hint is incomplete and cannot identify every VM, container, or hypervisor.
-- Autonomous cycles are finite CLI invocations, not a persistent service. A service or scheduler should be added only with explicit resource, pause, audit, and approval controls.
+- Cognitive Core's own autonomous cycles remain finite CLI invocations; its optional background service is separate and explicitly installed. BabyMind's default-on permanent learning supervisor is also separate: it has explicit resource bounds, pause/stop controls, a durable audit and verification gates, but it improves source through the verified learning cycle rather than running Cognitive Core goals. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 - Research notes do not imply external research, shell experiments, or physical-world actions were performed.
 
 
@@ -115,6 +115,14 @@ subjective awareness. Logs are available through
 
 For foreground debugging, run
 `babymind cognitive service --interval 60 --agent BM-02` and stop with Ctrl+C.
+
+This optional cognitive service is **not** the default-on learning service.
+`install-linux.sh` also installs `babymind-learning.service` when a systemd user
+session is available. It runs the headless `--learning-service` launcher, holds
+distinct cycle and supervisor locks, and remains idle while a desktop session
+owns the in-app learning supervisor. Both services are bounded, run as the user
+and have explicit stop controls; neither is a claim of subjective awareness.
+See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 ## Independent specialist model routing
 

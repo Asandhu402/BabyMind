@@ -193,11 +193,12 @@ jobs:
           node-version: '22'
       - name: Install headless DOM
         run: npm ci
-      - name: Run Diagnostics, research chat and Self/autonomy UI checks
+      - name: Run Diagnostics, research chat, Self/autonomy and learning UI checks
         run: |
           node tests/test_diagnostics_ui.js
           node tests/test_research_ui.js
           node tests/test_self_ui.js
+          node tests/test_learning_ui.js
 
   real-model-installer:
     # Permanent, not opt-in: the pinned model is the application's brain, so

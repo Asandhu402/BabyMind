@@ -148,6 +148,30 @@ def build_parser() -> argparse.ArgumentParser:
     run_learning_parser = independence_actions.add_parser(
         "run-learning", help="Run a verified learning cycle: identify a weakness, propose and verify a fix, evaluate behaviorally")
     run_learning_parser.add_argument("--cycles", type=int, default=1, choices=range(1, 11))
+
+    # The permanent supervisor is a first-class command, not a hidden option.
+    learning_parser = subparsers.add_parser(
+        "learning", help="Inspect and control the permanent autonomous self-improvement service")
+    learning_actions = learning_parser.add_subparsers(dest="learning_action", required=True)
+    learning_actions.add_parser("status", help="Show the autonomous supervisor, gates and durable ledger")
+    runs_parser = learning_actions.add_parser("runs", help="Show recent supervisor outcomes")
+    runs_parser.add_argument("--limit", type=int, default=25)
+    service_parser = learning_actions.add_parser(
+        "service", help="Run the standalone learning supervisor in the foreground")
+    service_parser.add_argument("--interval", type=float, default=None,
+                                help="Seconds between cycles (60-86400; default 1800)")
+    service_parser.add_argument("--max-cycles", type=int, default=None,
+                                help="Stop after this many loop iterations; used for tests")
+    learning_actions.add_parser("run-once", help="Run one supervised cycle now")
+    learning_actions.add_parser("pause", help="Pause autonomous cycles")
+    learning_actions.add_parser("resume", help="Resume autonomous cycles")
+    learning_actions.add_parser("enable", help="Enable autonomous cycles")
+    learning_actions.add_parser("disable", help="Disable autonomous cycles")
+    stop_parser = learning_actions.add_parser("stop", help="Drop the durable kill switch")
+    stop_parser.add_argument("--reason", default="Stopped from the command line.")
+    learning_actions.add_parser("reset", help="Clear the kill switch, halt and error backoff")
+    interval_parser = learning_actions.add_parser("interval", help="Set the cycle interval")
+    interval_parser.add_argument("seconds", type=float)
     return parser
 
 
@@ -442,6 +466,8 @@ def main() -> None:
             report = independence.evidence.evidence_store.report()
             print(json.dumps(report, indent=2, ensure_ascii=False))
         elif args.independence_action == "learning":
+            from .learning_service import control_service
+            control_service(independence)  # attach live supervisor status
             report = independence.learning.status()
             print(json.dumps(report, indent=2, ensure_ascii=False))
         elif args.independence_action == "test":
@@ -465,12 +491,41 @@ def main() -> None:
             )
             print(json.dumps(report, indent=2, ensure_ascii=False))
         elif args.independence_action == "run-learning":
-            from .coordinator import BabyMindCoordinator
-            coordinator = BabyMindCoordinator()
-            report = independence.learning.run(
-                coordinator.provider, cycles=args.cycles,
-            )
+            # An explicit batch still uses the shared cycle/verification locks
+            # so it cannot race the permanent supervisor's source edits.
+            from .learning_service import control_service
+            report = control_service(independence).run_supervised(args.cycles)
             print(json.dumps(report, indent=2, ensure_ascii=False))
+    elif args.command == "learning":
+        import json
+        from .learning_service import control_service, run_standalone
+        if args.learning_action == "service":
+            run_standalone(interval=args.interval, max_cycles=args.max_cycles)
+        else:
+            service = control_service()
+            if args.learning_action == "status":
+                result = service.status()
+            elif args.learning_action == "runs":
+                result = service.runs(args.limit)
+            elif args.learning_action == "run-once":
+                result = service.run_once(force=True, kind="manual")
+            elif args.learning_action == "pause":
+                result = service.pause()
+            elif args.learning_action == "resume":
+                result = service.resume()
+            elif args.learning_action == "enable":
+                result = service.enable()
+            elif args.learning_action == "disable":
+                result = service.disable()
+            elif args.learning_action == "stop":
+                result = service.stop(reason=args.reason)
+            elif args.learning_action == "reset":
+                result = service.reset()
+            elif args.learning_action == "interval":
+                result = service.set_interval(args.seconds)
+            else:  # pragma: no cover - argparse constrains the choices
+                raise ValueError(f"Unknown learning action: {args.learning_action}")
+            print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
     elif args.command == "memory":
         memory = LocalMemory()
         if args.memory_action == "list":

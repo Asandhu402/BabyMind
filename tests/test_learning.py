@@ -63,8 +63,8 @@ class ScriptedDevelop:
         self._responses = list(responses)
         self.calls: list[dict] = []
 
-    def __call__(self, provider, task, *, attempts=2):
-        self.calls.append({"task": task, "attempts": attempts})
+    def __call__(self, provider, task, *, attempts=2, **kwargs):
+        self.calls.append({"task": task, "attempts": attempts, **kwargs})
         if not self._responses:
             return {
                 "status": "unrepaired", "attempts": 0, "history": [],
@@ -419,7 +419,7 @@ class LearningCycleTests(unittest.TestCase):
                 CycleScripts.lesson("Develop crashed."),
             ])
 
-            def raising_develop(provider_arg, task, *, attempts=2):
+            def raising_develop(provider_arg, task, *, attempts=2, **kwargs):
                 raise RuntimeError("engine exploded")
 
             with mock.patch("babymind.coding_engine.develop", new=raising_develop):
@@ -450,6 +450,110 @@ class LearningCycleTests(unittest.TestCase):
                 result = cycle.run_cycle(provider)
             self.assertEqual(result["decision"], "rolled_back")
             self.assertEqual(len(ind.positions.positions()), 0)
+
+    def test_daemon_state_is_durable(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            store = _make_store(tmp)
+            store.set_daemon_state(state="paused", total_cycles=3, last_error="transient")
+            reopened = _make_store(tmp)
+            state = reopened.daemon_state()
+            self.assertEqual(state["state"], "paused")
+            self.assertEqual(state["total_cycles"], 3)
+            self.assertEqual(state["last_error"], "transient")
+            self.assertTrue(reopened.verify_audit_chain()["intact"])
+
+    def test_edit_guard_protects_supervisor_and_verification(self):
+        from babymind.learning import learning_edit_guard
+        self.assertIsNone(learning_edit_guard("src/babymind/response_quality.py"))
+        for path in ("src/babymind/learning.py", "src/babymind/learning_service.py",
+                     "src/babymind/selfdev.py", "src/babymind/web/app.js",
+                     "tests/test_learning.py", "../outside.py", ".github/workflows/tests.yml"):
+            with self.subTest(path=path):
+                self.assertTrue(learning_edit_guard(path))
+
+    def test_weakness_attempts_retire_repeated_failures(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            cycle, ind, store, sm = self._make(tmp)
+            weakness = store.record_weakness("A recurring weakness.")
+            for _ in range(3):
+                store.note_weakness_attempt(weakness["id"], decision="rolled_back")
+            loaded = store.weakness(weakness["id"])
+            self.assertEqual(loaded["attempts"], 3)
+            self.assertEqual(loaded["status"], "dismissed")
+            self.assertNotIn(weakness["id"], [w["id"] for w in store.weaknesses("unaddressed")])
+            self.assertTrue(store.verify_audit_chain()["intact"])
+
+    def test_autonomous_work_retries_backlog_and_deduplicates(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            cycle, ind, store, sm = self._make(tmp)
+            backlog = store.record_weakness("An unresolved weakness.")
+            store.set_weakness_status(backlog["id"], "unaddressed")
+            provider = ScriptedProvider([])
+            work = cycle.select_autonomous_work(provider)
+            self.assertEqual(work["kind"], "retry")
+            self.assertEqual(work["weakness_id"], backlog["id"])
+            self.assertEqual(provider.calls, [])
+
+            store.set_weakness_status(backlog["id"], "addressed")
+            addressed = store.record_weakness("A hash algorithm weakness.")
+            store.set_weakness_status(addressed["id"], "addressed")
+            provider = ScriptedProvider([CycleScripts.identify()])
+            duplicate = cycle.select_autonomous_work(provider)
+            self.assertEqual(duplicate["kind"], "no_work")
+            self.assertIn("already", duplicate["reason"])
+
+            provider = ScriptedProvider([CycleScripts.identify(weakness="A brand new weakness.")])
+            fresh = cycle.select_autonomous_work(provider)
+            self.assertEqual(fresh["kind"], "new")
+            self.assertEqual(len(provider.calls), 1)
+
+    def test_autonomous_cycle_passes_edit_guard(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            cycle, ind, store, sm = self._make(tmp)
+            weakness = store.record_weakness("A durable weakness.", prediction_confidence=0.7)
+            provider = ScriptedProvider([
+                CycleScripts.evaluate_effective(), CycleScripts.lesson("Worked."),
+            ])
+            fake = ScriptedDevelop([CycleScripts.applied()])
+            with mock.patch("babymind.coding_engine.develop", new=fake):
+                result = cycle.run_autonomous_cycle(provider)
+            self.assertEqual(result["decision"], "kept")
+            self.assertEqual(result["autonomous_work"], "retry")
+            self.assertTrue(callable(fake.calls[0]["edit_guard"]))
+            self.assertIn("src/babymind", fake.calls[0]["task"])
+            loaded = store.weakness(weakness["id"])
+            self.assertEqual(loaded["status"], "addressed")
+            self.assertEqual(loaded["attempts"], 1)
+
+    def test_evaluation_reads_the_verified_transaction_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            cycle, ind, store, sm = self._make(tmp)
+            fix = CycleScripts.applied(files=[{"path": "src/babymind/response_quality.py"}])
+            provider = ScriptedProvider([CycleScripts.evaluate_effective()])
+            with mock.patch.object(cycle, "_read_changed_files", return_value="code") as reader:
+                result = cycle.evaluate_fix(provider, {"weakness": "A bug."}, fix)
+            self.assertTrue(result["effective"])
+            reader.assert_called_once_with(["src/babymind/response_quality.py"])
+
+    def test_status_reports_default_on_supervisor(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            cycle, ind, store, sm = self._make(tmp)
+            status = cycle.status()
+            self.assertTrue(status["autonomous"]["default_enabled"])
+            self.assertEqual(status["autonomous"]["process_state"], "not_started_in_this_process")
+            self.assertIn("supervisor", status["learning"])
+
+            class FakeDaemon:
+                def status(self):
+                    return {"state": "idle", "default_enabled": True}
+            cycle.daemon = FakeDaemon()
+            self.assertEqual(cycle.status()["autonomous"]["state"], "idle")
 
 
 if __name__ == "__main__":

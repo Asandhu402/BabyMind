@@ -19,7 +19,9 @@ missing, not what is planned.
   [verification](LINUX_VERIFICATION.md), a fresh-machine run with the
   production model remains unverified. See
   [testing on Ubuntu 26.04](UBUNTU_26_04_TESTING.md).
-- There is no auto-updater, code signing, or self-repair supervisor.
+- There is no auto-updater or code signing. A default-on learning supervisor
+  exists, but it reuses bounded verified cycles, cannot update the running
+  packaged executable, and is not a general self-repair or release manager.
 - Linux x86-64 is the sole supported desktop target.
 - The portable executable is not itself a Python interpreter. A bundled Python helper supports sandboxed staged-source tests; generated Python app execution is still unavailable.
 
@@ -201,6 +203,24 @@ not race-resistant and the model sees selected source and failure output.
 - **Autonomy has not been exercised against a real model.** Every test uses
   scripted providers. Real-model behaviour of the goal loop — including whether a
   4B CPU model produces useful plans rather than repetitive ones — is unverified.
+- **The permanent learning supervisor is not proof of improvement.** It is
+  default-on, durable, stoppable and uses real compile/test/rollback verification,
+  but weakness identification, patches, behavioral evaluation and lessons are
+  model-generated. Its path guard refuses supervisor, verification, isolation,
+  UI, test and model-boundary files; that is a policy check, not a formal security
+  boundary. If the audit chain is broken, self-development is unavailable, or
+  `BABYMIND_SANDBOX=require` cannot be satisfied, cycles are skipped rather than
+  downgraded. Five consecutive errors halt the supervisor pending reset.
+- **The learning supervisor has not completed real-model or desktop acceptance.**
+  Scheduler, locks, gates, controls, persistence, guard and installer machinery
+  are covered by scripted tests. Whether a real 4B model finds useful weaknesses
+  or writes useful patches, long-running service behavior, packaged staged-source
+  edits, and Ubuntu 26.10 acceptance remain unverified. See
+  [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
+- **The learning service is not an auto-updater.** In source checkouts it can keep
+  narrowly guarded verified edits; in the packaged app it edits a managed staged
+  source copy only. It never rebuilds, replaces, activates or updates the running
+  executable.
 - **Introspection roughly triples model calls per answer** (draft, assess,
   critique, and a revision plus re-critique when needed). On CPU inference this is
   a significant latency cost.
@@ -210,12 +230,16 @@ not race-resistant and the model sees selected source and failure output.
 Deep research uses one shared model, bounded parallel searches, and only short
 page excerpts; citation-number validation is not fact-checking. Public search
 queries leave the device. The user-edited context card is opt-in at inference,
-not autonomous learning. Real-model, public search, desktop, and Ubuntu 26.10
-acceptance have not been completed for this feature. See
+not autonomous learning, and the source-learning supervisor never updates it.
+Real-model, public search, desktop, and Ubuntu 26.10 acceptance have not been
+completed for this feature. See
 [research and context card](RESEARCH_ENGINE.md).
 
 Research document mode accepts only one small text attachment, sends selected
 excerpts to the configured model, and performs no web search. It is not PDF or
 multi-document research; citation checks do not verify claims. Independent
-research agents and autonomous learning remain unimplemented. See
-[research and context card](RESEARCH_ENGINE.md).
+research agents remain unimplemented. Autonomous learning **is implemented** as
+a default-on verified source-improvement supervisor, but it is not autonomous
+research, does not update chat memory or the context card, and does not make the
+model's conclusions true. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md)
+and [research and context card](RESEARCH_ENGINE.md).

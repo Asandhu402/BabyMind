@@ -47,7 +47,10 @@ were copied or bundled:
 - [Letta Code memory](https://github.com/letta-ai/letta-code/blob/6d56a5a8e66bf628f38b8864f2b9fe5859934c8c/src/agent/memory.ts)
   (Apache-2.0) distinguishes persona and human memory blocks. BabyMind's
   independently implemented user-edited encrypted context card is simpler and
-  is not automatically learned or agent-managed.
+  is not automatically learned or agent-managed. The separate default-on
+  learning supervisor edits BabyMind's own source under verification; it never
+  infers, writes or manages this memory card. See
+  [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 This is a focused integration of ideas into existing BabyMind modules, not a
 feature-equivalence claim. See [research engine limitations](RESEARCH_ENGINE.md).

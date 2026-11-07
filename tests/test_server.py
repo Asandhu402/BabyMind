@@ -1048,6 +1048,99 @@ class BabyMindWebTests(unittest.TestCase):
         self.assertEqual(report["project_execution"]["sandbox_available"], sandbox.available())
         self.assertIn("read-only readiness report", report["notice"])
 
+    def test_learning_service_status_runs_and_control_routes(self) -> None:
+        class FakeService:
+            def __init__(self):
+                self.calls = []
+
+            def status(self):
+                return {"autonomous": True, "default_enabled": True, "state": "idle",
+                        "enabled": True, "gates": {"ready": True, "reasons": [], "checks": {}}}
+
+            def runs(self, limit=25):
+                self.calls.append(("runs", limit))
+                return {"runs": [{"id": "r1", "decision": "kept"}],
+                        "audit": {"intact": True, "entries": 1, "broken_at_seq": None, "reason": ""}}
+
+            def run_once(self, **kwargs):
+                self.calls.append(("run-once", kwargs))
+                return {"decision": "kept"}
+
+            def run_supervised(self, cycles):
+                self.calls.append(("run-supervised", cycles))
+                return {"cycles": [{"decision": "kept"}]}
+
+            def pause(self):
+                self.calls.append(("pause",))
+                return {"state": "paused"}
+
+            def resume(self):
+                self.calls.append(("resume",))
+                return {"state": "idle"}
+
+            def enable(self):
+                self.calls.append(("enable",))
+                return {"enabled": True}
+
+            def disable(self):
+                self.calls.append(("disable",))
+                return {"enabled": False}
+
+            def stop(self, reason=""):
+                self.calls.append(("stop", reason))
+                return {"state": "stopped", "stop_flag_present": True}
+
+            def reset(self):
+                self.calls.append(("reset",))
+                return {"state": "idle"}
+
+            def set_interval(self, seconds):
+                self.calls.append(("interval", seconds))
+                return {"interval_seconds": seconds}
+
+            def start(self):
+                self.calls.append(("start",))
+                return {"started": True}
+
+        fake = FakeService()
+        with patch.object(server, "_LEARNING_SERVICE", fake), \
+             patch.object(server, "_LEARNING_HOME", server.DATA_HOME):
+            status, _, body = self.request("/api/learning/service")
+            self.assertEqual(status, 200)
+            self.assertTrue(json.loads(body)["default_enabled"])
+            status, _, body = self.request("/api/learning/runs?limit=7")
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body)["runs"][0]["decision"], "kept")
+            self.assertIn(("runs", 7), fake.calls)
+            status, _, body = self.request("/api/independence/run-learning", {"cycles": 2})
+            self.assertEqual(status, 200)
+            self.assertIn(("run-supervised", 2), fake.calls)
+            for path, payload in (
+                ("/api/learning/service/run-once", {}),
+                ("/api/learning/service/pause", {}),
+                ("/api/learning/service/resume", {}),
+                ("/api/learning/service/enable", {}),
+                ("/api/learning/service/disable", {}),
+                ("/api/learning/service/stop", {"reason": "Stop from test."}),
+                ("/api/learning/service/reset", {}),
+                ("/api/learning/service/interval", {"seconds": 300}),
+            ):
+                with self.subTest(path=path):
+                    status, _, _body = self.request(path, payload)
+                    self.assertEqual(status, 200)
+            self.assertIn(("run-once", {"force": True, "kind": "manual"}), fake.calls)
+            self.assertIn(("pause",), fake.calls)
+            self.assertIn(("resume",), fake.calls)
+            self.assertIn(("enable",), fake.calls)
+            self.assertIn(("disable",), fake.calls)
+            self.assertIn(("stop", "Stop from test."), fake.calls)
+            self.assertIn(("reset",), fake.calls)
+            self.assertIn(("interval", 300.0), fake.calls)
+            with patch.object(server, "learning_service", return_value=fake):
+                report = server.ensure_autonomous_learning()
+            self.assertTrue(report["started_now"])
+            self.assertIn(("start",), fake.calls)
+
 
 class DiagnosticsEndpointTests(unittest.TestCase):
     """Integration coverage for the in-app Diagnostics window endpoints."""

@@ -103,7 +103,9 @@ test record is detectable.
 Web search and code experiments are each opt-in. By default the loop gathers no
 external evidence and records an inconclusive test with a `local_reasoning`
 evidence record explaining that the kind was not enabled. The loop never
-pretends to have gathered evidence it did not.
+pretends to have gathered evidence it did not. The permanent learning supervisor
+is separate: it has no web or experiment capability and does not override these
+flags. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 - `BABYMIND_OFFLINE=1` reports offline posture in the independence report, but
   does not automatically disable the evidence loop. The loop's own

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "Dev-only harness for BabyMind's headless web-client functional tests (jsdom). Not shipped in the app or the portable build.",
   "scripts": {
-    "test:ui": "node tests/test_diagnostics_ui.js && node tests/test_research_ui.js && node tests/test_self_ui.js"
+    "test:ui": "node tests/test_diagnostics_ui.js && node tests/test_research_ui.js && node tests/test_self_ui.js && node tests/test_learning_ui.js"
   },
   "devDependencies": {
     "jsdom": "^31.0.0"

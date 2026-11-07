@@ -1,5 +1,11 @@
 # Verified Learning Cycle
 
+**Status: implemented as the unit of work inside a default-on autonomous
+supervisor.** See [permanent autonomous learning](AUTONOMOUS_LEARNING.md) for
+the scheduler, durable state, gates, kill switches, CLI/API/UI controls and the
+Linux service. The manual commands below remain verification-gated, but a
+person no longer has to start each cycle.
+
 The verified learning cycle is BabyMind's capability to improve its own code
 based on its own assessment. Each cycle identifies a weakness in BabyMind's
 source, proposes a fix, verifies it through the real self-development
@@ -61,15 +67,39 @@ verification and evaluation pass, and records the lesson.
   and resolves it against the actual outcome. This measures whether stated
   confidence in fixes tracks reality, not whether the fixes are good.
 
-## How to use it
+## How it runs
 
-### CLI
+The supervisor is enabled by default when the desktop or server starts. It
+persists the next due time, retries unresolved weaknesses, skips duplicates and
+retired work, and records each autonomous outcome in a durable ledger. On Linux
+installations with a systemd user session, the installer also enables a
+headless user service; `--if-available` skips that unit on hosts without one.
+The in-app supervisor remains active either way. See
+[permanent autonomous learning](AUTONOMOUS_LEARNING.md).
+
+```bash
+# Inspect the default-on supervisor, gates and ledger
+babymind learning status
+babymind learning runs
+
+# One verified cycle now, or change the durable schedule
+babymind learning run-once
+babymind learning interval 900
+
+# Explicit controls
+babymind learning pause
+babymind learning resume
+babymind learning stop --reason "maintenance"
+babymind learning reset
+```
+
+### Legacy CLI
 
 ```bash
 # Show the learning cycle status (weaknesses, cycles, audit chain)
 python -m babymind.cli independence learning
 
-# Run one verified learning cycle
+# Run one verified learning cycle; now routed through the supervised batch
 python -m babymind.cli independence run-learning --cycles 1
 
 # Run up to three cycles
@@ -79,10 +109,16 @@ python -m babymind.cli independence run-learning --cycles 3
 ### Server API
 
 ```bash
-# Get learning cycle status
-curl /api/independence/learning
+# Default-on service status and recent outcomes
+curl /api/learning/service
+curl /api/learning/runs?limit=25
 
-# Run a learning cycle
+# One cycle now, under the shared lock and verification gates
+curl -X POST /api/learning/service/run-once \
+  -H "Content-Type: application/json" -d '{}'
+
+# Legacy cycle status and bounded supervised batch
+curl /api/independence/learning
 curl -X POST /api/independence/run-learning \
   -H "Content-Type: application/json" \
   -d '{"cycles": 1}'
@@ -93,15 +129,23 @@ curl -X POST /api/independence/run-learning \
 ```python
 from babymind.independence import Independence
 from babymind.coordinator import BabyMindCoordinator
+from babymind.learning_service import build_service
 
 ind = Independence(home="~/.babymind")
 coordinator = BabyMindCoordinator()
 ind.learning.selfmodel = coordinator.selfmodel
+service = build_service(ind, home="~/.babymind",
+                        provider_factory=coordinator.routed_provider)
 
-report = ind.learning.run(coordinator.provider, cycles=3)
+# Use the supervisor for shared locking and verification gates.
+report = service.run_supervised(cycles=3)
 for cycle in report["cycles"]:
     print(cycle["decision"], cycle["weakness"][:80])
 ```
+
+Calling `ind.learning.run(...)` directly remains available for tests and custom
+integrations, but it does not acquire the supervisor's cross-process cycle
+lock. Prefer `run_supervised` when a normal BabyMind process may be running.
 
 ## What this complements
 
@@ -118,4 +162,11 @@ for cycle in report["cycles"]:
   call an ineffective fix effective.
 - It does not make arbitrary generated code safe. The self-development
   engine keeps BabyMind recoverable; it does not sandbox arbitrary code.
-- It does not run in a loop automatically. Cycles are bounded and opt-in.
+- It does not update the running packaged executable. Verified edits in a
+  packaged build affect a managed staged source copy only, with no rebuild,
+  replacement or activation.
+- It is no longer opt-in. The default-on supervisor schedules bounded cycles,
+  but that is not permanent inference, an unbounded agent, an auto-updater, a
+  claim of sentience, or proof that BabyMind's capability improved. See
+  [permanent autonomous learning](AUTONOMOUS_LEARNING.md) for the gates,
+  kill switches and open acceptance work.

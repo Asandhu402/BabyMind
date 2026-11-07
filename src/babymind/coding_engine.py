@@ -1,13 +1,16 @@
-"""Opt-in, repository-aware self-development loop.
+"""Repository-aware self-development loop.
 
 Only the configured BabyMind development checkout is in scope. Model-authored
 changes always flow through selfdev's checkpoint and verification transaction.
+An optional ``edit_guard`` lets a caller (notably the autonomous learning
+supervisor) enforce an additional path policy before any write is previewed.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import PurePosixPath
+from typing import Callable
 
 from . import repository_context, selfdev
 from .integrations.coding_agent import _parse_response
@@ -71,7 +74,13 @@ def _search(query: str) -> dict:
     return result
 
 
-def _prepare_edits(edits: object) -> list[dict]:
+def _prepare_edits(edits: object, edit_guard: Callable[[str], str | None] | None = None) -> list[dict]:
+    """Validate edits before the transaction, including an optional path policy.
+
+    A guard refusal is raised as an ordinary proposal error so the coding loop
+    can show it to the model and ask for a different file. It is not a silent
+    retry and never reaches selfdev's write path.
+    """
     if not isinstance(edits, list) or not edits:
         raise ValueError("Submit a non-empty edits list or use finish.")
     prepared = []
@@ -82,6 +91,10 @@ def _prepare_edits(edits: object) -> list[dict]:
         if not isinstance(path, str) or any(part.startswith('.') or repository_context._SECRET_NAMES.search(part)
                                             for part in PurePosixPath(path).parts):
             raise ValueError("Hidden or sensitive-looking paths are excluded.")
+        if edit_guard is not None:
+            refusal = edit_guard(path)
+            if refusal:
+                raise ValueError(str(refusal)[:500])
         if set(edit) == {'path', 'content'}:
             target = selfdev.resolve_path(selfdev.dev_root(), edit['path'])
             if target.exists() or target.is_symlink():
@@ -98,7 +111,8 @@ def _prepare_edits(edits: object) -> list[dict]:
     return prepared
 
 
-def _propose(provider, task: str, failure: str, notes: dict) -> list[dict]:
+def _propose(provider, task: str, failure: str, notes: dict,
+             edit_guard: Callable[[str], str | None] | None = None) -> list[dict]:
     transcript = []
     for step in range(MAX_STEPS):
         history = '\n'.join(transcript)[-MAX_HISTORY_CHARS:]
@@ -121,7 +135,7 @@ def _propose(provider, task: str, failure: str, notes: dict) -> list[dict]:
             elif action == 'read' and set(message) == {'type', 'path', 'start_line'}:
                 result = _read_source(message['path'], message['start_line'])
             elif action == 'submit' and set(message) == {'type', 'edits'}:
-                return _prepare_edits(message['edits'])
+                return _prepare_edits(message['edits'], edit_guard=edit_guard)
             else:
                 raise ValueError("Unknown action or invalid fields.")
             observation = {"ok": True, "result": result}
@@ -142,11 +156,14 @@ def _propose(provider, task: str, failure: str, notes: dict) -> list[dict]:
     raise ValueError(f"Repository coding engine reached its {MAX_STEPS}-step limit without a submission.")
 
 
-def develop(provider, task: str, *, attempts: int = 2, test_timeout: int = 300) -> dict:
+def develop(provider, task: str, *, attempts: int = 2, test_timeout: int = 300,
+            edit_guard: Callable[[str], str | None] | None = None) -> dict:
     """Inspect and propose edits to BabyMind's own checkout, then verify or roll back.
 
-    Invoking this is explicit consent to model access and source editing. Tests
-    run under selfdev's configured sandbox policy; the default is fail-closed.
+    A caller may supply ``edit_guard`` to refuse paths before any write; the
+    autonomous learning supervisor uses this to protect its own policy and the
+    verification boundary. Tests run under selfdev's configured sandbox policy;
+    the default is fail-closed.
     """
     if not isinstance(task, str) or not task.strip() or len(task) > MAX_TASK_CHARS:
         raise ValueError(f"Task must contain 1–{MAX_TASK_CHARS} characters.")
@@ -155,9 +172,13 @@ def develop(provider, task: str, *, attempts: int = 2, test_timeout: int = 300) 
     if not selfdev.selfdev_enabled():
         raise selfdev.SelfDevError("Self-development is disabled or the source checkout is unavailable.")
     notes: dict[str, str] = {}
-    result = selfdev.apply_with_repair(lambda attempt, failure: _propose(provider, task.strip(), failure, notes),
-                                       attempts=attempts, reason=task[:200], agent_id="BM-03",
-                                       verify=True, test_timeout=test_timeout)
+    result = selfdev.apply_with_repair(
+        lambda attempt, failure: _propose(
+            provider, task.strip(), failure, notes, edit_guard=edit_guard,
+        ),
+        attempts=attempts, reason=task[:200], agent_id="BM-03",
+        verify=True, test_timeout=test_timeout,
+    )
     if notes:
         result['model_note'] = notes['model_note']  # Unverified model text, not evidence.
     return result

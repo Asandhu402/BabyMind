@@ -187,6 +187,24 @@ class CodingEngineTests(unittest.TestCase):
             with self.assertRaises(selfdev.SelfDevError):
                 coding_engine.develop(FixtureProvider(), 'Do work')
 
+    def test_edit_guard_refusal_never_reaches_the_write_path(self):
+        edit = {'path': 'src/babymind/new_helper.py', 'content': 'VALUE = 1\n'}
+        with patch('babymind.coding_engine.selfdev.resolve_path') as resolve_path, \
+             patch('babymind.coding_engine.selfdev.preview_edits', return_value=[]) as preview:
+            with self.assertRaisesRegex(ValueError, 'protected'):
+                coding_engine._prepare_edits([edit], lambda path: 'protected path')
+            resolve_path.assert_not_called()
+            preview.assert_not_called()
+
+    def test_allowed_path_still_uses_the_verified_transaction(self):
+        edit = {'path': 'src/babymind/new_helper.py', 'content': 'VALUE = 1\n'}
+        with patch('babymind.coding_engine.selfdev.resolve_path', return_value=Path('/nonexistent-babymind-path/new_helper.py')) as resolve_path, \
+             patch('babymind.coding_engine.selfdev.preview_edits', return_value=[]) as preview:
+            prepared = coding_engine._prepare_edits([edit], lambda path: None)
+        self.assertTrue(prepared[0]['create_only'])
+        resolve_path.assert_called_once()
+        preview.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()
