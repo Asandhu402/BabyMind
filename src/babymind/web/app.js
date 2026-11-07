@@ -101,7 +101,7 @@ async function sendMessage(message) {
     const result=await api("/api/chat",{method:"POST",body:JSON.stringify({
       message:text,agent_id:"BM-01",conversation_id:state.conversationId||"",
       use_memory:true,remember:false,collaborate:false,deep_research:false,
-      document_research:false,teamwork:false
+      document_research:false,teamwork:false,introspect:false
     })});
     state.conversationId=result.conversation_id||state.conversationId;
     $("#typingIndicator")?.remove();
