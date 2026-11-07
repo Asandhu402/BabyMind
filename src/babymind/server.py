@@ -528,6 +528,15 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(COORDINATOR.independence.designs.designs(
                 query.get("kind", [None])[0], query.get("status", [None])[0], limit=100,
             ))
+        elif path == "/api/independence/evidence":
+            self.send_json(COORDINATOR.independence.evidence.evidence_store.report())
+        elif path == "/api/independence/tests":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(int(query.get("limit", ["25"])[0]), 100))
+            except (TypeError, ValueError):
+                limit = 25
+            self.send_json(COORDINATOR.independence.evidence.evidence_store.tests(limit))
         elif path == "/api/autonomy/status":
             self.send_json(autonomy_engine().status() | {"permitted_by_environment": autonomy_enabled()})
         elif path == "/api/autonomy/audit":
@@ -1145,6 +1154,33 @@ class Handler(BaseHTTPRequestHandler):
                 cycles = int(payload.get("cycles", 1) or 1)
                 report = COORDINATOR.independence.curiosity.run(
                     COORDINATOR.routed_provider(), cycles=cycles,
+                )
+                self.send_json(report)
+            elif path == "/api/independence/test":
+                target = str(payload.get("target", "")).strip()
+                if not target:
+                    raise ValueError("A test requires a position or hypothesis ID.")
+                kind = str(payload.get("kind", "position") or "position")
+                allow_web = payload.get("allow_web") is True
+                allow_experiments = payload.get("allow_experiments") is True
+                if kind == "position":
+                    result = COORDINATOR.independence.evidence.test_position(
+                        COORDINATOR.routed_provider(), target,
+                        allow_web=allow_web, allow_experiments=allow_experiments,
+                    )
+                else:
+                    result = COORDINATOR.independence.evidence.test_hypothesis(
+                        COORDINATOR.routed_provider(), target,
+                        allow_web=allow_web, allow_experiments=allow_experiments,
+                    )
+                self.send_json(result)
+            elif path == "/api/independence/run-evidence":
+                cycles = int(payload.get("cycles", 3) or 3)
+                allow_web = payload.get("allow_web") is True
+                allow_experiments = payload.get("allow_experiments") is True
+                report = COORDINATOR.independence.evidence.run(
+                    COORDINATOR.routed_provider(), cycles=cycles,
+                    allow_web=allow_web, allow_experiments=allow_experiments,
                 )
                 self.send_json(report)
             elif path == "/api/autonomy/cycle":

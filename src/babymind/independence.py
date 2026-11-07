@@ -364,6 +364,22 @@ class PositionStore(_BaseStore):
                 db.close()
         return self.position(new_id)
 
+    def set_confidence(self, position_id: str, confidence: float) -> dict[str, Any] | None:
+        """Update a position's confidence in place, keeping its revision history."""
+        if self.position(position_id) is None:
+            return None
+        with self.lock:
+            db = self._connect()
+            try:
+                db.execute(
+                    "UPDATE independence_positions SET confidence=?, updated_at=? WHERE id=?",
+                    (_clamp(confidence), _now(), position_id),
+                )
+                db.commit()
+            finally:
+                db.close()
+        return self.position(position_id)
+
     def set_status(self, position_id: str, status: str) -> bool:
         if status not in POSITION_STATUSES:
             raise ValueError("Position status must be one of: " + ", ".join(POSITION_STATUSES))
@@ -1261,6 +1277,16 @@ class Independence:
         self.curiosity = CuriosityEngine(self.positions, self.explorations)
         for store in (self.positions, self.challenges, self.explorations, self.designs):
             store._initialise()
+        # The evidence loop bridges the independence stores to the outside world:
+        # real web evidence and real sandboxed experiments. Imported lazily to
+        # avoid a circular import (evidence.py imports from this module).
+        from .evidence import EvidenceStore, EvidenceLoop
+        self.evidence_store = EvidenceStore(self.secure, self.database_path)
+        self.evidence_store._initialise()
+        self.evidence = EvidenceLoop(
+            self.positions, self.explorations, self.evidence_store,
+            home=home_path,
+        )
 
     def context_for_prompt(self) -> str:
         """Compact block of BabyMind's own positions and open questions.
@@ -1303,10 +1329,14 @@ class Independence:
             "challenges": self.challenges.report(),
             "explorations": self.explorations.report(),
             "designs": self.designs.report(),
+            "evidence": self.evidence_store.report(),
             "note": (
                 "Positions, challenges, hypotheses, designs and curiosity findings are "
-                "model-generated text, not verified facts. The self-model's Brier-score "
-                "calibration is the only measured confidence signal. Offline mode is a "
+                "model-generated text, not verified facts. The evidence loop gathers real "
+                "external evidence (web content, sandboxed experiment output) and updates "
+                "conclusions against it, but the model still interprets that evidence. The "
+                "self-model's Brier-score calibration, fed by resolved predictions from "
+                "evidence tests, is the only measured confidence signal. Offline mode is a "
                 "posture reported here; the cognitive core never contacts an external AI "
                 "service regardless of this flag."
             ),
