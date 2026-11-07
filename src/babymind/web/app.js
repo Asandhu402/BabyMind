@@ -1,5 +1,5 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { conversationId: null, busy: false, conversations: [] };
+const state = { conversationId: null, busy: false };
 
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (char) => ({
   "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
@@ -67,21 +67,6 @@ function showTyping() {
   $("#messages").scrollTop=$("#messages").scrollHeight;
 }
 
-async function loadConversations() {
-  try { state.conversations=await api("/api/conversations"); }
-  catch (_) { state.conversations=[]; }
-}
-
-async function openConversation(id) {
-  try {
-    const messages=await api("/api/conversations/"+encodeURIComponent(id));
-    state.conversationId=id;
-    $("#messages").innerHTML="";
-    messages.forEach(item=>addMessage(item.role,item.content));
-    setView("chat");
-  } catch(error) { toast(error.message); }
-}
-
 async function newConversation() {
   state.conversationId=null;
   $("#messages").innerHTML='<div class="empty-chat" id="welcome"><div class="welcome-orb">B</div><h2>Hello. I\'m BabyMind.</h2><p>What would you like to talk about?</p></div>';
@@ -106,7 +91,6 @@ async function sendMessage(message) {
     state.conversationId=result.conversation_id||state.conversationId;
     $("#typingIndicator")?.remove();
     addMessage("assistant",result.response||"I couldn't produce a response.");
-    await loadConversations();
   } catch(error) {
     $("#typingIndicator")?.remove();
     addMessage("assistant",`I couldn't complete that message. ${error.message}`);
@@ -142,7 +126,6 @@ function init() {
     if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();$("#chatForm").requestSubmit();}
   });
   $("#newChat").addEventListener("click",newConversation);
-  loadConversations();
   checkHealth();
   setInterval(checkHealth,30000);
 }
