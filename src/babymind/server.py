@@ -531,6 +531,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(sandbox_status(probe=False))
         elif path == "/api/self/status":
             self.send_json(COORDINATOR.selfmodel.self_report())
+        elif path == "/api/emotions":
+            self.send_json(COORDINATOR.emotions.state())
         elif path == "/api/self/introspections":
             query = parse_qs(urlparse(self.path).query)
             try:
