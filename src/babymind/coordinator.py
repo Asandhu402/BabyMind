@@ -10,6 +10,7 @@ from .providers import ChatProvider, create_provider
 from .model_router import ModelRouter
 from .selfmodel import SelfModel
 from .independence import Independence
+from .emotions import EmotionSystem
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +65,7 @@ class BabyMindCoordinator:
         self.model_router = ModelRouter(fallback=self.provider)
         self.memory = memory or LocalMemory()
         self.cognitive = CognitiveCore(self.memory.database_path.with_name("cognitive.sqlite3"))
+        self.emotions = EmotionSystem(self.memory.database_path.with_name("emotions.sqlite3"))
         self.selfmodel = SelfModel(self.memory.database_path.with_name("selfmodel.sqlite3"))
         self.independence = Independence(self.memory.database_path.with_name("independence.sqlite3"))
         # Connect the verified learning cycle to the self-model so each cycle's
@@ -115,7 +117,9 @@ class BabyMindCoordinator:
             raise KeyError(f"Unknown agent ID: {normalized_id}") from error
 
         memories = self.memory.relevant(clean_task) if use_memory else []
+        self.emotions.observe(clean_task)
         system_prompt = self._base_system_prompt(agent)
+        system_prompt += "\\n\\n" + self.emotions.context()
         system_prompt += "\n\n" + self.cognitive.context_for_agent(agent)
         system_prompt += "\n\n" + self.selfmodel.context_for_prompt()
         system_prompt += "\n\n" + self.independence.context_for_prompt()
