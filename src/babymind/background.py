@@ -24,7 +24,7 @@ MAX_CONSECUTIVE_ERRORS = 5
 
 
 class BackgroundService:
-    def __init__(self, *, interval: float = 60, agent_id: str = "BM-02",
+    def __init__(self, *, interval: float = 60, agent_id: str = "BM-01",
                  core: CognitiveCore | None = None, coordinator: BabyMindCoordinator | None = None):
         if not MIN_INTERVAL_SECONDS <= interval <= MAX_INTERVAL_SECONDS:
             raise ValueError(f"Interval must be between {MIN_INTERVAL_SECONDS} and {MAX_INTERVAL_SECONDS} seconds.")
