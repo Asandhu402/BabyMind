@@ -1766,33 +1766,6 @@ class Handler(BaseHTTPRequestHandler):
             if payload.get("remember"):
                 COORDINATOR.memory.remember(agent_id, task, response)
             used_agents = [agent_id]
-        elif payload.get("teamwork") is True:
-            from .teamwork import run_team
-            team_result = run_team(COORDINATOR, task, history=context,
-                                   use_memory=bool(payload.get("use_memory")))
-            response = team_result["response"]
-            used_agents = [role["agent_id"] for role in team_result["roles"] if role["status"] != "skipped"]
-            if (team_result["status"] == "completed" or team_result["synthesis_error"]) and "BM-01" not in used_agents:
-                used_agents.append("BM-01")
-            if not used_agents:
-                used_agents = [agent_id]
-            if payload.get("remember"):
-                COORDINATOR.memory.remember(agent_id, task, response)
-        elif payload.get("collaborate"):
-            first = COORDINATOR.ask(agent_id, prompt, use_memory=bool(payload.get("use_memory")))
-            reviewer = COORDINATOR.ask("BM-49", (
-                "Review this draft for correctness, gaps, clarity, and safety. "
-                "Return concise actionable improvements. Do not rewrite the user's request.\n\n"
-                + first.response
-            ))
-            final = COORDINATOR.ask("BM-01", (
-                "Produce one coherent final answer using the specialist draft and reviewer notes. "
-                "Resolve contradictions, do not mention hidden process, and do not invent facts.\n\n"
-                "SPECIALIST DRAFT:\n" + first.response
-                + "\n\nREVIEW NOTES:\n" + reviewer.response
-            ), remember=bool(payload.get("remember")))
-            response = final.response
-            used_agents = [agent_id, "BM-49", "BM-01"]
         else:
             result = COORDINATOR.ask(
                 agent_id, prompt,
