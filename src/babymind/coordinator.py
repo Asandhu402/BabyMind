@@ -66,6 +66,10 @@ class BabyMindCoordinator:
         self.cognitive = CognitiveCore(self.memory.database_path.with_name("cognitive.sqlite3"))
         self.selfmodel = SelfModel(self.memory.database_path.with_name("selfmodel.sqlite3"))
         self.independence = Independence(self.memory.database_path.with_name("independence.sqlite3"))
+        # Connect the verified learning cycle to the self-model so each cycle's
+        # prediction (the model's confidence its fix will pass verification)
+        # feeds Brier calibration.
+        self.independence.learning.selfmodel = self.selfmodel
         self._agents = {agent.agent_id: agent for agent in agents}
 
     def _base_system_prompt(self, agent: AgentSpec) -> str:

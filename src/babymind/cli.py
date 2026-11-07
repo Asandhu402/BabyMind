@@ -133,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
         "curiosity", help="Pick and study one topic of BabyMind's own choosing")
     curiosity_parser.add_argument("--cycles", type=int, default=1, choices=range(1, 21))
     independence_actions.add_parser("evidence", help="Show evidence tests gathered and their verdicts")
+    independence_actions.add_parser("learning", help="Show the verified learning cycle status")
     test_parser = independence_actions.add_parser(
         "test", help="Test a position or hypothesis against real external evidence")
     test_parser.add_argument("target", help="Position or hypothesis ID")
@@ -144,6 +145,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_evidence_parser.add_argument("--cycles", type=int, default=3, choices=range(1, 11))
     run_evidence_parser.add_argument("--web", action="store_true", help="Allow web search evidence")
     run_evidence_parser.add_argument("--experiments", action="store_true", help="Allow sandboxed code experiments")
+    run_learning_parser = independence_actions.add_parser(
+        "run-learning", help="Run a verified learning cycle: identify a weakness, propose and verify a fix, evaluate behaviorally")
+    run_learning_parser.add_argument("--cycles", type=int, default=1, choices=range(1, 11))
     return parser
 
 
@@ -437,6 +441,9 @@ def main() -> None:
         elif args.independence_action == "evidence":
             report = independence.evidence.evidence_store.report()
             print(json.dumps(report, indent=2, ensure_ascii=False))
+        elif args.independence_action == "learning":
+            report = independence.learning.status()
+            print(json.dumps(report, indent=2, ensure_ascii=False))
         elif args.independence_action == "test":
             from .coordinator import BabyMindCoordinator
             if args.kind == "position":
@@ -455,6 +462,13 @@ def main() -> None:
             report = independence.evidence.run(
                 BabyMindCoordinator().provider, cycles=args.cycles,
                 allow_web=args.web, allow_experiments=args.experiments,
+            )
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+        elif args.independence_action == "run-learning":
+            from .coordinator import BabyMindCoordinator
+            coordinator = BabyMindCoordinator()
+            report = independence.learning.run(
+                coordinator.provider, cycles=args.cycles,
             )
             print(json.dumps(report, indent=2, ensure_ascii=False))
     elif args.command == "memory":

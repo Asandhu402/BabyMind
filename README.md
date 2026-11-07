@@ -210,6 +210,18 @@ self-model's Brier calibration. Web search and experiments are opt-in. See
 [evidence loop](docs/EVIDENCE_LOOP.md) for what is measured versus
 model-generated.
 
+## Verified learning cycle
+
+BabyMind can improve its own code through a verified learning cycle. Each
+cycle identifies a weakness in BabyMind's source, proposes a fix, verifies
+it through the real self-development transaction (compile + test suite in
+the OS sandbox), evaluates behaviorally whether the fix actually addresses
+the weakness, keeps it only if both verification and evaluation pass, and
+records the lesson. Kept improvements are recorded as positions; each cycle's
+prediction feeds Brier calibration. Weakness identification and behavioral
+evaluation are model-generated; verification is real. See
+[learning cycle](docs/LEARNING_CYCLE.md) for the honest scope.
+
 ## Safety and capabilities
 
 Current capability status (honest, matches the code):
