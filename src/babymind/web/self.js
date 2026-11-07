@@ -7,6 +7,19 @@
     return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   }
 
+  async function loadEmotions() {
+    const host=$("emotionStatus");
+    try {
+      const state=await api("/api/emotions");
+      const values=state.values||{};
+      const rows=Object.entries(values).map(([name,value])=>{
+        const percent=Math.round(Math.max(0,Math.min(1,Number(value)||0))*100);
+        return `<div class="emotion-meter"><div class="goal-meta">${escape(name)} · ${percent}%</div><div class="progress-track"><span style="width:${percent}%"></span></div></div>`;
+      }).join("");
+      host.innerHTML=`<strong>Currently ${escape(state.label||"steady")}</strong><div class="goal-meta">Dominant signal: ${escape(state.dominant||"calm")}</div>${rows}<p>${escape(state.notice||"Modelled signals, not subjective experience.")}</p>`;
+    } catch(error) { host.textContent="Emotional state unavailable: "+error.message; }
+  }
+
   async function loadSelf() {
     try {
       const report=await api("/api/self/status");
@@ -102,12 +115,12 @@
       if(approve)approveGoal(Number(approve.dataset.approve));
       if(dismiss){proposedGoals.splice(Number(dismiss.dataset.dismiss),1);renderIdeas();}
     });
-    $("refreshSelf").addEventListener("click",()=>{loadSelf();loadAutonomy();});
+    $("refreshSelf").addEventListener("click",()=>{loadSelf();loadAutonomy();loadEmotions();});
     $("autonomyStart").addEventListener("click",startAutonomy);
     $("autonomyStop").addEventListener("click",stopAutonomy);
   }
 
-  async function refresh() { await Promise.all([loadSelf(),loadAutonomy()]); }
+  async function refresh() { await Promise.all([loadSelf(),loadAutonomy(),loadEmotions()]); }
   window.babymindLoadSelf=refresh;
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bind);else bind();
 })();
