@@ -1706,7 +1706,7 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Messages must be 20,000 characters or fewer.")
         agent = next((item for item in AGENTS if item.agent_id == agent_id), None)
         if agent is None:
-            raise ValueError("Choose one of the 50 registered agents.")
+            raise ValueError("BabyMind has one identity: BM-01.")
         is_new_conversation = not conversation_id
         if is_new_conversation:
             conversation_id = secrets.token_urlsafe(12)
