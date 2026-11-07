@@ -27,7 +27,7 @@ class SelfEvaluationTests(unittest.TestCase):
         self.assertEqual(before["notes"], after["notes"])
         self.assertEqual(before["cycles"], after["cycles"])
 
-    def test_all_fifty_roles_are_preserved(self):
+    def test_single_babymind_identity_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
             report = run_self_evaluation(CognitiveCore(Path(temporary) / "cognitive.sqlite3"))
         roles = next(item for item in report["checks"] if item["name"] == "role_registry_integrity")
