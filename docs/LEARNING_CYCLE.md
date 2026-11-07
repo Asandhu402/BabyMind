@@ -153,6 +153,10 @@ lock. Prefer `run_supervised` when a normal BabyMind process may be running.
 - The **introspection pipeline** critiques BabyMind's *answers* for quality.
 - The **self-model** tracks BabyMind's *beliefs* about itself and their calibration.
 - The **learning cycle** tests and improves BabyMind's *code* -- its own source.
+- The **language lab** builds and executes an artefact that is *not* this
+  repository: a new language with a working interpreter, measured against an
+  oracle the harness computes. It is a separate opt-in cycle with its own
+  gates; see [language lab](LANGUAGE_LAB.md).
 
 ## What this does not do
 

@@ -369,6 +369,26 @@ class IndependenceContainerTests(_StoreTests):
     def test_offline_flag_reads_env(self):
         self.assertFalse(offline_enabled())
 
+    def test_container_accepts_a_database_path_without_doubling_the_filename(self):
+        """Regression: the coordinator passes a database path, not a directory.
+
+        That used to append "independence.sqlite3" again, so the first start
+        wrote a file where the second start expected a directory, and every
+        restart after that raised FileExistsError.
+        """
+        database = self.root / "independence.sqlite3"
+        first = Independence(str(database))
+        self.assertEqual(first.database_path, database)
+        self.assertTrue(database.is_file())
+
+        second = Independence(str(database))
+        self.assertEqual(second.database_path, database)
+        self.assertTrue((self.root / "independence.sqlite3").is_file())
+
+    def test_container_still_accepts_a_directory(self):
+        independence = Independence(home=self.root)
+        self.assertEqual(independence.database_path, self.root / "independence.sqlite3")
+
 
 if __name__ == "__main__":
     unittest.main()

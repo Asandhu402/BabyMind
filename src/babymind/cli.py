@@ -172,6 +172,26 @@ def build_parser() -> argparse.ArgumentParser:
     learning_actions.add_parser("reset", help="Clear the kill switch, halt and error backoff")
     interval_parser = learning_actions.add_parser("interval", help="Set the cycle interval")
     interval_parser.add_argument("seconds", type=float)
+
+    # Inventing a new language is a different cycle from editing this repository,
+    # so it is a separate command with its own explicit gates.
+    language_parser = subparsers.add_parser(
+        "language",
+        help="Research, design and verify a new language by running it in the sandbox")
+    language_actions = language_parser.add_subparsers(dest="language_action", required=True)
+    language_actions.add_parser(
+        "status", help="Show the language lab's gates, sandbox and durable history")
+    language_runs = language_actions.add_parser("runs", help="Show recent language cycles")
+    language_runs.add_argument("--limit", type=int, default=25)
+    language_run = language_actions.add_parser(
+        "run-once",
+        help="Run one complete cycle: research, design, validate, execute, record")
+    language_run.add_argument(
+        "--research", action="store_true",
+        help="Allow public web search and page reads for this cycle (off by default)")
+    language_run.add_argument(
+        "--attempts", type=int, default=1, choices=range(1, 3),
+        help="Give the model a second try if its design is rejected (default 1)")
     return parser
 
 
@@ -496,6 +516,24 @@ def main() -> None:
             from .learning_service import control_service
             report = control_service(independence).run_supervised(args.cycles)
             print(json.dumps(report, indent=2, ensure_ascii=False))
+    elif args.command == "language":
+        import json
+        from .independence import Independence
+        lab = Independence().languages
+        if args.language_action == "status":
+            print(json.dumps(lab.status(), indent=2, ensure_ascii=False))
+        elif args.language_action == "runs":
+            print(json.dumps(lab.runs(args.limit), indent=2, ensure_ascii=False))
+        elif args.language_action == "run-once":
+            from .coordinator import BabyMindCoordinator
+            report = lab.run(
+                BabyMindCoordinator().provider,
+                allow_research=args.research,
+                max_attempts=args.attempts,
+            )
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["status"] != "verified":
+                raise SystemExit(1)
     elif args.command == "learning":
         import json
         from .learning_service import control_service, run_standalone
