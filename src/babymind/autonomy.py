@@ -127,7 +127,7 @@ class AutonomyEngine:
         database_path: str | Path | None = None,
         workspace: str | Path | None = None,
         limits: dict[str, int] | None = None,
-        agent_id: str = "BM-02",
+        agent_id: str = "BM-01",
     ) -> None:
         self.home = _default_home()
         self.database_path = Path(database_path) if database_path else self.home / "autonomy.sqlite3"
