@@ -261,6 +261,19 @@ exec '{sys.executable}' "$@"
         self.assertEqual(self._wait_for_launch(app_log).splitlines()[-1], 'app ',
                          'the one command must finish with BabyMind running')
 
+    def test_installer_enables_the_permanent_learning_service(self):
+        scripts = self.source / 'scripts'
+        scripts.mkdir()
+        log = self.root / 'learning-service.log'
+        (scripts / 'install-learning-service.sh').write_text(
+            '#!/bin/bash\nprintf "%s\\n" "$*" >> "$LEARNING_LOG"\n'
+        )
+        result = self.run_installer(LEARNING_LOG=str(log))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('--if-available --launcher', log.read_text())
+        self.assertIn(str(self.home / '.local/bin/babymind'), log.read_text())
+        self.assertIn('Autonomous learning runs by default', result.stdout)
+
 
 class InstallAndRunScriptTests(unittest.TestCase):
     def setUp(self) -> None:

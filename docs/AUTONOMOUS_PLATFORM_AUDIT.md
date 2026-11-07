@@ -16,6 +16,14 @@ security boundary. This is a status summary, not an acceptance report.
   (RLIMIT_AS)/process (RLIMIT_NPROC) limits. When no OS sandbox backend is
   available, running generated code is refused (fail closed). It still cannot
   run generated code in the portable app. Review code regardless.
+- The verified learning cycle is now supervised permanently: enabled by default,
+  durable across restarts, restartable with the Linux user service, serialized by
+  cross-process locks and stopped by a durable kill switch, pause, circuit breaker
+  or closed gate. It reuses the checkpoint/compile/test/rollback transaction and
+  `sandbox=require`; its path guard refuses supervisor, verification, isolation,
+  UI, test and model-boundary files. Weakness discovery and effectiveness remain
+  model-generated, packaged builds edit staged source only, and the running
+  executable is never updated. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 - There is still no *formally verified* security boundary, but all untrusted
   execution now funnels through one broker (`babymind.broker.execute`, exposed
   at `/api/broker/status`) with a fail-closed `sandbox=require` policy and an
@@ -39,5 +47,9 @@ runs automatically on every push and pull request instead of on request —
 configured for Ubuntu 26.10 in the morning of 2026-11-06 and moved the same
 day to the hosted Ubuntu 26.04 LTS runner; its last recorded run failed, so a
 passing real-model acceptance is still an
-open gate), desktop/UI testing and target hardware performance. No model
-independence, sandbox escape resistance, or fully autonomous work is claimed.
+open gate), desktop/UI testing and target hardware performance. The learning
+supervisor's scheduler, gates, locks, controls, guard, API/CLI/UI and installer
+have scripted tests, but real-model and long-running desktop acceptance remain
+open gates. No model independence, sandbox escape resistance, or general fully
+autonomous development is claimed; the permanent learning process is a bounded,
+audited, stoppable verified cycle, not a finished autonomous engineer.

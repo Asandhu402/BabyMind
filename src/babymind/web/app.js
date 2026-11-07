@@ -45,7 +45,7 @@ function setView(name) {
   document.querySelectorAll(".view").forEach(view=>view.classList.remove("active"));
   const target=$("#"+name+"View") || $("#chatView"); target.classList.add("active");
   document.querySelectorAll(".nav-item").forEach(item=>item.classList.toggle("active",item.dataset.view===name));
-  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",development:"Development review",githubResearch:"GitHub research",settings:"Settings",diagnostics:"Diagnostics",self:"Self & autonomy"})[name]||"Chat";
+  $("#pageTitle").textContent=({chat:"Chat",agents:"Agent directory",memory:"Memory",tasks:"Task queue",mission:"Mission control",development:"Development review",githubResearch:"GitHub research",settings:"Settings",diagnostics:"Diagnostics",self:"Self & autonomy",learning:"Self-improvement"})[name]||"Chat";
   $("#sidebar").classList.remove("open");
   if(name==="memory") { loadMemory(); loadMemoryProfile(); }
   if(name==="tasks") loadTasks();
@@ -54,6 +54,7 @@ function setView(name) {
   if(name==="diagnostics") loadDiagnostics();
   if(name==="mission" && window.babymindLoadMission) window.babymindLoadMission();
   if(name==="self" && window.babymindLoadSelf) window.babymindLoadSelf();
+  if(name==="learning" && window.babymindLoadLearning) window.babymindLoadLearning();
 }
 function renderAgentSelect() {
   $("#agentSelect").innerHTML=state.agents.map(agent=>`<option value="${agent.id}">${agent.id} · ${escapeHTML(agent.name)}</option>`).join("");

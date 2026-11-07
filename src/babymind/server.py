@@ -28,6 +28,7 @@ from . import interaction_log
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
 from .development_review import DevelopmentReviews, ReviewProcessLock
+from .first_run import _data_home
 from .providers import ProviderError
 from .secure_store import SecureTextStore
 from .lan_tls import create_lan_tls_context
@@ -35,7 +36,7 @@ from .research import fetch_page, search_web
 from .autonomy import AutonomyEngine, autonomy_enabled
 
 WEB = Path(__file__).resolve().parent / "web"
-DATA_HOME = Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind"))
+DATA_HOME = _data_home()
 DATA_HOME.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_HOME / "app.sqlite3"
 DB_LOCK = threading.RLock()
@@ -49,6 +50,13 @@ BUILDER_LOCK = threading.RLock()
 # threads or touches the model endpoint.
 AUTONOMY_LOCK = threading.RLock()
 _AUTONOMY: AutonomyEngine | None = None
+
+# The permanent verified-learning supervisor is also lazy: importing the web
+# server must not start a background thread or a second local model. The
+# desktop/server entry points call ensure_autonomous_learning() explicitly.
+LEARNING_LOCK = threading.RLock()
+_LEARNING_SERVICE = None
+_LEARNING_HOME: Path | None = None
 
 
 def autonomy_engine() -> AutonomyEngine:
@@ -65,6 +73,29 @@ def autonomy_engine() -> AutonomyEngine:
                 workspace=DATA_HOME / "autonomy" / "workspace",
             )
         return _AUTONOMY
+
+
+def learning_service():
+    """Return this process's attached autonomous learning supervisor."""
+    global _LEARNING_SERVICE, _LEARNING_HOME
+    from .learning_service import in_process_service
+
+    with LEARNING_LOCK:
+        if _LEARNING_SERVICE is None or _LEARNING_HOME != DATA_HOME:
+            _LEARNING_SERVICE = in_process_service(
+                COORDINATOR, home=DATA_HOME, semaphore=INFERENCE_SEMAPHORE,
+            )
+            _LEARNING_HOME = DATA_HOME
+        return _LEARNING_SERVICE
+
+
+def ensure_autonomous_learning() -> dict:
+    """Start the default-on supervisor when the desktop/server process starts."""
+    service = learning_service()
+    started = service.start()
+    return service.status() | {"started_now": started.get("started", False)}
+
+
 BUILDER_PLANS: dict[str, dict] = {}
 BUILDER_PLAN_TTL = 1_800
 # Mission control state is created lazily so tests can relocate DATA_HOME.
@@ -538,7 +569,19 @@ class Handler(BaseHTTPRequestHandler):
                 limit = 25
             self.send_json(COORDINATOR.independence.evidence.evidence_store.tests(limit))
         elif path == "/api/independence/learning":
+            # Attach the in-process supervisor status on first inspection too,
+            # so a status request never silently loses the live process state.
+            learning_service()
             self.send_json(COORDINATOR.independence.learning.status())
+        elif path == "/api/learning/service":
+            self.send_json(learning_service().status())
+        elif path == "/api/learning/runs":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(int(query.get("limit", ["25"])[0]), 200))
+            except (TypeError, ValueError):
+                limit = 25
+            self.send_json(learning_service().runs(limit))
         elif path == "/api/autonomy/status":
             self.send_json(autonomy_engine().status() | {"permitted_by_environment": autonomy_enabled()})
         elif path == "/api/autonomy/audit":
@@ -1187,10 +1230,30 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(report)
             elif path == "/api/independence/run-learning":
                 cycles = int(payload.get("cycles", 1) or 1)
-                report = COORDINATOR.independence.learning.run(
-                    COORDINATOR.routed_provider(), cycles=cycles,
-                )
-                self.send_json(report)
+                # Keep the legacy explicit-batch route, but route it through the
+                # supervisor's shared cycle lock and verification gates so it
+                # cannot edit source concurrently with an autonomous cycle.
+                self.send_json(learning_service().run_supervised(cycles))
+            elif path == "/api/learning/service/run-once":
+                self.send_json(learning_service().run_once(force=True, kind="manual"))
+            elif path == "/api/learning/service/pause":
+                self.send_json(learning_service().pause())
+            elif path == "/api/learning/service/resume":
+                self.send_json(learning_service().resume())
+            elif path == "/api/learning/service/stop":
+                self.send_json(learning_service().stop(
+                    reason=str(payload.get("reason", "Stopped from the BabyMind interface."))
+                ))
+            elif path == "/api/learning/service/reset":
+                self.send_json(learning_service().reset())
+            elif path == "/api/learning/service/enable":
+                self.send_json(learning_service().enable())
+            elif path == "/api/learning/service/disable":
+                self.send_json(learning_service().disable())
+            elif path == "/api/learning/service/interval":
+                self.send_json(learning_service().set_interval(
+                    float(payload.get("seconds", 1800) or 1800)
+                ))
             elif path == "/api/autonomy/cycle":
                 engine = autonomy_engine()
                 if engine.state not in ("running", "paused"):
@@ -1780,6 +1843,21 @@ def main() -> None:
         parser.error("Non-loopback binding requires --lan, which enables access-token protection.")
     init_db()
     recover_development_reviews()
+    # Hold a shared session lock for this process's lifetime so the standalone
+    # systemd supervisor stays idle while the app is open. Keep the handle
+    # referenced until serve_forever() returns.
+    from .learning_service import hold_desktop_session
+    session_lock = hold_desktop_session(DATA_HOME)
+    # Hold one reference so shutdown can signal the in-process loop without
+    # writing the durable stop flag.
+    learning_supervisor = learning_service()
+    learning_status = ensure_autonomous_learning()
+    print(
+        "Autonomous learning: "
+        + ("enabled" if learning_status["enabled_by_environment"] else "disabled by environment")
+        + f" (state {learning_status['state']}, next cycle {learning_status['next_due_at']})",
+        flush=True,
+    )
     auth_token = secrets.token_urlsafe(24) if args.lan else None
     lan_ip = None
     tls_context = None
@@ -1819,7 +1897,10 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nShutting down BabyMind.")
     finally:
+        learning_supervisor.request_stop()
         server.server_close()
+        if session_lock is not None:
+            session_lock.close()
 
 
 if __name__ == "__main__":

@@ -10,7 +10,9 @@ import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from .first_run import MODEL_SIZE_LABEL, _download_model, _sha256, prepare_local_engine
+from .first_run import (
+    MODEL_SIZE_LABEL, _data_home, _download_model, _sha256, prepare_local_engine,
+)
 
 
 def _run_with_progress(app, title, work, *, cancellable=False):
@@ -108,18 +110,30 @@ def main() -> None:
                            cancellable=True)
 
     server = None
+    session_lock = None
+    learning_supervisor = None
     try:
         def verify(path: Path) -> str:
             return _run_with_progress(app, "Verifying the local model…",
                                       lambda _progress, _cancel: _sha256(path))
 
         prepare_local_engine(download, verify)
+        # A shared lock tells the standalone learning service that this desktop
+        # process owns the in-app supervisor and the local model right now.
+        from .learning_service import hold_desktop_session
+        session_lock = hold_desktop_session(_data_home())
 
         def start_server(_progress, _cancel):
             # Import after engine setup; the module constructs the coordinator.
-            from .server import DATA_HOME, Handler, init_db, recover_development_reviews
+            nonlocal learning_supervisor
+            from .server import (
+                DATA_HOME, Handler, ensure_autonomous_learning,
+                init_db, learning_service, recover_development_reviews,
+            )
             init_db()
             recover_development_reviews()
+            learning_supervisor = learning_service()
+            ensure_autonomous_learning()  # default-on permanent supervisor
             local_server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
             threading.Thread(target=local_server.serve_forever, daemon=True,
                              name="BabyMindLocalServer").start()
@@ -142,6 +156,10 @@ def main() -> None:
         if server is not None:
             server.shutdown()
             server.server_close()
+        if learning_supervisor is not None:
+            learning_supervisor.request_stop()
+        if session_lock is not None:
+            session_lock.close()
 
 
 if __name__ == "__main__":

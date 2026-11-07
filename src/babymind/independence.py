@@ -87,7 +87,10 @@ def _clamp(value: Any, default: float = 0.5) -> float:
 
 
 def _default_home() -> Path:
-    return Path(os.getenv("BABYMIND_HOME", Path.home() / ".babymind")).expanduser()
+    # One canonical home resolver keeps the app, server, coordinator and
+    # standalone learning service looking at the same desktop-session lock.
+    from .first_run import _data_home
+    return _data_home()
 
 
 def offline_enabled() -> bool:

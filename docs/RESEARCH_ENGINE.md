@@ -61,14 +61,17 @@ The Memory view has an optional, user-edited context card (up to 4,000
 characters). It is encrypted in the existing memory database with the existing
 local key. The card is only included in regular chat when **Use memory** is on,
 and is explicitly labeled as untrusted context, not a system instruction. It
-is not learned or updated automatically. When deep research and memory are both
-on, at most 300 characters of the card and two relevant saved memories are
-included in the synthesis prompt; lexical memory search can fall back to recent
-notes when nothing matches. These are not sent to the search provider and are
-not source evidence. **Remember** remains opt-in. Clear all memory also
-deletes the card. The key is accessible to the local user, so this does not
-protect against a compromised account. As with all prompt-based controls,
-malicious or mistaken context may still influence the model.
+is not learned or updated automatically. The separate default-on learning
+supervisor improves BabyMind's own source under verification and never infers,
+writes or manages this card; see
+[permanent autonomous learning](AUTONOMOUS_LEARNING.md). When deep research and
+memory are both on, at most 300 characters of the card and two relevant saved
+memories are included in the synthesis prompt; lexical memory search can fall
+back to recent notes when nothing matches. These are not sent to the search
+provider and are not source evidence. **Remember** remains opt-in. Clear all
+memory also deletes the card. The key is accessible to the local user, so this
+does not protect against a compromised account. As with all prompt-based
+controls, malicious or mistaken context may still influence the model.
 
 ## Verification and scope
 

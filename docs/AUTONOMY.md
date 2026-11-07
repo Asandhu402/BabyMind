@@ -2,8 +2,9 @@
 
 **Status: implemented in part; Linux is the supported platform.**
 BabyMind now has a mission orchestrator over 50 development roles, a
-self-development engine with checkpoints and automatic rollback, a bounded
-command runner, GitHub/licence research, and offline hardware sizing.
+self-development engine with checkpoints and automatic rollback, a default-on
+permanent learning supervisor around the verified cycle, a bounded command
+runner, GitHub/licence research, and offline hardware sizing.
 
 Read the status matrix before believing any capability claim in a chat message.
 Nothing in this document is a promise that BabyMind is a finished autonomous
@@ -21,6 +22,7 @@ engineer.
 | Public research | `research.py` | DuckDuckGo search, guarded page reading, GitHub repository search/metadata, licence classification. |
 | Hardware sizing | `hardware.py` | CPU/RAM/disk detection and a conservative model/context recommendation with llama.cpp flags. |
 | UI | `web/mission.js`, `index.html` | Mission control view: run a mission, watch all 50 roles, inspect self-development state, roll back, run tests, edit source with preview. |
+| Permanent learning | `learning_service.py`, `web/learning.js` | Default-on, durable, stoppable supervisor around the verified learning cycle, with a run ledger, gates, controls and a Self-improvement view. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md). |
 
 ## The 50 roles are not 50 models
 
@@ -35,7 +37,13 @@ A role recorded as `contributed` merely returned non-empty model text. A mission
 marked `completed` means all calls returned text; neither status verifies that
 its output is correct, useful, or that requested work was actually performed.
 
-## The autonomous loop (opt-in per mission)
+## The mission self-edit loop (opt-in per mission)
+
+This section describes a **mission-triggered** self-edit. It remains opt-in. It
+is separate from the default-on permanent learning supervisor, which repeatedly
+runs the bounded verified cycle outside missions and has its own narrower path
+guard, durable schedule, gates and kill switches. See
+[permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 Starting a mission with `self_edit: true` (UI: **Also apply one verified
 self-edit**) closes the loop:

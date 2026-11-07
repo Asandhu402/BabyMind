@@ -107,10 +107,18 @@ honest scope.
 Already implemented by `ActionPolicy` in `autonomy.py`, and surfaced here.
 Routine local cognitive actions (create a goal, complete a goal, record a
 question, write a note, wait) are allowlisted and run without approval.
-Extraordinary actions (network access, shell, source edits, deletion,
+Extraordinary actions (network access, shell, arbitrary source edits, deletion,
 credentials, external messages, purchases, system changes) require a separate
 supervised tool and explicit approval. The independence report states both
 facts.
+
+The default-on learning supervisor is a narrow, deliberate exception for
+reversible self-edits: it does not ask for approval on each cycle, but every
+edit is confined by a path guard, checkpoint, compile/test verification,
+fail-closed sandbox, automatic rollback, hash-chained audit and a durable kill
+switch. It cannot edit policy, sandbox configuration, model boundaries, its own
+supervisor, verification machinery, UI or tests, and it never updates the
+running packaged executable. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 ### Run locally without subscriptions, external AI services or corporate control
 
@@ -119,7 +127,9 @@ runs a local llama.cpp GGUF model with no API key and no external AI service.
 Network research is opt-in and leaves the device only when the user enables it.
 `BABYMIND_OFFLINE` is an enforced-posture flag reported in the independence
 report; the cognitive core never contacts an external AI service regardless of
-it. There is no auto-updater and no subscription.
+it. There is no auto-updater and no subscription. The autonomous learning
+supervisor is not an auto-updater: it verifies bounded source edits locally and
+does not replace or activate the running application.
 
 ## What this is not
 
@@ -141,8 +151,10 @@ Being precise here is the point of the module.
   execution, or external contact happens inside it.
 - **Independence is not safety.** A system that forms its own positions and
   challenges its creator is still a 4B model that can be wrong, and it still
-  deserves supervision. The action allowlist and approval boundaries are
-  unchanged; this subsystem adds no new reach.
+  deserves supervision. This subsystem adds no new reach of its own. The
+  separate learning supervisor can make narrowly guarded verified source edits
+  without per-cycle approval, but remains bounded, audited, stoppable and unable
+  to expand its own authority.
 - **No claim about consciousness is made or denied.** This is operational
   self-knowledge about conclusions and disagreements, not a model of subjective
   experience.
@@ -162,6 +174,8 @@ babymind independence design architecture "Critique pair" "Run two seeded critiq
 babymind independence curiosity --cycles 2   # pick and study its own topics offline
 babymind independence test <position-id> --experiments   # test against a sandboxed experiment
 babymind independence run-evidence --cycles 3 --web --experiments
+babymind independence learning       # verified learning status with supervisor state
+babymind learning status             # default-on service, gates and ledger
 ```
 
 Over HTTP: `GET /api/independence/report`, `/positions`, `/challenges`,

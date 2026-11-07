@@ -160,10 +160,21 @@ finally:
     if os.path.exists(temp):
         os.unlink(temp)
 PY
+# Permanent autonomous self-improvement is part of the installation, not an
+# opt-in add-on. On hosts without a systemd user session (CI shells, minimal
+# containers) the in-app supervisor still runs whenever BabyMind is open.
+learning_service_script="$source_dir/scripts/install-learning-service.sh"
+if [[ -f $learning_service_script ]]; then
+  if ! bash "$learning_service_script" --if-available --launcher "$launcher"; then
+    printf 'warning: the autonomous learning user service was not enabled; the in-app supervisor remains active.\n' >&2
+  fi
+fi
+
 printf '\n%s\n' 'BabyMind is installed. Open BabyMind from your Applications menu,' \
   "or start it with: $launcher" \
   "Model and personal data: $HOME/.babymind" \
-  'Previous app versions are kept in the BabyMind installation directory.'
+  'Previous app versions are kept in the BabyMind installation directory.' \
+  'Autonomous learning runs by default; use "babymind learning status" or "babymind learning stop" to inspect or stop it.'
 
 # The documented one-command installer asks for the app to be started, so the
 # single copy-paste ends with BabyMind running. Detach it so the terminal (and

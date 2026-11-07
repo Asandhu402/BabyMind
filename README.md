@@ -57,15 +57,19 @@ The command downloads and runs `bootstrap-linux.sh`, which:
 4. downloads the newest source, then hands over to `install-linux.sh`, which
    installs the Qt 6.12/WebEngine libraries for your package manager, verifies
    and downloads the pinned 2.71 GB model, builds the CPU runtime and desktop,
-   and adds the application-menu entry.
+   adds the application-menu entry, and enables the default-on autonomous
+   learning user service when a systemd user session is available.
 
 Review the scripts before running them. It needs internet, a graphical desktop,
 time to compile, and disk space (at least 4.5 GB for the model plus several GB
 for dependencies; 10 GB free recommended), and it may ask for your sudo
 password. When it finishes, BabyMind starts on its own; afterwards open it from
-Applications or run `~/.local/bin/babymind`. Set
-`BABYMIND_LAUNCH_AFTER_INSTALL=0` instead of `=1` in that command to install
-without starting.
+Applications or run `~/.local/bin/babymind`. The in-app learning supervisor
+starts with the app, and the installed user service can continue supervised
+cycles while the app is closed. See
+[permanent autonomous learning](docs/AUTONOMOUS_LEARNING.md) for its gates and
+stop controls. Set `BABYMIND_LAUNCH_AFTER_INSTALL=0` instead of `=1` in that
+command to install without starting.
 
 Preview without changing anything, or stop after preparing the machine:
 
@@ -104,17 +108,19 @@ request or manual dispatch - runs the same complete set of jobs, and no job is
 gated by a condition; `tests/test_real_model_ci.py` fails the build if a gate
 or a job-selecting switch is ever added back.
 
-A permanent `ui-diagnostics` job runs the web client's Diagnostics view headlessly
-(jsdom) on the hosted Ubuntu 24.04 image: it loads the real `index.html` and
-`app.js`, and asserts the interaction log renders, entries are copyable
-per-entry and as a full report, the log path and Clear log work, and uncaught
-client errors are posted to the server. It is a DOM-level check, not a
-real-browser pass; see [known limitations](docs/KNOWN_LIMITATIONS.md).
+A permanent `ui-diagnostics` job runs the web client's Diagnostics, research,
+Self/autonomy and Self-improvement views headlessly (jsdom) on the hosted Ubuntu
+24.04 image: it loads the real `index.html` and `app.js`, and asserts the
+interaction log renders and exports, client errors are posted, research chat
+works, the self-model/autonomy controls work, and the default-on learning
+service's status, gates, ledger, controls and interval validation work. It is a
+DOM-level check, not a real-browser pass; see
+[known limitations](docs/KNOWN_LIMITATIONS.md).
 
 A passing run shows the installer, the pinned model and CPU inference still work
 together on the tested questions. It is not proof of role competence, of
-correct advice, of behavior on a real Ubuntu Desktop session, or of packaged
-self-upgrade. It is also slow: the job allows 180 minutes for the download, the
+correct advice, of behavior on a real Ubuntu Desktop session, of packaged
+self-upgrade, or of real-model autonomous-learning quality. It is also slow: the job allows 180 minutes for the download, the
 build, the GUI question set and a 50-role CPU mission, and it fails when the
 model cannot answer the tested questions or produce a valid edit.
 
@@ -128,7 +134,10 @@ Linux portable archive and run `./BabyMind` (or open the executable in your file
 manager). On first launch BabyMind asks to download a roughly 2.71 GB model,
 verifies its SHA-256, and saves it under `~/.babymind/models`. The download
 requires internet and at least 4.5 GB free. Subsequent launches use the local
-model. There is no API key, paid service, LM Studio or auto-updater.
+model. There is no API key, paid service, LM Studio or auto-updater; the
+default-on learning supervisor makes bounded staged-source edits and never
+replaces the running portable executable. See
+[permanent autonomous learning](docs/AUTONOMOUS_LEARNING.md).
 CPU inference may be slow and needs substantial memory.
 
 The Linux package and first-run GUI have **not yet been validated end to end**
@@ -170,9 +179,12 @@ It tracks how well-calibrated its own confidence has been as a measured number
 (Brier score over resolved predictions), and it holds revisable beliefs about its
 own limits, values and lessons, encrypted on this device.
 
-Autonomy lets it pursue its own goals unattended inside a workspace it cannot
-leave, with a kill switch that lands within one step, hard budgets, a circuit
-breaker, and a hash-chained audit log. It is off until you arm it.
+General-purpose goal autonomy lets it pursue its own goals unattended inside a
+workspace it cannot leave, with a kill switch that lands within one step, hard
+budgets, a circuit breaker, and a hash-chained audit log. That controller is
+off until you arm it. The separate verified learning supervisor is enabled by
+default, durable and stoppable; it is described below and in
+[permanent autonomous learning](docs/AUTONOMOUS_LEARNING.md).
 
 **This is operational self-knowledge, not sentience.** The critique is the same
 local model reading its own draft — a second opinion from the same weights, not an
@@ -210,17 +222,43 @@ self-model's Brier calibration. Web search and experiments are opt-in. See
 [evidence loop](docs/EVIDENCE_LOOP.md) for what is measured versus
 model-generated.
 
-## Verified learning cycle
+## Permanent autonomous self-improvement
 
-BabyMind can improve its own code through a verified learning cycle. Each
-cycle identifies a weakness in BabyMind's source, proposes a fix, verifies
-it through the real self-development transaction (compile + test suite in
-the OS sandbox), evaluates behaviorally whether the fix actually addresses
-the weakness, keeps it only if both verification and evaluation pass, and
-records the lesson. Kept improvements are recorded as positions; each cycle's
-prediction feeds Brier calibration. Weakness identification and behavioral
-evaluation are model-generated; verification is real. See
-[learning cycle](docs/LEARNING_CYCLE.md) for the honest scope.
+BabyMind improves its own code through a **default-on, supervised learning
+cycle**. The desktop and server start a durable supervisor without an operator
+request; the Linux installer also enables a headless systemd user service when
+one is available. A cycle identifies a weakness in BabyMind's source, proposes
+a narrowly guarded fix, verifies it through the real self-development
+transaction (compile + test suite in the OS sandbox), evaluates behaviorally
+whether the fix actually addresses the weakness, keeps it only if both
+verification and evaluation pass, and records the lesson. Kept improvements are
+recorded as positions; each cycle's prediction feeds Brier calibration.
+Unresolved weaknesses are retried, duplicates and repeated failures are retired,
+and recent lessons inform later cycles.
+
+"Permanent" means enabled by default, persistent across restarts, crash-
+recoverable and automatically restarted with the installation — not permanent
+inference or an unbounded agent. A durable kill switch, pause/resume, interval,
+circuit breaker, audit-chain check, path guard, sandbox `require` policy, desktop
+session lock and process locks all remain. Weakness identification and behavioral
+evaluation are model-generated; compilation, tests, rollback and local state
+changes are real. Packaged builds edit staged source only and do not update the
+running executable. This is not sentience, an auto-updater, or proof of improved
+capability.
+
+```bash
+babymind learning status          # default-on supervisor, gates, ledger
+babymind learning runs            # recent verified outcomes and audit chain
+babymind learning run-once        # one gated cycle now
+babymind learning stop --reason "maintenance"
+babymind learning reset           # clear the durable kill switch and resume
+```
+
+The web **Self-improvement** view exposes the same controls plus
+`GET /api/learning/service`, `GET /api/learning/runs` and
+`POST /api/learning/service/{run-once,pause,resume,stop,reset,enable,disable,interval}`.
+See [permanent autonomous learning](docs/AUTONOMOUS_LEARNING.md) and the
+[verified learning cycle](docs/LEARNING_CYCLE.md) for the honest scope.
 
 ## Safety and capabilities
 
@@ -239,10 +277,12 @@ Current capability status (honest, matches the code):
    read-only GitHub metadata research exist; page content is treated as
    untrusted. No autonomous browsing or repo cloning.
 4. **Fully autonomous development** — *incomplete*: missions (sequential or
-   phase-parallel graph mode), checkpointed self-edits with rollback, and
-   independent verification exist, but there is no typed task-graph state,
-   worktree isolation, or signed/auto-updating release — not yet an
-   autonomous platform. See [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md).
+   phase-parallel graph mode), checkpointed self-edits with rollback, independent
+   verification, and a default-on verified learning supervisor exist, but there
+   is no typed task-graph state, worktree isolation, or signed/auto-updating
+   release — not yet an autonomous platform. The learning supervisor is bounded,
+   stoppable and does not update the running packaged app. See
+   [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md).
 
 - For an opt-in repository-aware self-development loop, run `babymind develop
   "describe a change"` against BabyMind's configured source checkout. It can
@@ -250,6 +290,11 @@ Current capability status (honest, matches the code):
   verification/rollback path without running all 50 roles. This is not an
   arbitrary-project agent; review changes and keep independent backups. See
   [autonomy](docs/AUTONOMY.md#opt-in-repository-aware-self-development).
+- Autonomous learning does not require `babymind develop` or a manual mission.
+  Its default-on supervisor reuses the same checkpoint/compile/test/rollback
+  transaction with a narrower path guard. Use `babymind learning status`,
+  `babymind learning stop`, or the Self-improvement view to inspect and stop it.
+  See [permanent autonomous learning](docs/AUTONOMOUS_LEARNING.md).
 - The requested acceptance target is Ubuntu 26.10 x86-64; current hosted CI
   uses Ubuntu 26.04 and is not a substitute for a 26.10 acceptance run.
 - Chat's opt-in **Team** mode plans and runs a small dependency graph over

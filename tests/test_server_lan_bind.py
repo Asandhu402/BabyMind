@@ -18,11 +18,19 @@ class LanBindTests(unittest.TestCase):
         probe.getsockname.return_value = ("192.168.1.42", 0)
         http_server = Mock()
         http_server.serve_forever.side_effect = KeyboardInterrupt
+        session_lock = Mock()
+        learning_supervisor = Mock()
+        learning_status = {
+            "enabled_by_environment": True, "state": "idle", "next_due_at": "soon",
+        }
 
         with (
             patch.object(server.argparse.ArgumentParser, "parse_args", return_value=args),
             patch.object(server, "init_db"),
             patch.object(server, "recover_development_reviews"),
+            patch("babymind.learning_service.hold_desktop_session", return_value=session_lock),
+            patch.object(server, "learning_service", return_value=learning_supervisor),
+            patch.object(server, "ensure_autonomous_learning", return_value=learning_status),
             patch.object(server.socket, "socket", return_value=probe),
             patch.object(
                 server, "create_lan_tls_context",
@@ -37,6 +45,8 @@ class LanBindTests(unittest.TestCase):
         factory.assert_called_once_with(("192.168.1.42", 8765), server.Handler)
         self.assertEqual(http_server.auth_token, "test-token")
         http_server.server_close.assert_called_once()
+        learning_supervisor.request_stop.assert_called_once()
+        session_lock.close.assert_called_once()
 
 
 if __name__ == "__main__":

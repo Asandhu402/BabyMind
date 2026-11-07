@@ -173,7 +173,11 @@ Being precise here is the whole point of the module.
   self-report settle that question in either direction — the fluency is not evidence.
 - **Autonomy is bounded, not safe by virtue of being bounded.** A system that can
   write files unattended deserves supervision regardless of how small its
-  allowlist is.
+  allowlist is. General-purpose goal autonomy remains off until armed. The
+  separate default-on learning supervisor is also bounded and stoppable: it
+  makes only narrowly guarded, checkpointed, compile/test-verified source edits
+  and never claims that a recorded lesson proves improved capability. See
+  [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
 
 ## Using it
 
@@ -187,12 +191,19 @@ babymind self believe limit "I over-explain simple answers." --confidence 0.8
 babymind autonomy status          # state, budgets, audit-chain integrity
 babymind autonomy goal "Keep a learning journal"
 BABYMIND_AUTONOMY=1 babymind autonomy run --cycles 20 --interval 30
+
+babymind learning status          # default-on supervisor, gates, ledger
+babymind learning runs            # recent verified outcomes
+babymind learning stop --reason "maintenance"
+babymind learning reset           # clear the kill switch and resume
 ```
 
 In the web interface, **Self & autonomy** shows the self-model, calibration,
-recorded limits and dissent, plus the autonomy state, goals, and audit log. Chat
-replies carry a collapsible self-check panel with the confidence, any dissent, the
-assumptions made, what the critique found, and what it changed.
+recorded limits and dissent, plus the autonomy state, goals, and audit log. The
+separate **Self-improvement** view shows the permanent learning supervisor's
+state, safety gates, outcomes and controls. Chat replies carry a collapsible
+self-check panel with the confidence, any dissent, the assumptions made, what
+the critique found, and what it changed.
 
 ## Testing
 
@@ -207,7 +218,12 @@ assumptions made, what the critique found, and what it changed.
 - `tests/test_self_api.py` — every new HTTP endpoint.
 - `tests/test_self_ui.js` — jsdom functional test of the Self view, the autonomy
   controls, the per-message self-check panel, and HTML escaping of model text.
+- `tests/test_learning_service.py`, `tests/test_learning.py`,
+  `tests/test_server.py`, `tests/test_learning_ui.js` — the default-on learning
+  supervisor's schedule, gates, locks, kill switch, persistence, guard, API/CLI
+  controls, Self-improvement view and ledger.
 
-These prove the machinery behaves as described. They do not prove that the resulting
-answers are better, and no automated test here establishes anything about
-consciousness.
+These prove the machinery behaves as described with scripted providers. They do
+not prove that the resulting answers are better, that a real model improves
+BabyMind's code, that the system is conscious, or that a recorded lesson is a
+capability gain.
