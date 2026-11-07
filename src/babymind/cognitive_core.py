@@ -43,7 +43,7 @@ def environment_snapshot() -> dict[str, Any]:
         "virtualization_hint_meaning": "Hypervisor flag observed; this does not establish simulation." if hypervisor else "No hypervisor flag observed; this does not establish a physical environment.",
         "agent_count": len(AGENTS), "agent_ids": [a.agent_id for a in AGENTS],
         "capabilities": {
-            "role_registry": len(AGENTS) == 50, "coordinator_module": importlib.util.find_spec("babymind.coordinator") is not None,
+            "role_registry": len(AGENTS) == 1, "coordinator_module": importlib.util.find_spec("babymind.coordinator") is not None,
             "research_module": importlib.util.find_spec("babymind.research") is not None,
             "sandbox_module": importlib.util.find_spec("babymind.sandbox") is not None,
             "model_endpoint_verified": False, "network_research_executed": False,
@@ -82,7 +82,7 @@ class CognitiveCore:
                 """)
                 if db.execute("SELECT 1 FROM identity WHERE id=1").fetchone() is None:
                     identity = {"name": "BabyMind", "kind": "local AI software system",
-                        "purpose": "Help users through its configured model, tools, and 50 specialist roles.",
+                        "purpose": "Help users through its configured model, tools, memory, and approved goals.",
                         "identity_version": 1,
                         "identity_policy": "Describe implementation and observed state; never assert consciousness as fact.",
                         "created_at": _now()}
@@ -146,9 +146,9 @@ class CognitiveCore:
 
     def context_for_agent(self, agent: AgentSpec) -> str:
         env = environment_snapshot()
-        return ("COGNITIVE CORE / OPERATIONAL SELF-MODEL (shared by all 50 roles)\n"
+        return ("COGNITIVE CORE / OPERATIONAL SELF-MODEL (for the single BabyMind identity)\n"
             f"Identity: {self.identity()['name']} — {self.identity()['kind']}.\n"
-            f"Current role: {agent.agent_id} {agent.name}; registry contains {env['agent_count']} roles.\n"
+            f"Current role: {agent.agent_id} {agent.name}; one identity is active.\n"
             f"Observed host: {env['distribution']}; {env['system']} {env['architecture']}; Python {env['python']}.\n"
             f"Known boundaries: {json.dumps(env['capabilities'], sort_keys=True)}.\n"
             f"Active goals: {json.dumps(self.active_goals(5), ensure_ascii=False)}.\n"
@@ -196,7 +196,7 @@ class CognitiveCore:
                 return "Waited without changing external state.", True
             finally: db.close()
 
-    def run_cycle(self, provider, agent_id: str = "BM-02", objective: str | None = None) -> dict[str, Any]:
+    def run_cycle(self, provider, agent_id: str = "BM-01", objective: str | None = None) -> dict[str, Any]:
         """Run one observe-understand-plan-act-verify-reflect-learn cycle."""
         normalized = str(agent_id).strip().upper()
         if normalized not in AGENT_BY_ID: raise KeyError(f"Unknown agent ID: {normalized}")
@@ -217,7 +217,7 @@ class CognitiveCore:
             "\nACTIVE GOALS:\n"+json.dumps(goals,ensure_ascii=False)+
             "\nRECENT EXPERIENCES AND LEARNINGS:\n"+json.dumps(experiences,ensure_ascii=False)+
             "\nPERSISTENT RESEARCH NOTES:\n"+json.dumps(notes,ensure_ascii=False)+
-            "\nAVAILABLE SPECIALIST ROLES:\n"+json.dumps(roster,ensure_ascii=False)+
+            "\nBABYMIND IDENTITY:\n"+json.dumps(roster,ensure_ascii=False)+
             "\nCURRENT ROLE:\n"+agent_instructions(agent)+
             "\nSELECTED GOAL OBJECTIVE:\n"+_clean(objective, 1000)+
             "\nIf an objective is supplied, work only toward it using permitted local actions. Break it into small verifiable steps; do not claim completion until the goal is explicitly completed and read-back verified."+
