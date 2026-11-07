@@ -1269,7 +1269,17 @@ class Independence:
     def __init__(self, home: str | Path | None = None, database_path: str | Path | None = None) -> None:
         home_path = Path(home) if home else _default_home()
         if database_path is None:
-            database_path = home_path / "independence.sqlite3"
+            # ``home`` is a directory. A caller that passes a database path as
+            # ``home`` (the coordinator historically did) used to have the
+            # filename appended again, creating ".../independence.sqlite3/
+            # independence.sqlite3"; every start after the first then failed
+            # with FileExistsError. Accept a file path for what it is: the
+            # database is that file, and its parent is the data directory.
+            if home_path.suffix == ".sqlite3" or (home_path.exists() and home_path.is_file()):
+                database_path = home_path
+                home_path = home_path.parent
+            else:
+                database_path = home_path / "independence.sqlite3"
         self.database_path = Path(database_path)
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.secure = SecureTextStore(self.database_path.with_suffix(".key"))
@@ -1300,6 +1310,15 @@ class Independence:
         self.learning = LearningCycle(
             self, self.learning_store, home=home_path,
         )
+        # The language lab runs a complete research -> design -> sandboxed execution
+        # -> conformance cycle to invent a new language, which the code-learning
+        # cycle cannot do: it only edits this repository, and it never executes a
+        # generated artifact against an independent oracle. Imported lazily to
+        # avoid a circular import (language_lab.py imports from this module).
+        from .language_lab import LanguageLab, LanguageLabStore
+        self.language_store = LanguageLabStore(self.secure, self.database_path)
+        self.language_store._initialise()
+        self.languages = LanguageLab(self, self.language_store, home=home_path)
 
     def context_for_prompt(self) -> str:
         """Compact block of BabyMind's own positions and open questions.

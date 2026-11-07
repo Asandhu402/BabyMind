@@ -24,6 +24,15 @@ security boundary. This is a status summary, not an acceptance report.
   UI, test and model-boundary files. Weakness discovery and effectiveness remain
   model-generated, packaged builds edit staged source only, and the running
   executable is never updated. See [permanent autonomous learning](AUTONOMOUS_LEARNING.md).
+- The new **language lab** runs a complete development cycle on an artefact
+  that is not this repository: research (opt-in), design a new language,
+  validate the specification, execute the generated interpreter in the OS
+  sandbox, and compare its output with an oracle recomputed by the harness.
+  Held-out numbers derived by the harness defeat an interpreter that only
+  prints memorised answers. The limits are exact: design and research are
+  model-generated, only decimal rounding is independently checkable, no
+  real-model or desktop-UI cycle has been run here, and it is off by default
+  and fails closed without a sandbox. See [language lab](LANGUAGE_LAB.md).
 - There is still no *formally verified* security boundary, but all untrusted
   execution now funnels through one broker (`babymind.broker.execute`, exposed
   at `/api/broker/status`) with a fail-closed `sandbox=require` policy and an

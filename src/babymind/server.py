@@ -584,6 +584,15 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 limit = 25
             self.send_json(learning_service().runs(limit))
+        elif path == "/api/language/status":
+            self.send_json(COORDINATOR.independence.languages.status())
+        elif path == "/api/language/runs":
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                limit = max(1, min(int(query.get("limit", ["25"])[0]), 100))
+            except (TypeError, ValueError):
+                limit = 25
+            self.send_json(COORDINATOR.independence.languages.runs(limit))
         elif path == "/api/autonomy/status":
             self.send_json(autonomy_engine().status() | {"permitted_by_environment": autonomy_enabled()})
         elif path == "/api/autonomy/audit":
@@ -1256,6 +1265,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(learning_service().set_interval(
                     float(payload.get("seconds", 1800) or 1800)
                 ))
+            elif path == "/api/language/run-once":
+                # Research is authorised per request, never by the presence of
+                # the lab. Default off: the caller must pass allow_research.
+                report = COORDINATOR.independence.languages.run(
+                    COORDINATOR.routed_provider(),
+                    allow_research=payload.get("allow_research") is True,
+                    max_attempts=int(payload.get("max_attempts", 1) or 1),
+                )
+                self.send_json(report)
             elif path == "/api/autonomy/cycle":
                 engine = autonomy_engine()
                 if engine.state not in ("running", "paused"):
