@@ -38,7 +38,7 @@
       ].join("\n");
       const result=await api("/api/chat",{method:"POST",body:JSON.stringify({
         message:prompt,agent_id:"BM-01",conversation_id:"",use_memory:true,
-        remember:false,collaborate:false,deep_research:false,document_research:false,teamwork:false
+        remember:false,collaborate:false,deep_research:false,document_research:false,teamwork:false,introspect:false
       })});
       const raw=String(result.response||"");
       const match=raw.match(/\{[\s\S]*"goals"[\s\S]*\}/);
