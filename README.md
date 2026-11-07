@@ -198,6 +198,18 @@ self-model's Brier calibration remains the only measured confidence signal. See
 [intellectual independence](docs/INTELLECTUAL_INDEPENDENCE.md) for the honest
 scope and the CLI/API surface.
 
+## Evidence loop
+
+The independence subsystem's conclusions can be tested against **real external
+evidence**, not just the model's own critique. The evidence loop designs a test
+for each position or hypothesis, gathers genuine evidence — public web pages
+(read as plain text, scripts never executed) or sandboxed code experiments (OS
+namespace isolation, no network, read-only system) — evaluates it, and updates
+the conclusion based on what the evidence showed. Predictions feed the
+self-model's Brier calibration. Web search and experiments are opt-in. See
+[evidence loop](docs/EVIDENCE_LOOP.md) for what is measured versus
+model-generated.
+
 ## Safety and capabilities
 
 Current capability status (honest, matches the code):

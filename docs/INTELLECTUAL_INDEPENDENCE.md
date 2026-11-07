@@ -91,6 +91,17 @@ not just the verdict), then revised, adopted or rejected. The record keeps the
 lineage so you can see what it considered and how it changed. Kinds are
 architecture, method, language, notation and protocol.
 
+### Test its own conclusions against real evidence
+
+Implemented as the **evidence loop** (`src/babymind/evidence.py`).
+
+Positions and hypotheses can be tested against genuine external evidence — web
+pages and sandboxed code experiments — rather than only against the model's own
+critique. The loop designs a test, gathers real evidence, evaluates it, and
+updates the conclusion based on what the evidence showed. Predictions feed the
+self-model's Brier calibration. See [evidence loop](EVIDENCE_LOOP.md) for the
+honest scope.
+
 ### Make decisions without needing approval for every ordinary action
 
 Already implemented by `ActionPolicy` in `autonomy.py`, and surfaced here.
@@ -149,6 +160,8 @@ babymind independence hypothesis "Attention is not the only scaling inductive bi
 babymind independence designs             # self-design proposals
 babymind independence design architecture "Critique pair" "Run two seeded critique passes."
 babymind independence curiosity --cycles 2   # pick and study its own topics offline
+babymind independence test <position-id> --experiments   # test against a sandboxed experiment
+babymind independence run-evidence --cycles 3 --web --experiments
 ```
 
 Over HTTP: `GET /api/independence/report`, `/positions`, `/challenges`,
