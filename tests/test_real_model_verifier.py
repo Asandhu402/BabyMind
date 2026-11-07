@@ -1,4 +1,14 @@
-"""Tests of acceptance harness safety logic, not actual model inference."""
+"""Tests for the real-model acceptance script's control flow.
+
+These drive ``scripts/verify_real_model_roles.py`` with patched providers so the
+script's own logic is exercised without a model, a sandbox or a network.
+
+The script no longer runs a 50-role mission (that feature was removed), so the
+role-count and duplicate-role assertions are gone. It now drives the same
+self-development path the learning cycle uses: ``coding_engine.develop``.
+"""
+from __future__ import annotations
+
 import importlib.util
 import io
 import tempfile
@@ -16,22 +26,33 @@ spec.loader.exec_module(verifier)
 
 class RealModelVerifierTests(unittest.TestCase):
     def test_extract_code(self):
-        self.assertEqual(verifier.extract_code("Here:\n```python\ndef add(a, b): return a+b\n```"),
-                         "def add(a, b): return a+b")
-        self.assertEqual(verifier.extract_code("x = 1\n"), "x = 1")
+        self.assertEqual(verifier.extract_code("```python\nprint(1)\n```"), "print(1)")
+        self.assertEqual(verifier.extract_code("print(2)"), "print(2)")
 
     def test_annotation_escapes_untrusted_workflow_commands(self):
-        output = io.StringIO()
-        with patch.dict(verifier.os.environ, {"GITHUB_ACTIONS": "true"}), redirect_stdout(output):
-            verifier.annotate("Model output", "hello\n::error::forged%message")
-        lines = output.getvalue().splitlines()
-        self.assertEqual(len(lines), 2)
-        self.assertIn(r"hello\n::error::forged%message", lines[0])
+        stream = io.StringIO()
+        with redirect_stdout(stream), patch.dict(verifier.os.environ,
+                                                 {"GITHUB_ACTIONS": "true"}):
+            verifier.annotate("Coding response", "hello\n::error::forged%message")
+        lines = stream.getvalue().splitlines()
         self.assertIn("hello%0A::error::forged%25message", lines[1])
         self.assertFalse(any(line.startswith("::error::") for line in lines))
 
-    def _exercise(self, *, probe, mission_runs=None, test_error=False, real_success=False,
+    def _exercise(self, *, probe, mode="ok", expect_run_tests=0,
                   chat_responses=("4", "blue", "To recover lost data.")):
+        """Run the script end to end with every external boundary patched.
+
+        ``mode`` selects what the fake self-development engine does:
+
+        * ``"ok"``      -- the disposable core edit is applied and verified;
+        * ``"reject"``  -- the engine rolls back, so no verification runs;
+        * ``"real"``    -- the real-source copy edit is also applied;
+        * ``"error"``   -- the sandboxed test runner raises.
+
+        ``expect_run_tests`` is the exact number of sandboxed suite runs:
+        the coding check, then the disposable core edit, then the real-source
+        copy edit, minus any skipped because the sandbox probe failed.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "home"
             model = home / ".babymind/models/model.gguf"
@@ -40,54 +61,51 @@ class RealModelVerifierTests(unittest.TestCase):
             executable.parent.mkdir(parents=True)
             model.write_bytes(b"fixture")
             executable.write_bytes(b"fixture")
-            mission = {"status": "completed", "counts": {"contributed": 50}, "agents_recorded": 50,
-                       "runs": [{"agent_id": agent.agent_id, "output": "text", "error": ""}
-                                for agent in verifier.AGENTS], "summary": "unverified"}
-            if mission_runs is not None:
-                mission["runs"] = mission_runs
+
+            def develop(provider, brief, *, attempts=1):
+                if mode == "reject":
+                    # Nothing is applied, so no verification run may follow.
+                    return {"status": "rolled_back", "result": {"files": []}}
+                if "__init__.py" in brief:
+                    self.assertIn("double(n)", brief)
+                    copied = Path(verifier.os.environ["BABYMIND_DEV_ROOT"])
+                    source = copied / "src" / "babymind" / "__init__.py"
+                    source.write_text(source.read_text() + "\ndef double(n): return n * 2\n")
+                    return {"status": "applied",
+                            "result": {"files": [{"path": "src/babymind/__init__.py"}]}}
+                self.assertIn("add(a, b)", brief)
+                copied = Path(verifier.os.environ["BABYMIND_DEV_ROOT"])
+                core = copied / "src" / "babymind" / "core.py"
+                core.write_text(core.read_text() + "\ndef add(a, b): return a + b\n")
+                return {"status": "applied",
+                        "result": {"files": [{"path": "src/babymind/core.py"}]}}
+
             with patch.object(verifier, "MODEL_FILENAME", "model.gguf"), \
                  patch.object(verifier, "MODEL_SHA256", "fixture"), \
                  patch.object(verifier, "_sha256", return_value="fixture"), \
                  patch.object(verifier, "LlamaCppProvider"), \
                  patch.object(verifier, "BabyMindCoordinator") as coordinator, \
                  patch.object(verifier, "assist_with_code", return_value="generated code"), \
-                 patch.object(verifier, "MissionStore"), \
-                 patch.object(verifier, "Orchestrator") as orchestrator, \
+                 patch.object(verifier, "coding_engine") as engine, \
                  patch.object(verifier.sandbox, "self_test", side_effect=probe) as sandbox_probe, \
                  patch.object(verifier.runner, "run_unit_tests") as run_tests, \
                  patch.dict(verifier.os.environ, {}, clear=False), redirect_stdout(io.StringIO()):
-                coordinator.return_value.ask.side_effect = [SimpleNamespace(response=response)
-                                                            for response in chat_responses]
-                orchestrator.return_value.run_now.return_value = mission
-                if real_success:
-                    def apply_real_edit(brief, *, self_edit):
-                        self.assertTrue(self_edit)
-                        copied = Path(verifier.os.environ["BABYMIND_DEV_ROOT"])
-                        source = copied / "src/babymind/__init__.py"
-                        source.write_text(source.read_text() + "\ndef is_valid_agent_id(value): return True\n")
-                        return {**mission, "self_edit": {"status": "applied", "files": ["src/babymind/__init__.py"]}}
-                    orchestrator.return_value.run_now.side_effect = apply_real_edit
-                    orchestrator.return_value._run_self_edit.return_value = {"status": "no_change"}
-                    run_tests.return_value = {"sandboxed": True, "summary": {"passed": True}}
-                if test_error:
+                coordinator.return_value.ask.side_effect = [
+                    SimpleNamespace(response=response) for response in chat_responses
+                ]
+                engine.develop.side_effect = develop
+                if mode == "error":
                     run_tests.side_effect = RuntimeError("simulated runner error")
-                    def check_cleanup(*args):
-                        root = sandbox_probe.call_args.args[0]
-                        self.assertFalse((root / "src" / "solution.py").exists())
-                        self.assertFalse((root / "tests" / "test_solution.py").exists())
-                        return {"status": "no_change"}
-                    orchestrator.return_value._run_self_edit.side_effect = check_cleanup
-                result = verifier.run(SimpleNamespace(home=str(home), workdir=tmp))
-                if test_error:
-                    self.assertEqual(run_tests.call_count, 1)
-                    orchestrator.return_value._run_self_edit.assert_called_once()
-                elif real_success:
-                    self.assertEqual(run_tests.call_count, 2)
-                    self.assertEqual(run_tests.call_args.kwargs["sandbox"], "require")
-                    self.assertIn("babymind-source-copy", str(run_tests.call_args.args[0]))
                 else:
-                    run_tests.assert_not_called()
-                    orchestrator.return_value._run_self_edit.assert_not_called()
+                    run_tests.return_value = {"sandboxed": True, "summary": {"passed": True}}
+                result = verifier.run(SimpleNamespace(home=str(home), workdir=tmp))
+                self.assertEqual(run_tests.call_count, expect_run_tests)
+                if expect_run_tests:
+                    self.assertEqual(run_tests.call_args.kwargs["sandbox"], "require")
+                sandbox_probe.assert_called_once()
+                # The live checkout must never be modified by any run.
+                original = (SCRIPT.parents[1] / "src/babymind/__init__.py").read_text()
+                self.assertNotIn("def double(n)", original)
                 return result
 
     def test_chat_does_not_accept_incorrect_answers_that_mention_expected_words(self):
@@ -101,29 +119,38 @@ class RealModelVerifierTests(unittest.TestCase):
         self.assertEqual(result["self_edit"]["status"], "not tested")
         self.assertTrue(any("sandbox" in item for item in result["failures"]))
 
-    def test_probe_exception_fails_closed_but_roles_are_exercised(self):
+    def test_probe_exception_fails_closed(self):
         def fail_probe(root):
             raise RuntimeError("probe failed")
+
         result = self._exercise(probe=fail_probe)
-        self.assertEqual(result["mission"]["agents_recorded"], 50)
         self.assertIn("probe failed", result["sandbox"]["reason"])
         self.assertTrue(any("sandbox" in item for item in result["failures"]))
+        self.assertEqual(result["self_edit"]["status"], "not tested")
 
     def test_coding_runner_exception_cleans_fixture_before_self_edit(self):
-        result = self._exercise(probe=lambda root: {"verified": True}, test_error=True)
+        # The coding check runs, then the disposable core edit's check fails.
+        result = self._exercise(probe=lambda root: {"verified": True}, mode="error",
+                                expect_run_tests=3)
         self.assertTrue(any("simulated runner error" in item for item in result["failures"]))
 
-    def test_completed_mission_checks_disposable_real_source_in_sandbox(self):
+    def test_real_source_edit_is_verified_on_a_disposable_copy(self):
         original = (SCRIPT.parents[1] / "src/babymind/__init__.py").read_text()
-        result = self._exercise(probe=lambda root: {"verified": True}, real_success=True)
+        # Coding check, disposable core edit check, then the real-source copy.
+        result = self._exercise(probe=lambda root: {"verified": True}, mode="real",
+                                expect_run_tests=3)
         self.assertEqual(result["real_source_self_edit"]["status"], "applied")
         self.assertTrue(result["real_source_self_edit_test"]["passed"])
+        # The live checkout must never be modified.
         self.assertEqual((SCRIPT.parents[1] / "src/babymind/__init__.py").read_text(), original)
 
-    def test_duplicate_roles_are_not_accepted_as_all_roles(self):
-        runs = [{"agent_id": "BM-01", "output": "text", "error": ""} for _ in range(50)]
-        result = self._exercise(probe=lambda root: {"verified": False}, mission_runs=runs)
-        self.assertTrue(any("distinct registered role" in item for item in result["failures"]))
+    def test_a_rejected_edit_is_recorded_as_a_failure(self):
+        # A verified sandbox still runs the coding check once, but a rolled-back
+        # edit must never reach a verification run of its own.
+        result = self._exercise(probe=lambda root: {"verified": True}, mode="reject",
+                                expect_run_tests=1)
+        self.assertTrue(any("disposable core edit" in item for item in result["failures"]))
+        self.assertTrue(any("real-source copy" in item for item in result["failures"]))
 
 
 if __name__ == "__main__":

@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Real-model role, coding and disposable self-edit smoke test.
+"""Real-model chat, coding and disposable self-edit smoke test.
 
 CI runs this on every push and pull request against an ephemeral host with the
-pinned model installed by install-linux.sh. This runs 50 sequential model
-calls and can take a long time. Generated code is executed only if the OS
-sandbox's own boundary probes pass, and only inside a throwaway project. It
-does not test the frozen desktop's self-edit capability.
+pinned model installed by install-linux.sh. It still makes several sequential
+model calls and can take a while. Generated code is executed only if the OS
+sandbox's own boundary probes pass, and only inside a throwaway project.
+
+The 50-role mission was removed along with the role catalogue, so this script
+no longer runs a mission or checks per-role contributions. It now exercises the
+same self-development path the learning cycle uses (``coding_engine.develop``)
+against a disposable copy. It does not test the frozen desktop's self-edit
+capability.
 """
 from __future__ import annotations
 
@@ -20,11 +25,10 @@ import tempfile
 from pathlib import Path
 
 from babymind import runner, sandbox
-from babymind.agents import AGENTS
 from babymind.coordinator import BabyMindCoordinator
 from babymind.first_run import MODEL_FILENAME, MODEL_SHA256, _sha256
 from babymind.integrations.coding import assist_with_code
-from babymind.orchestrator import MissionStore, Orchestrator
+from babymind import coding_engine
 from babymind.providers import LlamaCppProvider
 
 
@@ -132,17 +136,22 @@ def run(args) -> dict:
                 report["failures"].append(f"Coding test error: {error}")
 
             if evidence.get("verified"):
-                os.environ.update({"BABYMIND_DEV_ROOT": str(root), "BABYMIND_SELF_DEVELOPMENT_ENABLED": "true"})
-                store = MissionStore(Path(temp) / "selfedit-records")
-                worker = Orchestrator(provider, store, max_seconds=120)
+                os.environ.update({"BABYMIND_DEV_ROOT": str(root),
+                                   "BABYMIND_SELF_DEVELOPMENT_ENABLED": "true"})
                 brief = ("In src/babymind/core.py, whose complete current content is VALUE = 1, "
                          "preserve VALUE and add a Python function add(a, b) returning a + b. "
                          "Edit only src/babymind/core.py, not tests or other files.")
                 try:
-                    edit = worker._run_self_edit("disposable-test", brief, [])
-                    report["self_edit"] = edit
+                    edit = coding_engine.develop(provider, brief, attempts=1)
+                    inner = edit.get("result") or {}
+                    applied = {
+                        "status": edit.get("status"),
+                        "files": [item.get("path") for item in inner.get("files", [])
+                                  if isinstance(item, dict)],
+                    }
+                    report["self_edit"] = applied
                     annotate("Source self-edit", json.dumps(edit))
-                    if edit.get("status") != "applied" or edit.get("files") != ["src/babymind/core.py"]:
+                    if applied["status"] != "applied" or applied["files"] != ["src/babymind/core.py"]:
                         report["failures"].append("Model did not apply the requested disposable core edit.")
                     else:
                         (root / "tests" / "test_added.py").write_text(
@@ -166,63 +175,41 @@ def run(args) -> dict:
             brief = (
                 "Review and improve src/babymind/__init__.py, whose complete current content follows:\n"
                 + real_content + "\nPreserve that existing content and add a function "
-                "is_valid_agent_id(value) that returns True only for strings BM-01 through BM-50 "
-                "inclusive and False for all other values. Edit only src/babymind/__init__.py. "
-                "Give concrete advice and tests; role outputs are suggestions, not actions."
+                "double(n) that returns n multiplied by two. Edit only src/babymind/__init__.py."
             )
-            # Bounded responses make a full 50-role pass practical on a CPU VM.
-            os.environ["BABYMIND_MAX_TOKENS"] = "72"
-            def update(_id, role):
-                excerpt = json.dumps((role.output or role.error)[:160], ensure_ascii=True)
-                print(f"ROLE {role.agent_id} {role.status} {role.seconds:.1f}s: {excerpt}", flush=True)
-                if role.agent_id == AGENTS[-1].agent_id:
-                    # The JSON file proposal needs more room than a role reply.
-                    os.environ["BABYMIND_MAX_TOKENS"] = "512"
-            worker = Orchestrator(provider, MissionStore(Path(temp) / "mission-records"),
-                                  max_seconds=4200, on_update=update)
-            mission = worker.run_now(brief, self_edit=bool(evidence.get("verified")))
-            report["mission"] = {key: mission[key] for key in ("status", "counts", "agents_recorded", "runs", "summary")}
-            real_edit = mission.get("self_edit") or {
-                "status": "not tested", "reason": "OS sandbox probes failed or no self-edit was recorded"}
-            report["real_source_self_edit"] = real_edit
-            annotate("Real source mission self-edit", json.dumps(real_edit))
-            if real_edit.get("status") != "applied" or real_edit.get("files") != ["src/babymind/__init__.py"]:
-                report["failures"].append("Mission did not apply the requested edit to the disposable real-source copy.")
-            elif not (real_root / "src" / "babymind" / "__init__.py").read_text(encoding="utf-8").startswith(real_content):
-                report["failures"].append("Real-source edit did not preserve the original file content.")
-            elif evidence.get("verified"):
-                try:
-                    (real_root / "tests" / "test_acceptance_agent_id.py").write_text(
-                        "import unittest\nfrom babymind import is_valid_agent_id, AGENT_COUNT\n"
-                        "class AgentId(unittest.TestCase):\n"
-                        " def test_valid(self):\n"
-                        "  for value in ('BM-01', 'BM-09', 'BM-10', 'BM-50'): self.assertIs(is_valid_agent_id(value), True)\n"
-                        " def test_invalid(self):\n"
-                        "  for value in ('BM-00', 'BM-51', 'BM-1', 'BM-01x', '', None, 1): self.assertIs(is_valid_agent_id(value), False)\n"
-                        " def test_original_constant(self): self.assertEqual(AGENT_COUNT, 50)\n",
+            try:
+                edit = coding_engine.develop(provider, brief, attempts=1)
+                inner = edit.get("result") or {}
+                real_edit = {
+                    "status": edit.get("status"),
+                    "files": [item.get("path") for item in inner.get("files", [])
+                              if isinstance(item, dict)],
+                }
+                report["real_source_self_edit"] = real_edit
+                annotate("Real source self-edit", json.dumps(edit))
+                if real_edit["status"] != "applied" or real_edit["files"] != ["src/babymind/__init__.py"]:
+                    report["failures"].append(
+                        "Self-development did not apply the requested edit to the disposable real-source copy.")
+                elif not (real_root / "src" / "babymind" / "__init__.py").read_text(
+                        encoding="utf-8").startswith(real_content):
+                    report["failures"].append("Real-source edit did not preserve the original file content.")
+                elif evidence.get("verified"):
+                    (real_root / "tests" / "test_acceptance_double.py").write_text(
+                        "import unittest\nfrom babymind import double\n"
+                        "class Double(unittest.TestCase):\n"
+                        " def test_numbers(self):\n"
+                        "  self.assertEqual(double(2), 4)\n"
+                        "  self.assertEqual(double(-3), -6)\n"
+                        "  self.assertEqual(double(0), 0)\n",
                         encoding="utf-8")
                     checked = runner.run_unit_tests(real_root, timeout=300, sandbox="require")
                     report["real_source_self_edit_test"] = checked["summary"]
                     annotate("Sandboxed real source behavior test", json.dumps(checked["summary"]))
                     if not checked["sandboxed"] or not checked["summary"]["passed"]:
-                        report["failures"].append("Real-source edit failed independent sandboxed behavior tests.")
-                except Exception as error:
-                    report["failures"].append(f"Real-source self-edit behavior test error: {error}")
-            annotate("50-role mission", mission["summary"])
-            expected_ids = {agent.agent_id for agent in AGENTS}
-            role_ids = [item["agent_id"] for item in mission["runs"]]
-            if (mission["agents_recorded"] != len(expected_ids)
-                    or mission["counts"].get("contributed", 0) != len(expected_ids)
-                    or len(role_ids) != len(expected_ids) or set(role_ids) != expected_ids):
-                report["failures"].append("Not every distinct registered role returned text.")
-            report["warnings"].append("Role status checks only nonempty text; competence and correctness need independent review.")
-            # Keep bounded samples for every role in check annotations as well
-            # as the full artifact, which may not be downloadable on all hosts.
-            for start in range(0, len(mission["runs"]), 10):
-                group = mission["runs"][start:start + 10]
-                annotate(f"Role outputs {start + 1}-{start + len(group)}", "\n".join(
-                    f"{r['agent_id']} ({r.get('status', 'unknown')}): "
-                    f"{(r['output'] or r['error'])[:300]}" for r in group))
+                        report["failures"].append(
+                            "Real-source edit failed independent sandboxed behavior tests.")
+            except Exception as error:
+                report["failures"].append(f"Real-source self-edit test error: {error}")
     finally:
         provider.stop()
     return report

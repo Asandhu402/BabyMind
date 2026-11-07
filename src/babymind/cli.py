@@ -16,6 +16,17 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("list", help="List all registered agents")
     subparsers.add_parser("integrations", help="Show availability of optional integrations")
     subparsers.add_parser("roles", help="Show the unified BabyMind identity")
+    agents_parser = subparsers.add_parser(
+        "agents", help="Inspect the single identity, or purge removed agent/role data")
+    agents_actions = agents_parser.add_subparsers(dest="agents_action", required=True)
+    agents_actions.add_parser("status", help="Show the identity and any removable legacy data")
+    agents_purge = agents_actions.add_parser(
+        "purge", help="Delete stored agent, role, mission and review records")
+    agents_purge.add_argument(
+        "--confirm", action="store_true",
+        help="Required: this permanently deletes the listed rows")
+    agents_purge.add_argument(
+        "--dry-run", action="store_true", help="List what would be deleted, delete nothing")
     subparsers.add_parser("hardware", help="Detect hardware and recommend local model settings")
     subparsers.add_parser("selfdev", help="Report the self-development engine's real state")
 
@@ -42,11 +53,6 @@ def build_parser() -> argparse.ArgumentParser:
     service_parser.add_argument("--interval", type=float, default=60, help="Seconds between cycles (5-3600)")
     service_parser.add_argument("--agent", default="BM-01", help="BabyMind identity used for each cycle")
     cognitive_actions.add_parser("routing", help="Show the configured model route without exposing secrets")
-
-    mission_parser = subparsers.add_parser("mission", help="Run a bounded BabyMind mission")
-    mission_parser.add_argument("brief", help="Mission brief")
-    mission_parser.add_argument("--max-seconds", type=int, default=900,
-                               help="Time budget for the whole mission (default 900)")
 
     develop_parser = subparsers.add_parser("develop", help="Inspect and verify changes to BabyMind's configured source checkout")
     develop_parser.add_argument("task", help="Description of the source change")
@@ -218,6 +224,21 @@ def main() -> None:
         from .agents import AGENTS
         for agent in AGENTS:
             print(f"{agent.agent_id}  {agent.name:38} {agent.phase:15} {agent.purpose}")
+    elif args.command == "agents":
+        import json
+        from .agent_data import agent_data_report, purge_agent_data
+        if args.agents_action == "status":
+            print(json.dumps(agent_data_report(), indent=2, ensure_ascii=False))
+        else:
+            if not args.confirm and not args.dry_run:
+                raise SystemExit(
+                    "This permanently deletes stored agent, role, mission and review records. "
+                    "Re-run with --confirm, or use --dry-run to see what would be deleted."
+                )
+            report = purge_agent_data(dry_run=bool(args.dry_run))
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            if report["deleted_total"] and not args.dry_run:
+                print(f"\nDeleted {report['deleted_total']} row(s). Run backups are NOT deleted.")
     elif args.command == "hardware":
         from .hardware import hardware_report
         report = hardware_report()
@@ -234,17 +255,6 @@ def main() -> None:
         print(f"audit log valid: {report['audit']['valid']}  checkpoints: {len(report['checkpoints'])}")
         if report["problem"]:
             print(f"problem: {report['problem']}")
-    elif args.command == "mission":
-        from .coordinator import BabyMindCoordinator
-        from .orchestrator import MissionStore, Orchestrator
-        from .server import DATA_HOME
-        store = MissionStore(DATA_HOME)
-        orchestrator = Orchestrator(BabyMindCoordinator().model_router, store,
-                                    max_seconds=args.max_seconds)
-        mission = orchestrator.run_now(args.brief)
-        for run in mission["runs"]:
-            print(f"[{run['status']:11}] {run['agent_id']} {run['agent_name']:38} {run['phase']}")
-        print(f"\n{mission['summary']}")
     elif args.command == "develop":
         import json
         from .coding_engine import develop

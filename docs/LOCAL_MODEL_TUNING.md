@@ -51,7 +51,7 @@ On an 8 GB machine, leave the defaults alone — 4096 context is the safe floor.
   panels let BabyMind *look up* current or obscure facts instead of recalling
   them. For anything time-sensitive or niche, use them — this is the single
   biggest real-world lift available to a 4B model.
-- **Roles and mission mode change framing, not capability.** All 50 roles are
+- **Roles and mission mode (since removed) changed framing, not capability.** All 50 roles were
   prompts over the same model. A mission gives you structured, multi-step
   output and an audit trail; it does not make the model reason better.
 - **Opt-in memory** makes BabyMind personal over time, at the same per-answer

@@ -27,7 +27,6 @@ from . import __version__
 from . import interaction_log
 from .agents import AGENTS
 from .coordinator import BabyMindCoordinator
-from .development_review import DevelopmentReviews, ReviewProcessLock
 from .first_run import _data_home
 from .providers import ProviderError
 from .secure_store import SecureTextStore
@@ -98,34 +97,6 @@ def ensure_autonomous_learning() -> dict:
 
 BUILDER_PLANS: dict[str, dict] = {}
 BUILDER_PLAN_TTL = 1_800
-# Mission control state is created lazily so tests can relocate DATA_HOME.
-_MISSION_STORE = None
-_MISSION_HOME: Path | None = None
-MISSION_LOCK = threading.RLock()
-
-
-def mission_store():
-    """Return the encrypted mission store for the current data home."""
-    global _MISSION_STORE, _MISSION_HOME
-    from .orchestrator import MissionStore
-
-    with MISSION_LOCK:
-        if _MISSION_STORE is None or _MISSION_HOME != DATA_HOME:
-            _MISSION_STORE = MissionStore(DATA_HOME)
-            _MISSION_HOME = DATA_HOME
-        return _MISSION_STORE
-
-
-def orchestrator():
-    from .orchestrator import Orchestrator
-
-    budget = int(os.getenv("BABYMIND_MISSION_MAX_SECONDS", "900") or 900)
-    # routed_provider() re-syncs the router's fallback to the live provider, so
-    # replacing COORDINATOR.provider (as callers and tests do) is honoured
-    # instead of silently falling back to whichever provider existed at startup.
-    return Orchestrator(COORDINATOR.routed_provider(), mission_store(), max_seconds=budget)
-
-
 @contextmanager
 def db():
     # Serialize access so a validated restore cannot replace a database while
@@ -147,66 +118,6 @@ def db():
 
 def text_store() -> SecureTextStore:
     return SecureTextStore(DB_PATH.with_suffix(".key"))
-
-
-def development_reviews() -> DevelopmentReviews:
-    return DevelopmentReviews(db, text_store())
-
-
-def recover_development_reviews():
-    """Recover only when no other app instance owns the review worker."""
-    try:
-        process_lock = ReviewProcessLock(DATA_HOME)
-    except RuntimeError:
-        return
-    try:
-        development_reviews().recover()
-    finally:
-        process_lock.close()
-
-
-def start_development_review(task=None, context="", *, review_id=None):
-    """Start one serialized model review without exposing execution tools."""
-    if not INFERENCE_SEMAPHORE.acquire(blocking=False):
-        raise RuntimeError("BabyMind is busy with another model operation.")
-    process_lock = None
-    try:
-        process_lock = ReviewProcessLock(DATA_HOME)
-        reviews = development_reviews()
-        if review_id is None:
-            review_id = reviews.create(task, context)
-        else:
-            reviews.resume(review_id)
-
-        def run():
-            try:
-                reviews.run(review_id, COORDINATOR.provider)
-            except Exception as error:
-                print(f"[BabyMind] Development review interrupted: {type(error).__name__}", flush=True)
-                try:
-                    reviews.recover()
-                except Exception:
-                    pass
-            finally:
-                try:
-                    process_lock.close()
-                finally:
-                    INFERENCE_SEMAPHORE.release()
-
-        thread = threading.Thread(target=run, name="BabyMindDevelopmentReview", daemon=True)
-        try:
-            thread.start()
-        except Exception:
-            reviews.recover()
-            raise
-    except Exception:
-        try:
-            if process_lock is not None:
-                process_lock.close()
-        finally:
-            INFERENCE_SEMAPHORE.release()
-        raise
-    return review_id
 
 
 def init_db() -> None:
@@ -240,7 +151,6 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             )
         """)
-        DevelopmentReviews.create_tables(connection)
         connection.execute("PRAGMA foreign_keys = ON")
         # Encrypt legacy plaintext values in place; the prefix makes this
         # migration idempotent and safe to retry after an interrupted upgrade.
@@ -486,13 +396,6 @@ class Handler(BaseHTTPRequestHandler):
                 "report": interaction_log.export_report(DATA_HOME, version=__version__),
                 "generated_at": now(),
             })
-        elif path == "/api/development-reviews":
-            self.send_json(development_reviews().list())
-        elif path.startswith("/api/development-reviews/"):
-            try:
-                self.send_json(development_reviews().get(path.rsplit("/", 1)[-1]))
-            except ValueError as error:
-                self.send_json({"error": str(error)}, 404)
         elif path == "/api/integrations":
             from .integrations.catalog import integration_status
             self.send_json(integration_status())
@@ -505,24 +408,6 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/builder/status":
             from .builder import builder_status
             self.send_json(builder_status())
-        elif path == "/api/roles":
-            from .orchestrator import phase_catalogue, role_catalogue
-            self.send_json({
-                "roles": role_catalogue(),
-                "phases": phase_catalogue(),
-                "count": len(role_catalogue()),
-                "notice": "50 roles share one local model; they are not 50 independent models.",
-            })
-        elif path == "/api/agents/activity":
-            self.send_json(mission_store().agent_stats())
-        elif path == "/api/missions":
-            self.send_json(mission_store().list_missions(limit=30))
-        elif path.startswith("/api/missions/"):
-            mission_id = path.rstrip("/").rsplit("/", 1)[-1]
-            try:
-                self.send_json(mission_store().get(mission_id))
-            except ValueError:
-                self.send_json({"error": "Mission not found."}, 404)
         elif path == "/api/model/hardware":
             from .hardware import hardware_report
             self.send_json(hardware_report(DATA_HOME))
@@ -736,17 +621,6 @@ class Handler(BaseHTTPRequestHandler):
                     detail=str(payload.get("stack") or "") or None,
                 )
                 self.send_json({"recorded": True}, 201)
-            elif path == "/api/development-reviews":
-                review_id = start_development_review(payload.get("task"), payload.get("context", ""))
-                self.send_json({"id": review_id}, 202)
-            elif path.startswith("/api/development-reviews/") and path.endswith("/cancel"):
-                review_id = path.split("/")[-2]
-                development_reviews().cancel(review_id)
-                self.send_json({"id": review_id, "status": "cancelling"})
-            elif path.startswith("/api/development-reviews/") and path.endswith("/resume"):
-                review_id = path.split("/")[-2]
-                start_development_review(review_id=review_id)
-                self.send_json({"id": review_id, "status": "running"}, 202)
             elif path == "/api/integrations/voicebox/speech":
                 audio = COORDINATOR.synthesize_speech(
                     str(payload.get("text", "")),
@@ -975,24 +849,6 @@ class Handler(BaseHTTPRequestHandler):
                     "agent_name": "BabyMind Coding Assistant",
                     "notice": "Generated by BabyMind's shared local llama.cpp model. No files or commands were accessed."
                 })
-            elif path == "/api/missions":
-                brief = str(payload.get("brief", ""))
-                mode = "graph" if str(payload.get("mode", "")) == "graph" else "batched"
-                mission_id = orchestrator().start(brief, mode=mode, self_edit=bool(payload.get("self_edit")))
-                self.send_json({
-                    "id": mission_id, "status": "running", "agents": 50,
-                    "self_edit": bool(payload.get("self_edit")),
-                    "notice": (
-                        "All 50 roles are queued. With self_edit the mission also proposes one patch "
-                        "to BabyMind's own source and applies it only if the test suite accepts it."
-                        if payload.get("self_edit") else
-                        "All 50 roles are queued. Poll this mission for per-role records."
-                    ),
-                }, 202)
-            elif path.startswith("/api/missions/") and path.endswith("/cancel"):
-                mission_id = path.strip("/").split("/")[2]
-                orchestrator().cancel(mission_id)
-                self.send_json({"id": mission_id, "cancelled": True})
             elif path in {"/api/research/github", "/api/research/github/repo"}:
                 from .research import github_repository, github_search
                 if path.endswith("/repo"):
@@ -1033,7 +889,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self.send_json(result, 201 if result["status"] == "applied" else 200)
             elif path == "/api/dev/repair":
-                from .orchestrator import parse_model_json
+                from .model_json import parse_model_json
                 from .selfdev import PROPOSER_ERROR_PREFIX, apply_with_repair, dev_root
                 from .repository_context import build_context
 
@@ -1327,7 +1183,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/verify/fix":
                 from . import verifier
                 from .selfdev import dev_root, apply_with_repair, PROPOSER_ERROR_PREFIX
-                from .orchestrator import parse_model_json
+                from .model_json import parse_model_json
                 from .repository_context import build_context
                 root = str(payload.get("root", "")).strip() or str(dev_root())
                 if Path(root).resolve() != dev_root().resolve():
@@ -1644,12 +1500,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"retired": belief_id})
             else:
                 self.send_json({"error": "Belief not found."}, 404)
-        elif path.startswith("/api/development-reviews/"):
-            try:
-                development_reviews().delete(path.rsplit("/", 1)[-1])
-                self.send_json({"deleted": 1})
-            except ValueError as error:
-                self.send_json({"error": str(error)}, 400)
         elif path.startswith("/api/conversations/"):
             conversation_id = path.rsplit("/", 1)[-1]
             with db() as connection:
@@ -1837,7 +1687,6 @@ def main() -> None:
     if not args.lan and not is_loopback_host(args.host):
         parser.error("Non-loopback binding requires --lan, which enables access-token protection.")
     init_db()
-    recover_development_reviews()
     # Hold a shared session lock for this process's lifetime so the standalone
     # systemd supervisor stays idle while the app is open. Keep the handle
     # referenced until serve_forever() returns.

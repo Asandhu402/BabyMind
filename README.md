@@ -100,8 +100,9 @@ GitHub-hosted Ubuntu 26.04 LTS runner it runs the actual `install-linux.sh` (pac
 2.71 GB model download and its SHA-256 check, the local build), starts the
 installed desktop under Xvfb and drives it through the **full** extended
 question set with the real model, then runs the real model through source-mode
-chat questions, a coding task, a sandboxed self-edit and a 50-role mission on a
-disposable copy of this source.
+chat questions, a coding task, and sandboxed self-edits on a disposable copy
+of this source. (The 50-role mission it used to run was removed; see
+[autonomy](docs/AUTONOMY.md#removed-the-50-roles-missions-and-development-reviews).)
 
 There are no manual variants of this workflow. Every trigger - push, pull
 request or manual dispatch - runs the same complete set of jobs, and no job is
@@ -121,8 +122,8 @@ A passing run shows the installer, the pinned model and CPU inference still work
 together on the tested questions. It is not proof of role competence, of
 correct advice, of behavior on a real Ubuntu Desktop session, of packaged
 self-upgrade, or of real-model autonomous-learning quality. It is also slow: the job allows 180 minutes for the download, the
-build, the GUI question set and a 50-role CPU mission, and it fails when the
-model cannot answer the tested questions or produce a valid edit.
+build, the GUI question set and the model-driven edit checks, and it fails when
+the model cannot answer the tested questions or produce a valid edit.
 
 ## Portable desktop
 
@@ -305,21 +306,22 @@ Current capability status (honest, matches the code):
 3. **Research internet and GitHub** — *limited*: web search/page-read and
    read-only GitHub metadata research exist; page content is treated as
    untrusted. No autonomous browsing or repo cloning.
-4. **Fully autonomous development** — *incomplete*: missions (sequential or
-   phase-parallel graph mode), checkpointed self-edits with rollback, independent
-   verification, and a default-on verified learning supervisor exist, but there
-   is no typed task-graph state, worktree isolation, or signed/auto-updating
-   release — not yet an autonomous platform. The learning supervisor is bounded,
+4. **Fully autonomous development** — *incomplete*: checkpointed self-edits
+   with rollback, independent verification, and a default-on verified learning
+   supervisor exist, but there is no typed task-graph state, worktree isolation,
+   or signed/auto-updating release — not yet an autonomous platform. The 50-role
+   mission orchestrator, mission control, the role catalogue and the 50-role
+   development review were **removed**. The learning supervisor is bounded,
    stoppable and does not update the running packaged app. See
    [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md).
 
 - For an opt-in repository-aware self-development loop, run `babymind develop
   "describe a change"` against BabyMind's configured source checkout. It can
   search and read source, propose hash-checked edits, and use the existing
-  verification/rollback path without running all 50 roles. This is not an
+  verification/rollback path directly. This is not an
   arbitrary-project agent; review changes and keep independent backups. See
   [autonomy](docs/AUTONOMY.md#opt-in-repository-aware-self-development).
-- Autonomous learning does not require `babymind develop` or a manual mission.
+- Autonomous learning does not require `babymind develop`.
   Its default-on supervisor reuses the same checkpoint/compile/test/rollback
   transaction with a narrower path guard. Use `babymind learning status`,
   `babymind learning stop`, or the Self-improvement view to inspect and stop it.
@@ -330,9 +332,10 @@ Current capability status (honest, matches the code):
   2–4 existing roles, then shows their unverified contributions and an answer.
   It uses one model, no tools, and is not autonomous coding or research. See
   [team chat](docs/TEAMWORK.md) for privacy, limits and test coverage.
-- Chat, history, local memory, advisory development review, mission control,
-  read-only GitHub research, and optional integrations exist. A review is model
-  output, not independent verification; the autonomous development platform is
+- Chat, history, local memory, read-only GitHub research, and optional
+  integrations exist. There is one identity (BM-01); mission control, the role
+  catalogue and the advisory 50-role development review were removed. Model
+  output is not independent verification; the autonomous development platform is
   not complete. See [autonomous platform audit](docs/AUTONOMOUS_PLATFORM_AUDIT.md).
 - The portable build includes a Python helper and source seed for sandboxed
   edits to a staged source copy. These edits do **not** rebuild or update the

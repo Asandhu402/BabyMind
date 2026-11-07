@@ -1,6 +1,6 @@
 # BabyMind integrated capabilities and local engines
 
-BabyMind is one assistant identity, one shared local model, one central coordinator, and 50 specialist role prompts. The capabilities below are implemented in BabyMind's own source tree and are routed through `BabyMindCoordinator`; they do not create competing assistant identities. Some heavyweight engines run as local processes/services so a lightweight Linux installation does not have to load every model at startup.
+BabyMind is one assistant identity, one shared local model, one central coordinator, and a single identity (the 50 specialist role prompts were removed). The capabilities below are implemented in BabyMind's own source tree and are routed through `BabyMindCoordinator`; they do not create competing assistant identities. Some heavyweight engines run as local processes/services so a lightweight Linux installation does not have to load every model at startup.
 
 ## Capability map
 

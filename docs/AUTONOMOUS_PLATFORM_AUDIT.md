@@ -3,9 +3,14 @@
 BabyMind is **not** a fully autonomous development platform or release-ready
 security boundary. This is a status summary, not an acceptance report.
 
-- The 50 specialist roles are sequential prompts over one shared model, not
-  independent workers. Recorded model contributions are not proof of completed
-  work. Reviews and mission control are separate workflows.
+- **The 50 specialist roles, the mission orchestrator, mission control and the
+  50-role development review have been removed**, along with their APIs
+  (`/api/roles`, `/api/missions`, `/api/agents/activity`,
+  `/api/development-reviews`) and the `babymind mission` command. BabyMind has
+  one identity (BM-01). The removed workflow was 50 sequential prompts over one
+  shared model, and its recorded contributions were never proof of completed
+  work. Legacy rows can be listed and deleted with `babymind agents status` and
+  `babymind agents purge --confirm`.
 - The source self-development engine has checkpoints, compile/test checks and
   rollback, but its isolation depends on the Linux namespace backend. `auto`
   can fall back to unsandboxed execution; `require` fails closed. The frozen

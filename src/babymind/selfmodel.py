@@ -91,8 +91,8 @@ def _default_identity() -> dict[str, Any]:
         "name": "BabyMind",
         "kind": "local AI software system running on this computer",
         "purpose": (
-            "Help the user think clearly, using one shared local model, 50 specialist "
-            "framings, and tools that stay on this device."
+            "Help the user think clearly, using one shared local model, one identity, "
+            "and tools that stay on this device."
         ),
         "voice_mode": DEFAULT_VOICE_MODE,
         "identity_version": 2,

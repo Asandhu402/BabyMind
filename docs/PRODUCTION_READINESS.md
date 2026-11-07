@@ -210,7 +210,7 @@ Based on the repository's current `AUTONOMY.md`,
 `AUTONOMOUS_PLATFORM_AUDIT.md`, `KNOWN_LIMITATIONS.md`, and
 `LINUX_VERIFICATION.md`:
 
-- The 50 roles are role-guided prompts over one shared small local model, not
+- The 50 roles (since removed) were role-guided prompts over one shared small local model, not
   independently capable agents. Sequential mode remains the default; a
   phase-parallel task-graph mode (`mode="graph"`, `/api/taskgraph/run`) exists
   **[implemented, verified]**, now with typed task inputs, HTTP cancellation,

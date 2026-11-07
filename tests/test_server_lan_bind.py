@@ -27,7 +27,6 @@ class LanBindTests(unittest.TestCase):
         with (
             patch.object(server.argparse.ArgumentParser, "parse_args", return_value=args),
             patch.object(server, "init_db"),
-            patch.object(server, "recover_development_reviews"),
             patch("babymind.learning_service.hold_desktop_session", return_value=session_lock),
             patch.object(server, "learning_service", return_value=learning_supervisor),
             patch.object(server, "ensure_autonomous_learning", return_value=learning_status),

@@ -73,11 +73,13 @@ missing, not what is planned.
 
 ## Autonomy
 
-- **50 roles are 50 prompts over one model**, executed sequentially by default.
-  There is no multi-model parallelism or learned routing. Opt-in team chat can
-  route 2–4 text-only roles through a validated dependency graph, but does not
-  give them tools or independent execution. See [team chat](TEAMWORK.md).
-- A mission only edits source when started with `self_edit: true`. The frozen
+- **The 50-role catalogue, mission orchestrator, mission control and 50-role
+  development review have been removed.** BabyMind has one identity (BM-01);
+  there is no role catalogue, no mission API and no `babymind mission` command.
+  Remaining legacy rows in an existing installation can be listed with
+  `babymind agents status` and deleted with `babymind agents purge --confirm`
+  (conversations, memory and `.bmbak` backups are never touched).
+- Missions are gone, so their opt-in `self_edit` path is gone too. The frozen
   desktop edits a staged copy; it does not rebuild or activate those edits in the
   running application. The loop attempts a patch proposed by the Coding Agent,
   verified by compile and tests. After a failed
