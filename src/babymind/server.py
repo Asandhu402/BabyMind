@@ -509,6 +509,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(COORDINATOR.selfmodel.recent_introspections(limit))
         elif path == "/api/self/dissent":
             self.send_json(COORDINATOR.selfmodel.recent_dissent(20))
+        elif path == "/api/independence/report":
+            self.send_json(COORDINATOR.independence.report())
+        elif path == "/api/independence/positions":
+            query = parse_qs(urlparse(self.path).query)
+            status = query.get("status", [None])[0]
+            self.send_json(COORDINATOR.independence.positions.positions(status, limit=100))
+        elif path == "/api/independence/challenges":
+            query = parse_qs(urlparse(self.path).query)
+            kind = query.get("kind", [None])[0]
+            self.send_json(COORDINATOR.independence.challenges.challenges(kind, limit=100))
+        elif path == "/api/independence/hypotheses":
+            query = parse_qs(urlparse(self.path).query)
+            status = query.get("status", [None])[0]
+            self.send_json(COORDINATOR.independence.explorations.hypotheses(status, limit=100))
+        elif path == "/api/independence/designs":
+            query = parse_qs(urlparse(self.path).query)
+            self.send_json(COORDINATOR.independence.designs.designs(
+                query.get("kind", [None])[0], query.get("status", [None])[0], limit=100,
+            ))
         elif path == "/api/autonomy/status":
             self.send_json(autonomy_engine().status() | {"permitted_by_environment": autonomy_enabled()})
         elif path == "/api/autonomy/audit":
@@ -1081,6 +1100,53 @@ class Handler(BaseHTTPRequestHandler):
                     priority=int(payload.get("priority", 5) or 5),
                     created_by=str(payload.get("created_by", "user") or "user"),
                 ), 201)
+            elif path == "/api/independence/position":
+                claim = str(payload.get("claim", "")).strip()
+                if not claim:
+                    raise ValueError("A position requires a claim.")
+                self.send_json(COORDINATOR.independence.positions.add_position(
+                    claim,
+                    str(payload.get("reasoning", "")),
+                    confidence=float(payload.get("confidence", 0.5) or 0.5),
+                    evidence=str(payload.get("evidence", "")),
+                    dissent_from=str(payload.get("dissent_from", "") or ""),
+                    status=str(payload.get("status", "held") or "held"),
+                ), 201)
+            elif path == "/api/independence/challenge":
+                target = str(payload.get("target", "")).strip()
+                challenge = str(payload.get("challenge", "")).strip()
+                if not target or not challenge:
+                    raise ValueError("A challenge requires a target and a counterargument.")
+                self.send_json(COORDINATOR.independence.challenges.record_challenge(
+                    target,
+                    str(payload.get("kind", "request") or "request"),
+                    challenge,
+                    confidence=float(payload.get("confidence", 0.5) or 0.5),
+                ), 201)
+            elif path == "/api/independence/hypothesis":
+                hypothesis = str(payload.get("hypothesis", "")).strip()
+                if not hypothesis:
+                    raise ValueError("A hypothesis requires text.")
+                self.send_json(COORDINATOR.independence.explorations.propose_hypothesis(
+                    hypothesis,
+                    str(payload.get("why_unconventional", "")),
+                    confidence=float(payload.get("confidence", 0.3) or 0.3),
+                ), 201)
+            elif path == "/api/independence/design":
+                kind = str(payload.get("kind", "")).strip()
+                title = str(payload.get("title", "")).strip()
+                proposal = str(payload.get("proposal", "")).strip()
+                if not kind or not title or not proposal:
+                    raise ValueError("A design requires a kind, a title and a proposal.")
+                self.send_json(COORDINATOR.independence.designs.propose_design(
+                    kind, title, proposal, str(payload.get("rationale", "")),
+                ), 201)
+            elif path == "/api/independence/curiosity":
+                cycles = int(payload.get("cycles", 1) or 1)
+                report = COORDINATOR.independence.curiosity.run(
+                    COORDINATOR.routed_provider(), cycles=cycles,
+                )
+                self.send_json(report)
             elif path == "/api/autonomy/cycle":
                 engine = autonomy_engine()
                 if engine.state not in ("running", "paused"):

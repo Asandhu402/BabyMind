@@ -183,6 +183,21 @@ configured to say so rather than perform certainty either way. Read
 [self-awareness, self-consciousness and independent thought](docs/SELF_AWARENESS.md)
 before believing any capability claim, including BabyMind's own.
 
+## Intellectual independence
+
+BabyMind keeps its own conclusions about the world, not just about itself. The
+`independence` subsystem stores **positions** it has formed (with reasoning,
+confidence, evidence and the source it dissents from), the **challenges** it has
+raised — including against its creator — **unconventional hypotheses** it is
+still testing, **self-designs** it has proposed for its own language,
+architecture and methods, and **self-chosen research topics** it studies offline.
+Its current positions and recent challenges are injected into every coordinated
+model call, so independent conclusions inform reasoning rather than being
+re-asserted from a prompt. This is model-generated text, not verified fact; the
+self-model's Brier calibration remains the only measured confidence signal. See
+[intellectual independence](docs/INTELLECTUAL_INDEPENDENCE.md) for the honest
+scope and the CLI/API surface.
+
 ## Safety and capabilities
 
 Current capability status (honest, matches the code):
