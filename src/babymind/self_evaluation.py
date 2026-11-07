@@ -50,10 +50,10 @@ def run_self_evaluation(core: CognitiveCore | None = None) -> dict[str, Any]:
     )
     record(
         "role_registry_integrity",
-        len(AGENTS) == 50
-        and len(snapshot.get("agent_ids", [])) == 50
+        len(AGENTS) == 1
+        and len(snapshot.get("agent_ids", [])) == 1
         and len(set(snapshot.get("agent_ids", []))) == 50,
-        f"Found {len(AGENTS)} unique registered specialist roles.",
+        f"Found {len(AGENTS)} unique BabyMind identity.",
     )
     capabilities = snapshot.get("capabilities", {})
     record(
@@ -145,16 +145,16 @@ def run_self_evaluation(core: CognitiveCore | None = None) -> dict[str, Any]:
                 active_core.context_for_agent(agent)
                 for agent in AGENTS
             ]
-            context_ok = len(context_results) == 50 and all(
+            context_ok = len(context_results) == 1 and all(
                 "COGNITIVE CORE" in context
                 and agent.agent_id in context
                 and "not evidence of subjective consciousness" in context
                 for agent, context in zip(AGENTS, context_results)
             )
             record(
-                "shared_context_for_all_roles",
+                "shared_context_for_babymind",
                 context_ok,
-                "Every registered role receives grounded identity, role, environment, capability, and uncertainty context.",
+                "The single BabyMind identity receives grounded identity, environment, capability, and uncertainty context.",
             )
         except Exception as error:
             record("shared_context_for_all_roles", False, f"Context inspection failed: {type(error).__name__}: {error}")
@@ -162,7 +162,7 @@ def run_self_evaluation(core: CognitiveCore | None = None) -> dict[str, Any]:
         record(
             "shared_context_for_all_roles",
             False,
-            "Skipped: pass the configured CognitiveCore instance to evaluate per-role context.",
+            "Skipped: pass the configured CognitiveCore instance to evaluate BabyMind context.",
         )
 
     passed = sum(item["passed"] for item in checks)
