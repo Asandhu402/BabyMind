@@ -9,7 +9,7 @@ from .selfmodel import BELIEF_KINDS, VOICE_MODES
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="babymind", description="BabyMind 50-agent personal AI")
+    parser = argparse.ArgumentParser(prog="babymind", description="BabyMind unified personal AI")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("health", help="Check runtime and agent registry")
     subparsers.add_parser("doctor", help="Run non-destructive installation and security diagnostics")
@@ -27,20 +27,20 @@ def build_parser() -> argparse.ArgumentParser:
     autonomy_parser = cognitive_actions.add_parser("autonomy", help="Run bounded autonomous cycles with environment drift checks")
     autonomy_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 26), help="Number of cycles (1-25)")
     autonomy_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
-    autonomy_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
+    autonomy_parser.add_argument("--agent", default="BM-01", help="BabyMind identity used for each cycle")
     goal_parser = cognitive_actions.add_parser("goal", help="Execute one existing goal in bounded verified steps")
     goal_parser.add_argument("goal_id", help="ID of an active local goal")
     goal_parser.add_argument("--max-steps", type=int, default=5, choices=range(1, 11), help="Maximum steps (1-10)")
-    goal_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each step")
+    goal_parser.add_argument("--agent", default="BM-02", help="BabyMind identity used for each step")
     cycle_parser = cognitive_actions.add_parser("cycle", help="Run one observe-to-learn cognitive cycle")
-    cycle_parser.add_argument("--agent", default="BM-02", help="Existing role ID to run this cycle through")
+    cycle_parser.add_argument("--agent", default="BM-02", help="BabyMind identity used for this cycle")
     autonomous_parser = cognitive_actions.add_parser("run", help="Run a bounded number of autonomous cognitive cycles")
     autonomous_parser.add_argument("--cycles", type=int, default=5, choices=range(1, 101), help="Number of cycles (1-100)")
     autonomous_parser.add_argument("--interval", type=float, default=0, help="Seconds between cycles (0-3600)")
     autonomous_parser.add_argument("--agent", default="BM-02", help="Existing role ID used for each cycle")
     service_parser = cognitive_actions.add_parser("service", help="Run the persistent Linux cognitive background service")
     service_parser.add_argument("--interval", type=float, default=60, help="Seconds between cycles (5-3600)")
-    service_parser.add_argument("--agent", default="BM-02", help="Specialist role used for each cycle")
+    service_parser.add_argument("--agent", default="BM-02", help="BabyMind identity used for each cycle")
     cognitive_actions.add_parser("routing", help="Show configured per-agent model routes without exposing secrets")
 
     mission_parser = subparsers.add_parser("mission", help="Run a mission across all 50 roles")
