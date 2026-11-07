@@ -260,6 +260,35 @@ The web **Self-improvement** view exposes the same controls plus
 See [permanent autonomous learning](docs/AUTONOMOUS_LEARNING.md) and the
 [verified learning cycle](docs/LEARNING_CYCLE.md) for the honest scope.
 
+## Language lab
+
+The learning cycle only ever edits BabyMind's own Python, and its verdict on a
+patch is the model's judgment. The **language lab** runs a different, complete
+cycle on an artefact that is not this repository: it can research the public web
+(opt-in for one cycle), design an entirely **new language** with its own
+keywords, syntax rules and semantics, validate the specification, **execute** the
+generated interpreter inside the OS sandbox, and compare its measured output with
+digits the harness recomputes with `decimal` instead of trusting the model.
+
+The check that makes this more than narration is the **held-out probe**: after
+the declared cases, the harness derives its own numbers, recomputes the expected
+digits, and runs again. An interpreter that merely prints its own memorised
+answers fails; one that implements the declared rounding rule passes. That
+behaviour is proven against real sandboxed execution in `tests/test_language_lab.py`.
+
+It is off by default, fails closed without a sandbox backend, and does not prove
+the language is coherent, complete or useful — only that this interpreter
+produced these digits on these inputs.
+
+```bash
+babymind language status
+babymind language run-once --research --attempts 2
+curl /api/language/status
+```
+
+See [language lab](docs/LANGUAGE_LAB.md) for the gates, the exact limits, and
+what is measured versus model-generated.
+
 ## Safety and capabilities
 
 Current capability status (honest, matches the code):

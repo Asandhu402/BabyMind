@@ -122,6 +122,53 @@ class BabyMindWebTests(unittest.TestCase):
             read.assert_called_once_with('owner', 'repo', '1' * 40, 'README')
             self.assertEqual(self.request('/api/research/github/search', {'query':'x'}, extra_headers={'Sec-Fetch-Site':'cross-site'})[0], 403)
 
+    def test_language_lab_routes_expose_status_and_gate_research(self) -> None:
+        """The language lab's HTTP surface: read-only status, opt-in research."""
+        calls = []
+
+        class FakeLab:
+            def status(self):
+                calls.append(("status",))
+                return {"enabled": False, "requires_sandbox": True}
+
+            def runs(self, limit):
+                calls.append(("runs", limit))
+                return [{"name": "Numa", "status": "verified"}]
+
+            def run(self, provider, *, allow_research=False, max_attempts=1):
+                calls.append(("run", allow_research, max_attempts))
+                return {"status": "rejected", "reason": "design rejected"}
+
+        fake = FakeLab()
+        with patch.object(server.COORDINATOR, "independence",
+                          SimpleNamespace(languages=fake)):
+            status, _, body = self.request("/api/language/status")
+            self.assertEqual(status, 200)
+            self.assertTrue(json.loads(body)["requires_sandbox"])
+
+            status, _, body = self.request("/api/language/runs?limit=5")
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(body)[0]["name"], "Numa")
+
+            # Research is never enabled by merely calling the route.
+            status, _, _body = self.request("/api/language/run-once", {})
+            self.assertEqual(status, 200)
+            status, _, _body = self.request("/api/language/run-once",
+                                           {"allow_research": True, "max_attempts": 2})
+            self.assertEqual(status, 200)
+
+            # A cross-site mutation is refused by the shared origin check.
+            self.assertEqual(
+                self.request("/api/language/run-once", {},
+                             extra_headers={"Sec-Fetch-Site": "cross-site"})[0],
+                403,
+            )
+
+        self.assertIn(("status",), calls)
+        self.assertIn(("runs", 5), calls)
+        self.assertIn(("run", False, 1), calls)
+        self.assertIn(("run", True, 2), calls)
+
     def test_encrypted_backup_export_api(self) -> None:
         destination = Path(self.temp.name) / "BabyMind.bmbak"
         status, _, body = self.request("/api/backup/export", {

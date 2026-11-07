@@ -91,6 +91,14 @@ not just the verdict), then revised, adopted or rejected. The record keeps the
 lineage so you can see what it considered and how it changed. Kinds are
 architecture, method, language, notation and protocol.
 
+A design is still only a proposal. The **language lab**
+(`docs/LANGUAGE_LAB.md`) is the part that actually builds one: it designs a
+complete new language, runs the generated interpreter in the OS sandbox, and
+measures its output against arithmetic the harness computes itself. An accepted
+language is recorded here as `kind="language"`. Verified output on a few cases
+is not evidence that the language is good, and a rejected cycle is recorded as
+such rather than hidden.
+
 ### Test its own conclusions against real evidence
 
 Implemented as the **evidence loop** (`src/babymind/evidence.py`).

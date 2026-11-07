@@ -103,6 +103,28 @@ missing, not what is planned.
 - `BABYMIND_RUNNER_UNRESTRICTED` exists, is off by default, and removes the
   executable allowlist. Leaving it on is equivalent to giving the engine a shell.
 
+## Inventing a language
+
+- The **language lab** (`docs/LANGUAGE_LAB.md`) runs a complete
+  research → design → sandboxed execution → conformance cycle and can produce a
+  working interpreter for a new language whose behaviour is measured, not
+  narrated. What it proves is narrow: that this model-authored interpreter, on
+  this machine, produced the digits an independent decimal oracle computed, on
+  the cases and held-out probes that ran. It does **not** show that the language
+  is coherent, complete, useful or well designed, that anything except decimal
+  rounding is correct, that research findings were applied, or that the
+  interpreter is robust against a hostile program.
+- The lab is **off by default** and **fails closed** without an OS sandbox
+  backend. Research is a separate per-cycle opt-in. There is no UI; it is
+  reachable through `babymind language`, `/api/language/*` and Python.
+- **Only Python is compiled or executed.** A design's files are text, but the
+  entry point must be a `.py` interpreter. BabyMind cannot build or run a
+  C, Rust, Go or JavaScript toolchain, and it does not install dependencies.
+- No cycle has been run against a **real local model** in this environment;
+  every test uses a scripted provider. A real-model acceptance run and desktop
+  UI coverage remain open, and running generated code is unavailable in the
+  frozen packaged app.
+
 ## Applications BabyMind can build
 
 - The app builder produces Python/HTML/CSS/JS applications inside a folder. It
