@@ -108,7 +108,7 @@ jobs:
           fi
       - name: Archive without losing executable permissions
         run: tar -C dist -czf dist/BabyMind-Linux-x86_64.tar.gz BabyMind
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BabyMind-Linux-x86_64-ubuntu-${{ matrix.ubuntu }}
           path: dist/BabyMind-Linux-x86_64.tar.gz
@@ -285,7 +285,7 @@ jobs:
           fi
       - name: Upload the GUI question report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: babymind-gui-chat-report
           path: ${{ runner.temp }}/babymind-chat-report.json
@@ -293,7 +293,7 @@ jobs:
           retention-days: 7
       - name: Upload the real-model acceptance report
         if: ${{ !cancelled() && steps.installer.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: babymind-real-model-test-report
           path: ${{ runner.temp }}/babymind-real-model-report.json
